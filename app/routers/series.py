@@ -29,6 +29,7 @@ def image_to_resp(img: Image, base_url: str) -> ImageResponse:
         original_filename=img.original_filename,
         original_created_at=img.original_created_at,
         order_index=img.order_index,
+        status=img.status,
         uploaded_at=img.uploaded_at,
         public_url=f"{base_url}/{img.r2_key}" if base_url else img.r2_key,
     )

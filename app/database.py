@@ -64,10 +64,22 @@ def _bootstrap_settings(db):
     db.commit()
 
 
+def _run_migrations() -> None:
+    if ":memory:" in str(engine.url):
+        return  # tests use create_all with the full model, no migration needed
+    from alembic import command as alembic_command
+    from alembic.config import Config
+
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", str(engine.url))
+    alembic_command.upgrade(cfg, "head")
+
+
 def init_db():
     from app import models  # noqa: F401 — registers models with Base
 
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
     db = SessionLocal()
     try:
         _bootstrap_settings(db)

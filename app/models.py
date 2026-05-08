@@ -53,6 +53,7 @@ class Image(Base):
     original_filename: Mapped[str] = mapped_column(String)
     original_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String, default="pending")
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     series: Mapped["Series"] = relationship("Series", back_populates="images")

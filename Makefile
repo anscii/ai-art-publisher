@@ -32,6 +32,13 @@ types:
 # ── Run everything ────────────────────────────────────────────────────────────
 check: lint-fix lint types test
 
+# ── Database migrations ───────────────────────────────────────────────────────
+migrate:
+	$(PY) -m alembic upgrade head
+
+migrate-new:
+	$(PY) -m alembic revision --autogenerate -m "$(msg)"
+
 # ── Environment ───────────────────────────────────────────────────────────────
 venv:
 	uv venv .venv --python=python3.12
@@ -54,4 +61,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: dev test test-fast format lint lint-fix types check venv install install-dev hooks clean
+.PHONY: dev test test-fast format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean

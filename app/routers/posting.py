@@ -26,8 +26,16 @@ def _build_ig_caption(s: Series) -> str:
 
 
 def _image_urls(s: Series, base_url: str) -> list[str]:
-    imgs = sorted(s.images, key=lambda i: i.order_index)
+    imgs = sorted([i for i in s.images if i.status == "queued"], key=lambda i: i.order_index)
     return [f"{base_url.rstrip('/')}/{img.r2_key}" for img in imgs]
+
+
+def _after_post_success(s: Series) -> None:
+    for img in s.images:
+        if img.status == "queued":
+            img.status = "posted"
+    non_skip = [i for i in s.images if i.status != "skip"]
+    s.status = "posted" if all(i.status == "posted" for i in non_skip) else "partial_posted"
 
 
 def _do_telegram(s: Series, settings) -> dict:
@@ -48,8 +56,7 @@ def _handle_result(db: Session, s: Series, result: dict, platform: str) -> PostR
             s.posted_to_telegram_at = datetime.utcnow()
         if platform in ("instagram", "both"):
             s.posted_to_instagram_at = datetime.utcnow()
-        if s.status != "posted":
-            s.status = "posted"
+        _after_post_success(s)
         db.commit()
         return PostResult(success=True, message=f"Posted to {platform}")
     msg = result.get("description", "Unknown error")
@@ -58,11 +65,17 @@ def _handle_result(db: Session, s: Series, result: dict, platform: str) -> PostR
     return PostResult(success=False, message=msg)
 
 
+def _check_queued(s: Series) -> None:
+    if not any(i.status == "queued" for i in s.images):
+        raise HTTPException(status_code=400, detail="No images queued for posting")
+
+
 @router.post("/{series_id}/post/telegram")
 def post_telegram(series_id: str, db: Session = Depends(get_db)) -> PostResult:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
+    _check_queued(s)
     settings = get_or_create_settings(db)
     return _handle_result(db, s, _do_telegram(s, settings), "telegram")
 
@@ -72,6 +85,7 @@ def post_instagram(series_id: str, db: Session = Depends(get_db)) -> PostResult:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
+    _check_queued(s)
     settings = get_or_create_settings(db)
     return _handle_result(db, s, _do_instagram(s, settings), "instagram")
 
@@ -81,13 +95,14 @@ def post_both(series_id: str, db: Session = Depends(get_db)) -> PostResult:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
+    _check_queued(s)
     settings = get_or_create_settings(db)
     tg = _do_telegram(s, settings)
     ig = _do_instagram(s, settings)
     if tg["ok"] and ig["ok"]:
         s.posted_to_telegram_at = datetime.utcnow()
         s.posted_to_instagram_at = datetime.utcnow()
-        s.status = "posted"
+        _after_post_success(s)
         db.commit()
         return PostResult(success=True, message="Posted to both")
     errors = []

@@ -45,7 +45,11 @@ function buildImagesCard(series) {
 
   const headerLabel = h('span', { cls: 'small fw-medium' });
   headerLabel.appendChild(icon('bi bi-images me-1'));
-  headerLabel.appendChild(document.createTextNode('Images (' + series.images.length + ')'));
+  const queuedCount = series.images.filter(i => i.status === 'queued').length;
+  const countLabel = queuedCount > 0
+    ? 'Images (' + queuedCount + ' queued / ' + series.images.length + ')'
+    : 'Images (' + series.images.length + ')';
+  headerLabel.appendChild(document.createTextNode(countLabel));
 
   const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:80px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
   if (!series.images.length) {
@@ -113,11 +117,35 @@ function buildThumb(img, seriesId) {
   const gripEl = h('div', { cls: 'thumb-grip position-absolute' });
   gripEl.appendChild(icon('bi bi-grip-vertical'));
 
-  return h('div', { cls: 'position-relative flex-shrink-0', 'data-image-id': img.id },
+  const statusBtn = h('button', {
+    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-0 border-0 bg-transparent',
+    style: 'line-height:1',
+  });
+  statusBtn.appendChild(icon(_statusIcon(img.status)));
+  statusBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const next = img.status === 'queued' ? 'pending' : 'queued';
+    try {
+      const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: next });
+      App.currentSeries = updated;
+      renderEditor(updated);
+    } catch (err) { showToast(err.message, 'danger'); }
+  });
+
+  const outerCls = 'position-relative flex-shrink-0' + (img.status === 'posted' ? ' thumb-posted' : '');
+  return h('div', { cls: outerCls, 'data-image-id': img.id },
     imgEl,
+    statusBtn,
     gripEl,
     h('div', { cls: 'position-absolute top-0 end-0 m-1' },
       h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
+}
+
+function _statusIcon(status) {
+  if (status === 'queued') return 'bi bi-check-circle-fill text-primary';
+  if (status === 'posted') return 'bi bi-check-circle-fill text-success';
+  if (status === 'skip')   return 'bi bi-x-circle-fill text-secondary';
+  return 'bi bi-circle text-white';
 }
 
 let _sortable = null;
@@ -366,7 +394,7 @@ async function generateDescriptions(seriesId) {
 function buildActionsCard(series) {
   const statusSel = document.createElement('select');
   statusSel.className = 'form-select form-select-sm'; statusSel.id = 'statusSelect'; statusSel.style.width = '140px';
-  ['new','draft','approved','scheduled','posted','skip'].forEach(s => {
+  ['new','draft','approved','scheduled','partial_posted','posted','skip'].forEach(s => {
     const o = document.createElement('option'); o.value = s; o.textContent = s;
     if (s === series.status) o.selected = true;
     statusSel.appendChild(o);

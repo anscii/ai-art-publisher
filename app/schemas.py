@@ -51,8 +51,13 @@ class ImageResponse(BaseModel):
     original_filename: str
     original_created_at: datetime | None
     order_index: int
+    status: str
     uploaded_at: datetime
     public_url: str
+
+
+class ImageStatusUpdate(BaseModel):
+    status: str
 
 
 class RegisterImageBody(BaseModel):

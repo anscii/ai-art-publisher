@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Image, Series
-from app.routers.series import image_to_resp
+from app.routers.series import image_to_resp, series_to_detail
 from app.routers.settings import get_or_create_settings
-from app.schemas import MoveImageBody, RegisterImageBody, ReorderImagesBody
+from app.schemas import ImageStatusUpdate, MoveImageBody, RegisterImageBody, ReorderImagesBody
 from app.services.storage import get_storage_from_settings
 
 router = APIRouter(tags=["images"])
@@ -119,6 +119,22 @@ def move_image(
     img.order_index = _next_order(target)
     db.commit()
     return {"moved": image_id, "to": body.target_series_id}
+
+
+@router.patch("/api/images/{image_id}/status")
+def update_image_status(
+    image_id: str,
+    body: ImageStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    img = db.get(Image, image_id)
+    if not img:
+        raise HTTPException(status_code=404, detail="Image not found")
+    if body.status not in {"pending", "queued", "posted", "skip"}:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
+    img.status = body.status
+    db.commit()
+    return series_to_detail(img.series, db)
 
 
 @router.delete("/api/images/{image_id}")

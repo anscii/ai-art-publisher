@@ -13,7 +13,7 @@ def run_scheduled_posts():
 
     from app.database import SessionLocal
     from app.models import Series
-    from app.routers.posting import _do_instagram, _do_telegram
+    from app.routers.posting import _after_post_success, _do_instagram, _do_telegram
     from app.routers.settings import get_or_create_settings
 
     db = SessionLocal()
@@ -43,7 +43,7 @@ def run_scheduled_posts():
                         s.posted_to_instagram_at = datetime.utcnow()
                     else:
                         raise RuntimeError(result.get("description", "IG error"))
-                s.status = "posted"
+                _after_post_success(s)
                 logger.info("Scheduled post success: %s", s.id)
             except Exception as e:
                 s.status = "approved"
