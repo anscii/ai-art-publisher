@@ -298,6 +298,7 @@ function getDraftEdits() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadSeries(true);
+  initLightbox();
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();

@@ -5,3 +5,27 @@
 .series-item:hover { background-color: var(--bs-body-secondary) !important; }
 .btn-xs { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1.2; }
 #imageStrip { min-height: 80px; overflow-x: auto; flex-wrap: nowrap !important; }
+
+.lightbox-img {
+  max-width: min(90vw, 1400px);
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.thumb-grip {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  cursor: grab;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 1px 3px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 3px;
+  touch-action: none;
+  user-select: none;
+}

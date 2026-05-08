@@ -65,6 +65,18 @@ function buildThumb(img, seriesId) {
   imgEl.className = 'rounded';
   imgEl.style.cssText = 'width:80px;height:70px;object-fit:cover';
   imgEl.loading = 'lazy';
+  imgEl.style.cursor = 'zoom-in';
+  imgEl.addEventListener('click', e => {
+    e.stopPropagation();
+    const strip = document.getElementById('imageStrip');
+    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
+    const images = thumbs.map(el => ({
+      id: el.dataset.imageId,
+      public_url: el.querySelector('img').getAttribute('src'),
+    }));
+    const idx = thumbs.findIndex(el => el.dataset.imageId === img.id);
+    openLightbox(images, idx >= 0 ? idx : 0);
+  });
 
   const menuBtn = h('button', { cls: 'btn btn-xs btn-dark opacity-75', text: '⋯' });
   menuBtn.setAttribute('data-bs-toggle', 'dropdown');
@@ -98,13 +110,20 @@ function buildThumb(img, seriesId) {
   delLi.appendChild(delA);
   dropItems.appendChild(delLi);
 
-  return h('div', { cls: 'position-relative flex-shrink-0', 'data-image-id': img.id, style: 'cursor:grab' },
+  const gripEl = h('div', { cls: 'thumb-grip position-absolute' });
+  gripEl.appendChild(icon('bi bi-grip-vertical'));
+
+  return h('div', { cls: 'position-relative flex-shrink-0', 'data-image-id': img.id },
     imgEl,
+    gripEl,
     h('div', { cls: 'position-absolute top-0 end-0 m-1' },
       h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
 }
 
 let _sortable = null;
+let _lightboxImages = [];
+let _lightboxIdx    = 0;
+let _lightboxOpen   = false;
 
 function initImageSortable(seriesId) {
   const strip = document.getElementById('imageStrip');
@@ -113,7 +132,8 @@ function initImageSortable(seriesId) {
   _sortable = Sortable.create(strip, {
     animation: 150,
     ghostClass: 'sortable-ghost',
-    filter: '.dropdown, .dropdown-menu, button',
+    handle: '.thumb-grip',
+    touchStartThreshold: 4,
     onEnd: async () => {
       const ids = [...strip.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
       try {
@@ -121,6 +141,42 @@ function initImageSortable(seriesId) {
       } catch (e) { showToast('Reorder failed: ' + e.message, 'danger'); }
     },
   });
+}
+
+function initLightbox() {
+  document.addEventListener('keydown', e => {
+    if (!_lightboxOpen) return;
+    if (e.key === 'ArrowLeft')  lightboxNav(-1);
+    if (e.key === 'ArrowRight') lightboxNav(+1);
+  });
+  document.getElementById('lightboxModal')
+    .addEventListener('hidden.bs.modal', () => { _lightboxOpen = false; });
+  document.getElementById('lightboxPrev').addEventListener('click', () => lightboxNav(-1));
+  document.getElementById('lightboxNext').addEventListener('click', () => lightboxNav(+1));
+}
+
+function openLightbox(images, startIdx) {
+  _lightboxImages = images;
+  _lightboxIdx    = startIdx;
+  _lightboxOpen   = true;
+  _lightboxRender();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).show();
+}
+
+function _lightboxRender() {
+  const img = _lightboxImages[_lightboxIdx];
+  document.getElementById('lightboxImg').setAttribute('src', img.public_url);
+  document.getElementById('lightboxImg').setAttribute('alt', 'Image ' + (_lightboxIdx + 1));
+  document.getElementById('lightboxCounter').textContent =
+    (_lightboxIdx + 1) + ' / ' + _lightboxImages.length;
+  const single = _lightboxImages.length <= 1;
+  document.getElementById('lightboxPrev').classList.toggle('invisible', single);
+  document.getElementById('lightboxNext').classList.toggle('invisible', single);
+}
+
+function lightboxNav(delta) {
+  _lightboxIdx = (_lightboxIdx + delta + _lightboxImages.length) % _lightboxImages.length;
+  _lightboxRender();
 }
 
 async function addImages(seriesId) {
