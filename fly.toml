@@ -12,6 +12,9 @@ primary_region = 'ams'
   source = 'app_data'
   destination = '/app/data'
 
+[deploy]
+  release_command = "alembic upgrade head"
+
 [http_service]
   internal_port = 8080
   force_https = true
