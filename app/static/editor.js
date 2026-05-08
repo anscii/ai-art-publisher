@@ -235,8 +235,6 @@ function buildDescriptionsCard(series) {
     });
   }
 
-  const titleInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_title' });
-  titleInput.value = series.title || '';
   const descEn = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_en', rows: '4' });
   descEn.value = series.description_en || '';
   const descRu = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_ru', rows: '4' });
@@ -255,7 +253,6 @@ function buildDescriptionsCard(series) {
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
   const form = h('div', { cls: 'row g-2' },
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Title' }), titleInput),
     mkField('Description EN (Instagram)', descEn),
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram tags', tagsIg),
@@ -275,7 +272,6 @@ function applyVariant(idx) {
   const v = App.currentSeries?.ai_variants?.[idx];
   if (!v) return;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-  set('f_title',   v.title);
   set('f_desc_en', v.description_en);
   set('f_desc_ru', v.description_ru);
   set('f_tags_ig', (v.tags_instagram || []).join(' '));
@@ -292,7 +288,7 @@ async function saveDescription(seriesId) {
   const tagsTg = (document.getElementById('f_tags_tg')?.value || '').split(/\s+/).filter(Boolean);
   try {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, {
-      title:          document.getElementById('f_title')?.value || '',
+      title:          document.getElementById('editorTitle')?.value?.trim() || '',
       description_en: document.getElementById('f_desc_en')?.value || '',
       description_ru: document.getElementById('f_desc_ru')?.value || '',
       tags_instagram: tagsIg,
@@ -448,7 +444,7 @@ function restoreDraft(seriesId) {
     const d = JSON.parse(raw);
     if (!App.currentSeries?.description_en && d.desc_en) {
       const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-      set('f_title', d.title); set('f_desc_en', d.desc_en); set('f_desc_ru', d.desc_ru);
+      set('editorTitle', d.title); set('f_desc_en', d.desc_en); set('f_desc_ru', d.desc_ru);
       set('f_tags_ig', d.tags_ig); set('f_tags_tg', d.tags_tg);
     }
   } catch (_) {}

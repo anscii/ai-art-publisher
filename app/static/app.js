@@ -287,7 +287,7 @@ async function cancelScheduleItem(seriesId) {
 // ── Draft helpers ─────────────────────────────────────────────────────────────
 function getDraftEdits() {
   return {
-    title:   document.getElementById('f_title')?.value,
+    title:   document.getElementById('editorTitle')?.value,
     desc_en: document.getElementById('f_desc_en')?.value,
     desc_ru: document.getElementById('f_desc_ru')?.value,
     tags_ig: document.getElementById('f_tags_ig')?.value,
