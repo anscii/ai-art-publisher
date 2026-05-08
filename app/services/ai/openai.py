@@ -3,7 +3,7 @@ from typing import Any
 
 import openai as _openai
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData
+from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
 
 
 class OpenAIProvider(AIProvider):
@@ -37,5 +37,5 @@ class OpenAIProvider(AIProvider):
         )
         text = resp.choices[0].message.content
         assert text is not None
-        raw = json.loads(text)
+        raw = json.loads(extract_json(text))
         return [AIVariantData(**v) for v in raw]

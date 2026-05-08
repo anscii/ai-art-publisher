@@ -5,7 +5,7 @@ from typing import Any
 
 import google.generativeai as genai
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData
+from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
 
 
 class GoogleProvider(AIProvider):
@@ -28,5 +28,5 @@ class GoogleProvider(AIProvider):
 
         m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
         resp = m.generate_content(parts)
-        raw = json.loads(resp.text)
+        raw = json.loads(extract_json(resp.text))
         return [AIVariantData(**v) for v in raw]

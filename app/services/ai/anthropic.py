@@ -3,7 +3,7 @@ from typing import Any
 
 import anthropic as _anthropic
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData
+from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
 
 
 class AnthropicProvider(AIProvider):
@@ -35,5 +35,5 @@ class AnthropicProvider(AIProvider):
         )
         block = resp.content[0]
         assert isinstance(block, _anthropic.types.TextBlock)
-        raw = json.loads(block.text)
+        raw = json.loads(extract_json(block.text))
         return [AIVariantData(**v) for v in raw]

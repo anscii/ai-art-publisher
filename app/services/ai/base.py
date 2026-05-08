@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -13,6 +14,15 @@ Given images from a series, generate 3 distinct variants of:
 Variants should differ significantly — one story-focused, one creature/world-building, one poetic/atmospheric.
 
 Respond ONLY with valid JSON array of 3 objects. No markdown, no preamble."""
+
+_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+
+
+def extract_json(text: str) -> str:
+    """Strip markdown code fences that models sometimes add despite instructions."""
+    text = text.strip()
+    m = _FENCE_RE.search(text)
+    return m.group(1).strip() if m else text
 
 
 @dataclass
