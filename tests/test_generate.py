@@ -29,7 +29,7 @@ def test_generate_creates_variants(client):
         mp.return_value = p
         # need an api key set
         client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
-        resp = client.post(f"/api/series/{sid}/generate", json={})
+        resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
     assert resp.status_code == 200
     assert len(resp.json()) == 3
     assert resp.json()[0]["title"] == "Dragon Forest"
@@ -51,7 +51,7 @@ def test_generate_appends_not_replaces(client):
             p = MagicMock()
             p.generate_variants = MagicMock(return_value=_FAKE)
             mp.return_value = p
-            client.post(f"/api/series/{sid}/generate", json={})
+            client.post(f"/api/series/{sid}/generate", json={"include_images": True})
     detail = client.get(f"/api/series/{sid}").json()
     assert len(detail["ai_variants"]) == 6
 
@@ -59,5 +59,25 @@ def test_generate_appends_not_replaces(client):
 def test_generate_no_images_returns_400(client):
     sid = client.post("/api/series", json={"title": "Empty"}).json()["id"]
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
+    assert resp.status_code == 400
+
+
+def test_generate_text_only_requires_hint(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     resp = client.post(f"/api/series/{sid}/generate", json={})
     assert resp.status_code == 400
+    assert "Hint" in resp.json()["detail"]
+
+
+def test_generate_text_only_with_hint(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox spirit"})
+    assert resp.status_code == 200
+    assert len(resp.json()) == 3

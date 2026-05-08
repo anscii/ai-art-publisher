@@ -317,6 +317,11 @@ function buildGenerateCard(seriesId) {
   genBtn.appendChild(document.createTextNode('Generate'));
   genBtn.addEventListener('click', () => generateDescriptions(seriesId));
 
+  const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
+  const imgLabel = h('label', { cls: 'd-flex align-items-center gap-1 small text-muted', style: 'cursor:pointer' });
+  imgLabel.appendChild(imgCheck);
+  imgLabel.appendChild(document.createTextNode(' Include images'));
+
   const headerLabel = h('span', { cls: 'small fw-medium' });
   headerLabel.appendChild(icon('bi bi-robot me-1'));
   headerLabel.appendChild(document.createTextNode('AI Generation'));
@@ -325,24 +330,26 @@ function buildGenerateCard(seriesId) {
     h('div', { cls: 'card-header py-2' }, headerLabel),
     h('div', { cls: 'card-body p-2' },
       h('div', { cls: 'd-flex gap-2 flex-wrap align-items-end' },
-        h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint (optional)' }), hintInput),
+        h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelInput),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn))));
+        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
+        h('div', { cls: 'align-self-end pb-1' }, imgLabel))));
 }
 
 async function generateDescriptions(seriesId) {
   const btn = document.getElementById('generateBtn');
   const provider = document.getElementById('genProvider')?.value || null;
   const model    = document.getElementById('genModel')?.value.trim() || null;
-  const hint     = document.getElementById('genHint')?.value.trim() || null;
+  const hint          = document.getElementById('genHint')?.value.trim() || null;
+  const includeImages = document.getElementById('genIncludeImages')?.checked ?? false;
   if (btn) {
     btn.disabled = true;
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
   }
   try {
     await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
-      provider: provider || null, model: model || null, hint: hint || null,
+      provider: provider || null, model: model || null, hint: hint || null, include_images: includeImages,
     });
     await loadSeriesDetail(seriesId);
     showToast('Generated 3 new variants', 'success');

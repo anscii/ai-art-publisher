@@ -156,6 +156,7 @@ class GenerateRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
     hint: str | None = None
+    include_images: bool = False
 
 
 # ── Scheduling ────────────────────────────────────────────────────────────────

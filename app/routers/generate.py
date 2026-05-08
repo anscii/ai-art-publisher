@@ -48,7 +48,9 @@ def generate_descriptions(
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
-    if not s.images:
+    if not body.include_images and not body.hint:
+        raise HTTPException(status_code=400, detail="Hint is required when not including images")
+    if body.include_images and not s.images:
         raise HTTPException(status_code=400, detail="Series has no images")
 
     settings = get_or_create_settings(db)
@@ -58,11 +60,12 @@ def generate_descriptions(
     if not api_key:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
-    storage = get_storage_from_settings(settings)
-    images_b64 = []
-    for img in sorted(s.images, key=lambda i: i.order_index)[:4]:
-        data = storage.download_bytes(img.r2_key)
-        images_b64.append(base64.b64encode(data).decode())
+    images_b64: list[str] = []
+    if body.include_images:
+        storage = get_storage_from_settings(settings)
+        for img in sorted(s.images, key=lambda i: i.order_index)[:4]:
+            data = storage.download_bytes(img.r2_key)
+            images_b64.append(base64.b64encode(data).decode())
 
     provider = get_provider(provider_name, api_key)
     variants_data = provider.generate_variants(images_b64, model, body.hint)
