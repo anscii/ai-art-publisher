@@ -1,0 +1,15 @@
+.venv/
+data/
+.git/
+.gitignore
+.env
+.env.import
+.superpowers/
+docs/
+tests/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.sqlite
+.pytest_cache/

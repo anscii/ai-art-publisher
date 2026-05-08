@@ -1,0 +1,17 @@
+.env
+.env.import
+.venv/
+data/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.superpowers/
+.claude/
+*.db
+*.sqlite
+.coverage
+coverage.xml
+report.xml

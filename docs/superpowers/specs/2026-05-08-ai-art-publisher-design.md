@@ -14,7 +14,7 @@ A personal web tool for managing AI-generated image series: organize images into
 | Frontend | Vanilla JS + Bootstrap 5 + SortableJS (CDN, no build step) |
 | Database | SQLite via SQLAlchemy (single-file, on persistent volume) |
 | Image storage | Cloudflare R2 (S3-compatible, public bucket, boto3) |
-| Hosting | Fly.io (free tier VM + small persistent volume for DB only) |
+| App hosting | Fly.io (free tier VM + 1GB persistent volume for SQLite DB only — no images) |
 | Scheduling | APScheduler (in-process background thread) |
 | AI providers | Anthropic, OpenAI, Google Gemini (via their Python SDKs) |
 | Social posting | Telegram Bot API + Instagram Graph API (via httpx) |
