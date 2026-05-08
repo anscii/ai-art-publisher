@@ -13,7 +13,7 @@ primary_region = 'ams'
   destination = '/app/data'
 
 [deploy]
-  release_command = "alembic upgrade head"
+  release_command = "python scripts/migrate.py"
 
 [http_service]
   internal_port = 8080

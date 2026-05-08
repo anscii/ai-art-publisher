@@ -34,7 +34,7 @@ check: lint-fix lint types test
 
 # ── Database migrations ───────────────────────────────────────────────────────
 migrate:
-	$(PY) -m alembic upgrade head
+	$(PY) scripts/migrate.py
 
 migrate-new:
 	$(PY) -m alembic revision --autogenerate -m "$(msg)"
