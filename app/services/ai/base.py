@@ -8,8 +8,8 @@ Given images from a series, generate 3 distinct variants of:
 - title: short evocative name (3-6 words)
 - description_en: 2-4 sentences for Instagram. Creative, engaging. May invent a story, fictional creature description, or world-building snippet that fits the images.
 - description_ru: equivalent in Russian, more personal/conversational tone (for Telegram audience). Not a direct translation — rewrite for the tone.
-- tags_instagram: 15-20 relevant English hashtags (array of strings with #)
-- tags_telegram: 3-5 Russian hashtags (array of strings with #)
+- tags_instagram: up to 5 relevant English hashtags (array of strings with #)
+- tags_telegram: up to 3 Russian hashtags (array of strings with #)
 
 Variants should differ significantly — one story-focused, one creature/world-building, one poetic/atmospheric.
 
