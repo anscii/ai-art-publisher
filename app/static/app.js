@@ -29,6 +29,7 @@ const App = {
   series: [],
   total: 0,
   page: 1,
+  limit: 15,
   activeStatuses: new Set(['new', 'draft', 'approved', 'scheduled', 'posted']),
   currentSeriesId: null,
   currentSeries: null,
@@ -108,7 +109,7 @@ async function loadSeries(reset) {
   document.getElementById('seriesListLoading').classList.remove('d-none');
   try {
     const statuses = [...App.activeStatuses].join(',') || 'new';
-    const q = new URLSearchParams({ page: App.page, limit: 20, status: statuses });
+    const q = new URLSearchParams({ page: App.page, limit: App.limit, status: statuses });
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
@@ -411,6 +412,7 @@ function getDraftEdits() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('limitSel').value = String(App.limit);
   loadSeries(true);
   initLightbox();
   setInterval(() => {

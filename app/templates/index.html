@@ -40,6 +40,14 @@
           <span class="badge bg-secondary">skip</span></label></li>
       </ul>
     </div>
+    <select id="limitSel" class="form-select form-select-sm" style="width:60px"
+            onchange="App.limit=+this.value; loadSeries(true)">
+      <option>10</option>
+      <option>15</option>
+      <option>20</option>
+      <option>30</option>
+      <option>50</option>
+    </select>
     <button class="btn btn-sm btn-outline-secondary" onclick="showView('queue')">
       <i class="bi bi-calendar3"></i>
       <span class="d-none d-md-inline ms-1">Queue</span></button>
