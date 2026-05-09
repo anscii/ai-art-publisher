@@ -5,7 +5,13 @@ from typing import Any
 
 import google.generativeai as genai
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
+from app.services.ai.base import (
+    SYSTEM_PROMPT,
+    AIProvider,
+    AIVariantData,
+    build_user_text,
+    extract_json,
+)
 
 
 class GoogleProvider(AIProvider):
@@ -21,10 +27,7 @@ class GoogleProvider(AIProvider):
         for b64 in images_b64[:4]:
             img = PIL.Image.open(io.BytesIO(base64.b64decode(b64)))
             parts.append(img)
-        user_text = "Describe this artwork series."
-        if hint:
-            user_text += f" Additional context: {hint}"
-        parts.append(user_text)
+        parts.append(build_user_text(images_b64, hint))
 
         m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
         resp = m.generate_content(parts)

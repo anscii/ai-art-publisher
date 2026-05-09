@@ -3,7 +3,13 @@ from typing import Any
 
 import openai as _openai
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
+from app.services.ai.base import (
+    SYSTEM_PROMPT,
+    AIProvider,
+    AIVariantData,
+    build_user_text,
+    extract_json,
+)
 
 
 class OpenAIProvider(AIProvider):
@@ -21,10 +27,7 @@ class OpenAIProvider(AIProvider):
                     "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
                 }
             )
-        user_text = "Describe this artwork series."
-        if hint:
-            user_text += f" Additional context: {hint}"
-        content.append({"type": "text", "text": user_text})
+        content.append({"type": "text", "text": build_user_text(images_b64, hint)})
 
         messages: list[Any] = [
             {"role": "system", "content": SYSTEM_PROMPT},

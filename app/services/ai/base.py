@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 SYSTEM_PROMPT = """You are a creative writer helping describe AI-generated artwork series for social media.
 
-Given images from a series, generate 3 distinct variants of:
+Generate 3 distinct variants of:
 - title: short evocative name (3-6 words)
-- description_en: 2-4 sentences for Instagram. Creative, engaging. May invent a story, fictional creature description, or world-building snippet that fits the images.
-- description_ru: equivalent in Russian, more personal/conversational tone (for Telegram audience). Not a direct translation — rewrite for the tone.
+- description_en: 2-4 sentences for Instagram. Creative, engaging. May invent a story, fictional creature description, or world-building snippet that fits the artwork.
+- description_ru: equivalent in Russian, more personal/conversational tone (for Telegram audience of friends). Not a direct translation — rewrite for the tone.
 - tags_instagram: up to 5 relevant English hashtags (array of strings with #)
 - tags_telegram: up to 3 Russian hashtags (array of strings with #)
 
@@ -16,6 +16,16 @@ Variants should differ significantly — one story-focused, one creature/world-b
 Respond ONLY with valid JSON array of 3 objects. No markdown, no preamble."""
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+
+
+def build_user_text(images_b64: list[str], hint: str | None) -> str:
+    if images_b64:
+        text = "Describe this artwork series."
+        if hint:
+            text += f" Additional context: {hint}"
+    else:
+        text = f"Generate descriptions for this artwork series. Artwork description: {hint}"
+    return text
 
 
 def extract_json(text: str) -> str:

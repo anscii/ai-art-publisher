@@ -3,7 +3,13 @@ from typing import Any
 
 import anthropic as _anthropic
 
-from app.services.ai.base import SYSTEM_PROMPT, AIProvider, AIVariantData, extract_json
+from app.services.ai.base import (
+    SYSTEM_PROMPT,
+    AIProvider,
+    AIVariantData,
+    build_user_text,
+    extract_json,
+)
 
 
 class AnthropicProvider(AIProvider):
@@ -21,10 +27,7 @@ class AnthropicProvider(AIProvider):
                     "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
                 }
             )
-        user_text = "Describe this artwork series."
-        if hint:
-            user_text += f" Additional context: {hint}"
-        content.append({"type": "text", "text": user_text})
+        content.append({"type": "text", "text": build_user_text(images_b64, hint)})
 
         messages: list[Any] = [{"role": "user", "content": content}]
         resp = self._client.messages.create(
