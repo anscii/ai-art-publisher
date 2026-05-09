@@ -301,6 +301,15 @@ async function deleteImage(imageId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
+async function deleteVariant(variantId) {
+  try {
+    const updated = await apiFetch('DELETE', '/api/ai_variants/' + variantId);
+    App.currentSeries = updated;
+    renderEditor(updated);
+    showToast('Variant deleted', 'success');
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
 // ── Descriptions card ─────────────────────────────────────────────────────────
 function buildDescriptionsCard(series) {
   const variants = series.ai_variants || [];
@@ -316,7 +325,13 @@ function buildDescriptionsCard(series) {
       });
       btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
       btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:10px', text: v.provider }));
-      variantBtns.appendChild(btn);
+      const delBtn = h('button', {
+        cls: 'btn btn-xs btn-outline-danger px-1',
+        title: 'Delete variant',
+        onclick: (e) => { e.stopPropagation(); deleteVariant(v.id); },
+      });
+      delBtn.appendChild(document.createTextNode('×'));
+      variantBtns.appendChild(h('span', { style: 'display:inline-flex;gap:2px;align-items:center' }, btn, delBtn));
     });
   }
 

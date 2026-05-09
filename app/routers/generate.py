@@ -13,6 +13,7 @@ from app.services.ai.base import AIProvider
 from app.services.storage import get_storage_from_settings
 
 router = APIRouter(prefix="/api/series", tags=["generate"])
+variants_router = APIRouter(prefix="/api/ai_variants", tags=["ai_variants"])
 
 
 def get_provider(provider_name: str, api_key: str) -> AIProvider:
@@ -86,3 +87,14 @@ def generate_descriptions(
         db.add(v)
     db.commit()
     return series_to_detail(s, db).ai_variants
+
+
+@variants_router.delete("/{variant_id}")
+def delete_variant(variant_id: str, db: Session = Depends(get_db)):
+    v = db.get(AIVariant, variant_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    series = v.series
+    db.delete(v)
+    db.commit()
+    return series_to_detail(series, db)
