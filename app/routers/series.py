@@ -123,7 +123,7 @@ def list_series(
         q = q.where(Series.status.in_(statuses))
     else:
         q = q.where(Series.status != "skip")
-    q = q.order_by(Series.created_at.desc())
+    q = q.order_by(Series.created_at.asc())
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
     settings = get_or_create_settings(db)
