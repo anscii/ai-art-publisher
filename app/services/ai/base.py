@@ -53,6 +53,16 @@ def build_user_text(images_b64: list[str], hint: str | None) -> str:
     return text
 
 
+def fix_llm_text(text: str) -> str:
+    text = re.sub(r"(\w)—", r"\1 —", text)
+    text = re.sub(r"—(\w)", r"— \1", text)
+    return text
+
+
+def fix_llm_tag(tag: str) -> str:
+    return tag.replace("-", "_").replace(" ", "_")
+
+
 def extract_json(text: str) -> str:
     """Strip markdown code fences that models sometimes add despite instructions."""
     text = text.strip()
@@ -67,6 +77,13 @@ class AIVariantData:
     description_ru: str
     tags_instagram: list[str]
     tags_telegram: list[str]
+
+    def __post_init__(self):
+        self.title = fix_llm_text(self.title)
+        self.description_en = fix_llm_text(self.description_en)
+        self.description_ru = fix_llm_text(self.description_ru)
+        self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]
+        self.tags_telegram = [fix_llm_tag(t) for t in self.tags_telegram]
 
 
 class AIProvider(ABC):
