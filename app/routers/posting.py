@@ -26,7 +26,10 @@ def _build_ig_caption(s: Series) -> str:
 
 
 def _image_urls(s: Series, base_url: str) -> list[str]:
-    imgs = sorted([i for i in s.images if i.status == "queued"], key=lambda i: i.order_index)
+    imgs = sorted(
+        [i for i in s.images if i.status == "queued" and i.deleted_at is None],
+        key=lambda i: i.order_index,
+    )
     return [f"{base_url.rstrip('/')}/{img.r2_key}" for img in imgs]
 
 

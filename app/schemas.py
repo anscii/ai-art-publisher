@@ -53,6 +53,7 @@ class ImageResponse(BaseModel):
     order_index: int
     status: str
     uploaded_at: datetime
+    deleted_at: datetime | None
     public_url: str
 
 
@@ -186,3 +187,29 @@ class QueueItem(BaseModel):
 class PostResult(BaseModel):
     success: bool
     message: str
+
+
+# ── Trash ─────────────────────────────────────────────────────────────────────
+
+
+class TrashSeries(BaseModel):
+    id: str
+    title: str
+    original_folder_name: str | None
+    deleted_at: datetime
+    image_count: int
+    cover_url: str | None
+
+
+class TrashImage(BaseModel):
+    id: str
+    series_id: str
+    series_title: str
+    original_filename: str
+    public_url: str
+    deleted_at: datetime
+
+
+class TrashResponse(BaseModel):
+    series: list[TrashSeries]
+    images: list[TrashImage]

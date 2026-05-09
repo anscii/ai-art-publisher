@@ -217,26 +217,31 @@ function showView(view) {
   const sidebar = document.getElementById('seriesSidebar');
   const editor  = document.getElementById('editorPanel');
   const queue   = document.getElementById('queuePanel');
+  const trash   = document.getElementById('trashPanel');
   const back    = document.getElementById('backBtnRow');
   const mobile  = window.innerWidth < 992;
 
   if (!mobile) {
     sidebar.classList.remove('d-none');
     back.classList.add('d-none');
-    editor.classList.toggle('d-none', view === 'queue');
+    editor.classList.toggle('d-none', view === 'queue' || view === 'trash');
     queue.classList.toggle('d-none',  view !== 'queue');
+    trash.classList.toggle('d-none',  view !== 'trash');
   } else if (view === 'list') {
     sidebar.classList.remove('d-none');
     editor.classList.add('d-none');
     queue.classList.add('d-none');
+    trash.classList.add('d-none');
     back.classList.add('d-none');
   } else {
     sidebar.classList.add('d-none');
     back.classList.remove('d-none');
     editor.classList.toggle('d-none', view !== 'editor');
     queue.classList.toggle('d-none',  view !== 'queue');
+    trash.classList.toggle('d-none',  view !== 'trash');
   }
   if (view === 'queue') refreshQueue();
+  if (view === 'trash') refreshTrash();
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
@@ -282,6 +287,115 @@ async function cancelScheduleItem(seriesId) {
       updateSeriesItem(s);
     } catch (e) { showToast(e.message, 'danger'); }
   });
+}
+
+// ── Trash ─────────────────────────────────────────────────────────────────────
+async function refreshTrash() {
+  const content = document.getElementById('trashContent');
+  const emptyBtn = document.getElementById('emptyTrashBtn');
+  content.replaceChildren(h('div', { cls: 'text-muted text-center py-4', text: 'Loading…' }));
+  try {
+    const data = await apiFetch('GET', '/api/trash');
+    const isEmpty = !data.series.length && !data.images.length;
+    emptyBtn.classList.toggle('d-none', isEmpty);
+    emptyBtn.onclick = () => showConfirm('Permanently delete everything in Trash?', async () => {
+      await apiFetch('DELETE', '/api/trash');
+      showToast('Trash emptied', 'success');
+      refreshTrash();
+    });
+    if (isEmpty) {
+      content.replaceChildren(h('p', { cls: 'text-muted text-center py-4', text: 'Trash is empty' }));
+      return;
+    }
+    const nodes = [];
+    if (data.series.length) {
+      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2', text: 'Deleted Series' }));
+      data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
+    }
+    if (data.images.length) {
+      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2 mt-3', text: 'Deleted Images' }));
+      data.images.forEach(i => nodes.push(_buildTrashImageItem(i)));
+    }
+    content.replaceChildren(...nodes);
+  } catch (e) {
+    content.replaceChildren(h('p', { cls: 'text-danger', text: e.message }));
+  }
+}
+
+function _buildTrashSeriesItem(s) {
+  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
+  restoreBtn.appendChild(document.createTextNode('Restore'));
+  restoreBtn.addEventListener('click', async () => {
+    await apiFetch('POST', '/api/trash/series/' + s.id + '/restore');
+    showToast('Series restored', 'success');
+    loadSeries(true);
+    refreshTrash();
+  });
+  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  delBtn.appendChild(icon('bi bi-trash me-1'));
+  delBtn.appendChild(document.createTextNode('Delete'));
+  delBtn.addEventListener('click', () => showConfirm(
+    'Permanently delete this series and all its images?',
+    async () => {
+      await apiFetch('DELETE', '/api/trash/series/' + s.id);
+      showToast('Permanently deleted', 'success');
+      refreshTrash();
+    }
+  ));
+  const title = s.title || s.original_folder_name || s.id.slice(0, 8);
+  const thumb = s.cover_url
+    ? Object.assign(document.createElement('img'), {
+        src: s.cover_url, className: 'rounded flex-shrink-0',
+        style: 'width:48px;height:42px;object-fit:cover',
+      })
+    : h('div', { cls: 'bg-secondary rounded flex-shrink-0', style: 'width:48px;height:42px' });
+  return h('div', { cls: 'card mb-2' },
+    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
+      thumb,
+      h('div', { cls: 'flex-grow-1 overflow-hidden' },
+        h('div', { cls: 'fw-medium text-truncate', text: title }),
+        h('div', { cls: 'text-muted small', text: s.image_count + ' images · deleted ' + _timeAgo(s.deleted_at) })),
+      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+}
+
+function _buildTrashImageItem(i) {
+  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
+  restoreBtn.appendChild(document.createTextNode('Restore'));
+  restoreBtn.addEventListener('click', async () => {
+    await apiFetch('POST', '/api/trash/images/' + i.id + '/restore');
+    showToast('Image restored', 'success');
+    refreshTrash();
+    if (App.currentSeriesId === i.series_id) loadSeriesDetail(i.series_id);
+  });
+  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  delBtn.appendChild(icon('bi bi-trash me-1'));
+  delBtn.appendChild(document.createTextNode('Delete'));
+  delBtn.addEventListener('click', () => showConfirm('Permanently delete this image?', async () => {
+    await apiFetch('DELETE', '/api/trash/images/' + i.id);
+    showToast('Permanently deleted', 'success');
+    refreshTrash();
+  }));
+  const thumb = Object.assign(document.createElement('img'), {
+    src: i.public_url, className: 'rounded flex-shrink-0',
+    style: 'width:48px;height:42px;object-fit:cover',
+  });
+  return h('div', { cls: 'card mb-2' },
+    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
+      thumb,
+      h('div', { cls: 'flex-grow-1 overflow-hidden' },
+        h('div', { cls: 'fw-medium text-truncate small', text: i.original_filename }),
+        h('div', { cls: 'text-muted small', text: 'from "' + i.series_title + '" · deleted ' + _timeAgo(i.deleted_at) })),
+      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+}
+
+function _timeAgo(iso) {
+  const secs = Math.floor((Date.now() - new Date(iso + 'Z')) / 1000);
+  if (secs < 60) return 'just now';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+  return Math.floor(secs / 86400) + 'd ago';
 }
 
 // ── Draft helpers ─────────────────────────────────────────────────────────────

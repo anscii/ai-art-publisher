@@ -61,4 +61,8 @@ def test_update_series(client):
 def test_delete_series(client):
     sid = client.post("/api/series", json={"title": "X"}).json()["id"]
     client.delete(f"/api/series/{sid}")
+    # soft delete: hidden from normal view
     assert client.get(f"/api/series/{sid}").status_code == 404
+    # but visible in trash
+    trash = client.get("/api/trash").json()
+    assert any(s["id"] == sid for s in trash["series"])

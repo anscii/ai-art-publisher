@@ -31,6 +31,7 @@ def image_to_resp(img: Image, base_url: str) -> ImageResponse:
         order_index=img.order_index,
         status=img.status,
         uploaded_at=img.uploaded_at,
+        deleted_at=img.deleted_at,
         public_url=f"{base_url}/{img.r2_key}" if base_url else img.r2_key,
     )
 
@@ -53,7 +54,7 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
 def series_to_detail(s: Series, db: Session) -> SeriesDetail:
     settings = get_or_create_settings(db)
     base_url = settings.r2_public_base_url.rstrip("/")
-    images = sorted(s.images, key=lambda i: i.order_index)
+    images = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
     variants = sorted(s.ai_variants, key=lambda v: v.generated_at, reverse=True)
     return SeriesDetail(
         id=s.id,
@@ -78,10 +79,8 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
 
 
 def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
-    cover_url = None
-    if s.images and base_url:
-        first = sorted(s.images, key=lambda i: i.order_index)[0]
-        cover_url = f"{base_url}/{first.r2_key}"
+    active = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
+    cover_url = f"{base_url}/{active[0].r2_key}" if active and base_url else None
     return SeriesListItem(
         id=s.id,
         original_folder_name=s.original_folder_name,
@@ -92,7 +91,7 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
         scheduled_at=s.scheduled_at,
         posted_to_telegram_at=s.posted_to_telegram_at,
         posted_to_instagram_at=s.posted_to_instagram_at,
-        image_count=len(s.images),
+        image_count=len(active),
         cover_url=cover_url,
     )
 
@@ -118,7 +117,7 @@ def list_series(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> SeriesListResponse:
-    q = select(Series)
+    q = select(Series).where(Series.deleted_at.is_(None))
     if status:
         statuses = [s.strip() for s in status.split(",")]
         q = q.where(Series.status.in_(statuses))
@@ -140,7 +139,7 @@ def list_series(
 @router.get("/{series_id}")
 def get_series(series_id: str, db: Session = Depends(get_db)) -> SeriesDetail:
     s = db.get(Series, series_id)
-    if not s:
+    if not s or s.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Series not found")
     return series_to_detail(s, db)
 
@@ -166,15 +165,6 @@ def delete_series(series_id: str, db: Session = Depends(get_db)):
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
-    settings = get_or_create_settings(db)
-    try:
-        from app.services.storage import get_storage_from_settings
-
-        storage = get_storage_from_settings(settings)
-        for img in s.images:
-            storage.delete(img.r2_key)
-    except Exception:
-        pass  # R2 cleanup best-effort; don't block DB delete
-    db.delete(s)
+    s.deleted_at = datetime.utcnow()
     db.commit()
     return {"deleted": series_id}

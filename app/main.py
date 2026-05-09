@@ -15,6 +15,7 @@ from app.routers import posting as posting_router
 from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
 from app.routers import settings as settings_router
+from app.routers import trash as trash_router
 from app.scheduler import start_scheduler, stop_scheduler
 
 
@@ -74,6 +75,7 @@ app.include_router(images_router.router)
 app.include_router(generate_router.router)
 app.include_router(posting_router.router)
 app.include_router(scheduling_router.router)
+app.include_router(trash_router.router)
 
 
 @app.get("/")

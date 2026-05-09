@@ -111,7 +111,7 @@ function buildThumb(img, seriesId) {
   const delA = h('a', { cls: 'dropdown-item small text-danger', href: '#' });
   delA.appendChild(icon('bi bi-trash me-1'));
   delA.appendChild(document.createTextNode('Delete'));
-  delA.addEventListener('click', e => { e.preventDefault(); deleteImage(img.id, seriesId); });
+  delA.addEventListener('click', e => { e.preventDefault(); deleteImage(img.id); });
   delLi.appendChild(delA);
   dropItems.appendChild(delLi);
 
@@ -213,23 +213,21 @@ function initLightbox() {
     const img = _lightboxImages[_lightboxIdx];
     _lightboxPatch(img.status === 'skip' ? 'pending' : 'skip');
   });
-  document.getElementById('lightboxDeleteBtn').addEventListener('click', () => {
+  document.getElementById('lightboxDeleteBtn').addEventListener('click', async () => {
     const img = _lightboxImages[_lightboxIdx];
-    showConfirm('Delete this image?', async () => {
-      try {
-        await apiFetch('DELETE', '/api/images/' + img.id);
-        _lightboxImages.splice(_lightboxIdx, 1);
-        if (!_lightboxImages.length) {
-          bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
-        } else {
-          _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
-          _lightboxRender();
-        }
-        const updated = await apiFetch('GET', '/api/series/' + App.currentSeriesId);
-        App.currentSeries = updated;
-        renderEditor(updated);
-      } catch (err) { showToast(err.message, 'danger'); }
-    });
+    try {
+      const updated = await apiFetch('DELETE', '/api/images/' + img.id);
+      _lightboxImages.splice(_lightboxIdx, 1);
+      if (!_lightboxImages.length) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
+      } else {
+        _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
+        _lightboxRender();
+      }
+      App.currentSeries = updated;
+      renderEditor(updated);
+      showToast('Moved to Trash', 'success');
+    } catch (err) { showToast(err.message, 'danger'); }
   });
 }
 
@@ -294,14 +292,13 @@ async function moveImage(imageId, targetId, currentId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-async function deleteImage(imageId, seriesId) {
-  showConfirm('Delete this image?', async () => {
-    try {
-      await apiFetch('DELETE', '/api/images/' + imageId);
-      await loadSeriesDetail(seriesId);
-      showToast('Deleted', 'success');
-    } catch (e) { showToast(e.message, 'danger'); }
-  });
+async function deleteImage(imageId) {
+  try {
+    const updated = await apiFetch('DELETE', '/api/images/' + imageId);
+    App.currentSeries = updated;
+    renderEditor(updated);
+    showToast('Moved to Trash', 'success');
+  } catch (e) { showToast(e.message, 'danger'); }
 }
 
 // ── Descriptions card ─────────────────────────────────────────────────────────
@@ -539,20 +536,17 @@ async function saveStatus(seriesId) {
 }
 
 async function deleteSeries(seriesId) {
-  const name = App.currentSeries?.title || App.currentSeries?.original_folder_name || 'this series';
-  showConfirm(`Delete "${name}" and all its images? This cannot be undone.`, async () => {
-    try {
-      await apiFetch('DELETE', '/api/series/' + seriesId);
-      App.series = App.series.filter(s => s.id !== seriesId);
-      App.currentSeriesId = null;
-      App.currentSeries = null;
-      document.getElementById('seriesItems').querySelector(`[data-series-id="${seriesId}"]`)?.remove();
-      document.getElementById('editorPanel').replaceChildren(
-        h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
-      );
-      showToast('Series deleted', 'success');
-    } catch (e) { showToast(e.message, 'danger'); }
-  });
+  try {
+    await apiFetch('DELETE', '/api/series/' + seriesId);
+    App.series = App.series.filter(s => s.id !== seriesId);
+    App.currentSeriesId = null;
+    App.currentSeries = null;
+    document.getElementById('seriesItems').querySelector(`[data-series-id="${seriesId}"]`)?.remove();
+    document.getElementById('editorPanel').replaceChildren(
+      h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
+    );
+    showToast('Moved to Trash', 'success');
+  } catch (e) { showToast(e.message, 'danger'); }
 }
 
 // ── Draft restore ─────────────────────────────────────────────────────────────

@@ -142,11 +142,6 @@ def delete_image(image_id: str, db: Session = Depends(get_db)):
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Image not found")
-    settings = get_or_create_settings(db)
-    try:
-        get_storage_from_settings(settings).delete(img.r2_key)
-    except Exception:
-        pass
-    db.delete(img)
+    img.deleted_at = datetime.utcnow()
     db.commit()
-    return {"deleted": image_id}
+    return series_to_detail(img.series, db)

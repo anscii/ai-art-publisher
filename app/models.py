@@ -30,6 +30,7 @@ class Series(Base):
     scheduled_targets: Mapped[str] = mapped_column(Text, default="[]")
     posted_to_telegram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     posted_to_instagram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     images: Mapped[list["Image"]] = relationship(
         "Image",
@@ -55,6 +56,7 @@ class Image(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String, default="pending")
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="images")
 
