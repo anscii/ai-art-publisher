@@ -505,6 +505,11 @@ function buildActionsCard(series) {
   headerLabel.appendChild(icon('bi bi-send me-1'));
   headerLabel.appendChild(document.createTextNode('Actions'));
 
+  const deleteSeriesBtn = h('button', { cls: 'btn btn-sm btn-outline-danger' });
+  deleteSeriesBtn.appendChild(icon('bi bi-trash me-1'));
+  deleteSeriesBtn.appendChild(document.createTextNode('Delete series'));
+  deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
+
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header py-2' }, headerLabel),
     h('div', { cls: 'card-body p-2' },
@@ -518,7 +523,8 @@ function buildActionsCard(series) {
       h('div', null,
         h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule' }),
         schedControls,
-        h('div', { id: 'schedResult', cls: 'mt-1 small' }))));
+        h('div', { id: 'schedResult', cls: 'mt-1 small' })),
+      h('div', { cls: 'mt-3 pt-3 border-top' }, deleteSeriesBtn)));
 }
 
 async function saveStatus(seriesId) {
@@ -529,6 +535,23 @@ async function saveStatus(seriesId) {
     updateSeriesItem(updated);
     showToast('Status saved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function deleteSeries(seriesId) {
+  const name = App.currentSeries?.title || App.currentSeries?.original_folder_name || 'this series';
+  showConfirm(`Delete "${name}" and all its images? This cannot be undone.`, async () => {
+    try {
+      await apiFetch('DELETE', '/api/series/' + seriesId);
+      App.series = App.series.filter(s => s.id !== seriesId);
+      App.currentSeriesId = null;
+      App.currentSeries = null;
+      document.getElementById('seriesItems').querySelector(`[data-series-id="${seriesId}"]`)?.remove();
+      document.getElementById('editorPanel').replaceChildren(
+        h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
+      );
+      showToast('Series deleted', 'success');
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
 }
 
 // ── Draft restore ─────────────────────────────────────────────────────────────
