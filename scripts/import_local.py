@@ -55,6 +55,8 @@ def import_series(
     r2_secret_key: str,
     r2_bucket: str,
     workers: int = 8,
+    auth_username: str | None = None,
+    auth_password: str | None = None,
 ):
     s3 = boto3.client(
         "s3",
@@ -67,7 +69,8 @@ def import_series(
     folders = sorted(d for d in Path(source_dir).iterdir() if d.is_dir())
     print(f"Found {len(folders)} folders in {source_dir}")
 
-    with httpx.Client(base_url=app_url, timeout=30) as api:
+    auth = (auth_username, auth_password) if auth_username and auth_password else None
+    with httpx.Client(base_url=app_url, timeout=30, auth=auth) as api:
         # Collect already-imported folder names
         existing = set()
         page = 1
@@ -80,6 +83,7 @@ def import_series(
                     "page": page,
                 },
             )
+            print(resp)
             data = resp.json()
             for s in data["items"]:
                 if s["original_folder_name"]:
@@ -160,4 +164,6 @@ if __name__ == "__main__":
         r2_secret_key=os.environ["R2_SECRET_KEY"],
         r2_bucket=os.environ["R2_BUCKET"],
         workers=args.workers,
+        auth_username=os.environ.get("AUTH_USERNAME"),
+        auth_password=os.environ.get("AUTH_PASSWORD"),
     )
