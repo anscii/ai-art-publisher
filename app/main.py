@@ -61,6 +61,8 @@ async def basic_auth(request: Request, call_next):
 async def noindex_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
