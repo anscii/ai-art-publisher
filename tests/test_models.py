@@ -1,9 +1,9 @@
 from app import models
-from tests.conftest import TestingSessionLocal
+from tests.conftest import _TestingSessionLocal
 
 
 def test_series_defaults():
-    db = TestingSessionLocal()
+    db = _TestingSessionLocal()
     s = models.Series(title="Test")
     db.add(s)
     db.commit()
@@ -17,7 +17,7 @@ def test_series_defaults():
 
 
 def test_image_belongs_to_series():
-    db = TestingSessionLocal()
+    db = _TestingSessionLocal()
     s = models.Series(title="S")
     db.add(s)
     db.commit()
@@ -35,7 +35,7 @@ def test_image_belongs_to_series():
 
 
 def test_cascade_delete_images():
-    db = TestingSessionLocal()
+    db = _TestingSessionLocal()
     s = models.Series(title="S")
     db.add(s)
     db.commit()
