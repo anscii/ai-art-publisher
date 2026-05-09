@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.database as _db_module
 from app.database import Base, get_db
 from app.main import app
 
@@ -14,11 +15,16 @@ _engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+_TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
 @pytest.fixture(autouse=True)
-def setup_db():
+def setup_db(monkeypatch):
+    # Patch the module-level engine and session factory so that init_db() in the
+    # FastAPI lifespan uses the test DB, not whatever DATABASE_URL points to locally.
+    monkeypatch.setattr(_db_module, "engine", _engine)
+    monkeypatch.setattr(_db_module, "SessionLocal", _TestingSessionLocal)
+    monkeypatch.setattr(_db_module, "_bootstrap_settings", lambda db: None)
     Base.metadata.create_all(bind=_engine)
     yield
     Base.metadata.drop_all(bind=_engine)
@@ -26,7 +32,7 @@ def setup_db():
 
 @pytest.fixture
 def db():
-    session = TestingSessionLocal()
+    session = _TestingSessionLocal()
     try:
         yield session
     finally:
