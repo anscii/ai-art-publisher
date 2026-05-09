@@ -505,13 +505,15 @@ function buildActionsCard(series) {
   headerLabel.appendChild(icon('bi bi-send me-1'));
   headerLabel.appendChild(document.createTextNode('Actions'));
 
-  const deleteSeriesBtn = h('button', { cls: 'btn btn-sm btn-outline-danger' });
-  deleteSeriesBtn.appendChild(icon('bi bi-trash me-1'));
-  deleteSeriesBtn.appendChild(document.createTextNode('Delete series'));
+  const deleteSeriesBtn = h('button', {
+    cls: 'btn btn-xs btn-outline-danger ms-auto',
+    title: 'Delete series',
+  });
+  deleteSeriesBtn.appendChild(icon('bi bi-trash'));
   deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
 
   return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2' }, headerLabel),
+    h('div', { cls: 'card-header d-flex align-items-center py-2' }, headerLabel, deleteSeriesBtn),
     h('div', { cls: 'card-body p-2' },
       h('div', { cls: 'd-flex gap-2 align-items-center mb-3' }, statusSel, saveStatusBtn),
       h('div', { cls: 'mb-3' },
@@ -523,8 +525,7 @@ function buildActionsCard(series) {
       h('div', null,
         h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule' }),
         schedControls,
-        h('div', { id: 'schedResult', cls: 'mt-1 small' })),
-      h('div', { cls: 'mt-3 pt-3 border-top' }, deleteSeriesBtn)));
+        h('div', { id: 'schedResult', cls: 'mt-1 small' }))));
 }
 
 async function saveStatus(seriesId) {
