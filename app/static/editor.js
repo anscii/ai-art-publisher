@@ -51,7 +51,7 @@ function buildImagesCard(series) {
     : 'Images (' + series.images.length + ')';
   headerLabel.appendChild(document.createTextNode(countLabel));
 
-  const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:80px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
+  const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:160px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
   if (!series.images.length) {
     strip.appendChild(h('span', { cls: 'text-muted small align-self-center p-2', text: 'No images yet' }));
   } else {
@@ -67,7 +67,7 @@ function buildThumb(img, seriesId) {
   const imgEl = document.createElement('img');
   imgEl.setAttribute('src', img.public_url);
   imgEl.className = 'rounded';
-  imgEl.style.cssText = 'width:80px;height:70px;object-fit:cover';
+  imgEl.style.cssText = 'width:160px;height:140px;object-fit:cover';
   imgEl.loading = 'lazy';
   imgEl.style.cursor = 'zoom-in';
   imgEl.addEventListener('click', e => {

@@ -4,7 +4,7 @@
 .series-item { cursor: pointer; transition: background 0.1s; }
 .series-item:hover { background-color: var(--bs-body-secondary) !important; }
 .btn-xs { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1.2; }
-#imageStrip { min-height: 80px; overflow-x: auto; flex-wrap: nowrap !important; }
+#imageStrip { min-height: 160px; overflow-x: auto; flex-wrap: nowrap !important; }
 
 .lightbox-img {
   max-width: min(90vw, 1400px);
