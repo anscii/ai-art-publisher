@@ -109,9 +109,11 @@ DB migrations run automatically as a release command before the new version star
 
 ### Redeploy after code changes
 
+Push to `master` — GitHub Actions deploys automatically:
+
 ```bash
 git add . && git commit -m "feat: ..."
-fly deploy
+git push
 ```
 
 ---
@@ -139,6 +141,23 @@ series_folders/
 ```
 
 Timestamps are parsed from filenames automatically. All imported series get status `new`.
+
+---
+
+## Test AI Generation Locally
+
+Test prompts without opening the browser:
+
+```bash
+UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+  --hint "glowing cathedral half-submerged in a frozen sea, red aurora overhead"
+
+# Override provider/model
+UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+  --hint "..." --provider openai --model gpt-4o-mini
+```
+
+`--provider` and `--model` default to `DEFAULT_PROVIDER` / `DEFAULT_MODEL` from `.env`.
 
 ---
 

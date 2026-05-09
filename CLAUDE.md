@@ -42,8 +42,9 @@ app/
 alembic/           — Alembic migration environment
   versions/        — 001_image_status.py, 002_soft_delete.py
 scripts/
-  import_local.py  — bulk import CLI (boto3 direct upload + API register)
-  migrate.py       — DB migration script used by fly.toml release_command
+  import_local.py      — bulk import CLI (boto3 direct upload + API register)
+  migrate.py           — DB migration script used by fly.toml release_command
+  test_generation.py   — local CLI to test AI generation (--hint required, --provider/--model optional)
 tests/             — pytest, in-memory SQLite via StaticPool conftest
 data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 ```
