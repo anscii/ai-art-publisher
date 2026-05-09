@@ -77,6 +77,7 @@ function buildThumb(img, seriesId) {
     const images = thumbs.map(el => ({
       id: el.dataset.imageId,
       public_url: el.querySelector('img').getAttribute('src'),
+      status: el.dataset.imageStatus || 'pending',
     }));
     const idx = thumbs.findIndex(el => el.dataset.imageId === img.id);
     openLightbox(images, idx >= 0 ? idx : 0);
@@ -124,7 +125,7 @@ function buildThumb(img, seriesId) {
   statusBtn.appendChild(icon(_statusIcon(img.status)));
   statusBtn.addEventListener('click', async e => {
     e.stopPropagation();
-    const next = img.status === 'queued' ? 'pending' : 'queued';
+    const next = img.status === 'queued' ? 'pending' : img.status === 'skip' ? 'pending' : 'queued';
     try {
       const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: next });
       App.currentSeries = updated;
@@ -132,8 +133,10 @@ function buildThumb(img, seriesId) {
     } catch (err) { showToast(err.message, 'danger'); }
   });
 
-  const outerCls = 'position-relative flex-shrink-0' + (img.status === 'posted' ? ' thumb-posted' : '');
-  return h('div', { cls: outerCls, 'data-image-id': img.id },
+  const outerCls = 'position-relative flex-shrink-0' +
+    (img.status === 'posted' ? ' thumb-posted' : '') +
+    (img.status === 'skip' ? ' thumb-skip' : '');
+  return h('div', { cls: outerCls, 'data-image-id': img.id, 'data-image-status': img.status },
     imgEl,
     statusBtn,
     gripEl,
@@ -190,6 +193,44 @@ function initLightbox() {
     const dx = e.changedTouches[0].clientX - _touchStartX;
     if (Math.abs(dx) > 50) lightboxNav(dx < 0 ? +1 : -1);
   }, { passive: true });
+
+  async function _lightboxPatch(newStatus) {
+    const img = _lightboxImages[_lightboxIdx];
+    try {
+      const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: newStatus });
+      _lightboxImages[_lightboxIdx] = { ...img, status: newStatus };
+      _lightboxRender();
+      App.currentSeries = updated;
+      renderEditor(updated);
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  document.getElementById('lightboxQueueBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    _lightboxPatch(img.status === 'queued' ? 'pending' : 'queued');
+  });
+  document.getElementById('lightboxSkipBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    _lightboxPatch(img.status === 'skip' ? 'pending' : 'skip');
+  });
+  document.getElementById('lightboxDeleteBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    showConfirm('Delete this image?', async () => {
+      try {
+        await apiFetch('DELETE', '/api/images/' + img.id);
+        _lightboxImages.splice(_lightboxIdx, 1);
+        if (!_lightboxImages.length) {
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
+        } else {
+          _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
+          _lightboxRender();
+        }
+        const updated = await apiFetch('GET', '/api/series/' + App.currentSeriesId);
+        App.currentSeries = updated;
+        renderEditor(updated);
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+  });
 }
 
 function openLightbox(images, startIdx) {
@@ -209,6 +250,16 @@ function _lightboxRender() {
   const single = _lightboxImages.length <= 1;
   document.getElementById('lightboxPrev').classList.toggle('invisible', single);
   document.getElementById('lightboxNext').classList.toggle('invisible', single);
+
+  const qBtn = document.getElementById('lightboxQueueBtn');
+  const isQueued = img.status === 'queued';
+  qBtn.replaceChildren(icon(isQueued ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
+    document.createTextNode(isQueued ? 'Unqueue' : 'Queue'));
+
+  const sBtn = document.getElementById('lightboxSkipBtn');
+  const isSkip = img.status === 'skip';
+  sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
+    document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
 }
 
 function lightboxNav(delta) {
