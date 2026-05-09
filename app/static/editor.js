@@ -181,6 +181,15 @@ function initLightbox() {
     .addEventListener('hidden.bs.modal', () => { _lightboxOpen = false; });
   document.getElementById('lightboxPrev').addEventListener('click', () => lightboxNav(-1));
   document.getElementById('lightboxNext').addEventListener('click', () => lightboxNav(+1));
+
+  let _touchStartX = 0;
+  const modal = document.getElementById('lightboxModal');
+  modal.addEventListener('touchstart', e => { _touchStartX = e.changedTouches[0].clientX; }, { passive: true });
+  modal.addEventListener('touchend', e => {
+    if (!_lightboxOpen) return;
+    const dx = e.changedTouches[0].clientX - _touchStartX;
+    if (Math.abs(dx) > 50) lightboxNav(dx < 0 ? +1 : -1);
+  }, { passive: true });
 }
 
 function openLightbox(images, startIdx) {
