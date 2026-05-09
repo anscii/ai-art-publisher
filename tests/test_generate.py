@@ -81,3 +81,31 @@ def test_generate_text_only_with_hint(client):
         resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox spirit"})
     assert resp.status_code == 200
     assert len(resp.json()) == 3
+
+
+def _make_series_with_variants(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    variants = client.get(f"/api/series/{sid}").json()["ai_variants"]
+    return sid, variants
+
+
+def test_delete_variant(client):
+    sid, variants = _make_series_with_variants(client)
+    assert len(variants) == 3
+    vid = variants[0]["id"]
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 200
+    remaining = resp.json()["ai_variants"]
+    assert len(remaining) == 2
+    assert all(v["id"] != vid for v in remaining)
+
+
+def test_delete_variant_not_found(client):
+    resp = client.delete("/api/ai_variants/nonexistent-id")
+    assert resp.status_code == 404
