@@ -17,6 +17,7 @@ class SettingsResponse(BaseModel):
     telegram_channel_id: str
     instagram_access_token: str
     instagram_user_id: str
+    facebook_page_id: str
     r2_endpoint: str
     r2_access_key: str
     r2_secret_key: str
@@ -34,6 +35,7 @@ class SettingsUpdate(BaseModel):
     telegram_channel_id: str | None = None
     instagram_access_token: str | None = None
     instagram_user_id: str | None = None
+    facebook_page_id: str | None = None
     r2_endpoint: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
@@ -123,6 +125,7 @@ class SeriesListItem(BaseModel):
     scheduled_at: datetime | None
     posted_to_telegram_at: datetime | None
     posted_to_instagram_at: datetime | None
+    posted_to_facebook_at: datetime | None
     image_count: int
     cover_url: str | None
 
@@ -151,6 +154,7 @@ class SeriesDetail(BaseModel):
     scheduled_targets: list[str]
     posted_to_telegram_at: datetime | None
     posted_to_instagram_at: datetime | None
+    posted_to_facebook_at: datetime | None
     images: list[ImageResponse]
     ai_variants: list[AIVariantResponse]
 

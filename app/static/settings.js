@@ -4,7 +4,7 @@ async function loadSettings() {
     const fields = [
       'anthropic_api_key','openai_api_key','google_api_key','default_model',
       'telegram_bot_token','telegram_channel_id','instagram_access_token','instagram_user_id',
-      'r2_endpoint','r2_access_key','r2_secret_key','r2_bucket','r2_public_base_url',
+      'facebook_page_id','r2_endpoint','r2_access_key','r2_secret_key','r2_bucket','r2_public_base_url',
     ];
     fields.forEach(f => { const el = document.getElementById('s_' + f); if (el) el.value = s[f] || ''; });
     const provEl = document.getElementById('s_default_provider');
@@ -16,7 +16,7 @@ async function saveSettings() {
   const fields = [
     'anthropic_api_key','openai_api_key','google_api_key','default_provider','default_model',
     'telegram_bot_token','telegram_channel_id','instagram_access_token','instagram_user_id',
-    'r2_endpoint','r2_access_key','r2_secret_key','r2_bucket','r2_public_base_url',
+    'facebook_page_id','r2_endpoint','r2_access_key','r2_secret_key','r2_bucket','r2_public_base_url',
   ];
   const body = {};
   fields.forEach(f => {
