@@ -1,6 +1,10 @@
+import time
+
 import httpx
 
 BASE = "https://graph.instagram.com/v21.0"
+_POLL_INTERVAL = 3  # seconds between status checks
+_POLL_TIMEOUT = 120  # max seconds to wait for FINISHED
 
 
 class InstagramService:
@@ -12,6 +16,22 @@ class InstagramService:
         if len(image_urls) == 1:
             return self._post_single(image_urls[0], caption)
         return self._post_carousel(image_urls[:10], caption)
+
+    def _wait_for_container(self, client: httpx.Client, container_id: str) -> str | None:
+        """Poll container status until FINISHED or ERROR/timeout. Returns error message or None."""
+        deadline = time.monotonic() + _POLL_TIMEOUT
+        while time.monotonic() < deadline:
+            r = client.get(
+                f"{BASE}/{container_id}",
+                params={"fields": "status_code", "access_token": self._token},
+            )
+            status = r.json().get("status_code", "")
+            if status == "FINISHED":
+                return None
+            if status == "ERROR":
+                return "Instagram container processing failed (ERROR)"
+            time.sleep(_POLL_INTERVAL)
+        return f"Instagram container not ready after {_POLL_TIMEOUT}s"
 
     def _post_single(self, image_url: str, caption: str) -> dict:
         with httpx.Client(timeout=60) as client:
@@ -26,6 +46,9 @@ class InstagramService:
                     "ok": False,
                     "description": data.get("error", {}).get("message", "Create failed"),
                 }
+            err = self._wait_for_container(client, data["id"])
+            if err:
+                return {"ok": False, "description": err}
             resp2 = client.post(
                 f"{BASE}/{self._user_id}/media_publish",
                 params={"access_token": self._token},
@@ -54,6 +77,9 @@ class InstagramService:
                         "ok": False,
                         "description": d.get("error", {}).get("message", "Item create failed"),
                     }
+                err = self._wait_for_container(client, d["id"])
+                if err:
+                    return {"ok": False, "description": err}
                 child_ids.append(d["id"])
 
             resp = client.post(
@@ -67,6 +93,9 @@ class InstagramService:
                     "ok": False,
                     "description": d.get("error", {}).get("message", "Carousel create failed"),
                 }
+            err = self._wait_for_container(client, d["id"])
+            if err:
+                return {"ok": False, "description": err}
 
             resp2 = client.post(
                 f"{BASE}/{self._user_id}/media_publish",
