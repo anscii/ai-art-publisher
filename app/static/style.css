@@ -30,5 +30,5 @@
   user-select: none;
 }
 
-.thumb-posted { opacity: 0.55; }
-.thumb-skip { opacity: 0.4; filter: grayscale(80%); }
+.thumb-posted { opacity: 0.55; ; filter: grayscale(100%) blur(1px); }
+.thumb-skip { opacity: 0.4; filter: grayscale(10%) blur(2px); }

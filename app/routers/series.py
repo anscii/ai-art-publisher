@@ -73,6 +73,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         scheduled_targets=json.loads(s.scheduled_targets),
         posted_to_telegram_at=s.posted_to_telegram_at,
         posted_to_instagram_at=s.posted_to_instagram_at,
+        posted_to_facebook_at=s.posted_to_facebook_at,
         images=[image_to_resp(img, base_url) for img in images],
         ai_variants=[variant_to_resp(v) for v in variants],
     )
@@ -91,6 +92,7 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
         scheduled_at=s.scheduled_at,
         posted_to_telegram_at=s.posted_to_telegram_at,
         posted_to_instagram_at=s.posted_to_instagram_at,
+        posted_to_facebook_at=s.posted_to_facebook_at,
         image_count=len(active),
         cover_url=cover_url,
     )

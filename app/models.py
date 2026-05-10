@@ -30,6 +30,7 @@ class Series(Base):
     scheduled_targets: Mapped[str] = mapped_column(Text, default="[]")
     posted_to_telegram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     posted_to_instagram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    posted_to_facebook_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     images: Mapped[list["Image"]] = relationship(
@@ -91,6 +92,8 @@ class AppSettings(Base):
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
     instagram_access_token: Mapped[str] = mapped_column(String, default="")
     instagram_user_id: Mapped[str] = mapped_column(String, default="")
+    facebook_page_id: Mapped[str] = mapped_column(String, default="")
+    facebook_page_access_token: Mapped[str] = mapped_column(String, default="")
     r2_endpoint: Mapped[str] = mapped_column(String, default="")
     r2_access_key: Mapped[str] = mapped_column(String, default="")
     r2_secret_key: Mapped[str] = mapped_column(String, default="")
