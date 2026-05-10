@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostResult
+from app.services.facebook import FacebookService
 from app.services.instagram import InstagramService
 from app.services.telegram import TelegramService
 
@@ -53,15 +54,30 @@ def _do_instagram(s: Series, settings) -> dict:
     return svc.post(urls, _build_ig_caption(s))
 
 
-def _handle_result(db: Session, s: Series, result: dict, platform: str) -> PostResult:
+def _do_facebook(s: Series, settings) -> dict:
+    if not settings.facebook_page_id:
+        return {"ok": True, "skipped": True}
+    svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
+    urls = _image_urls(s, settings.r2_public_base_url)
+    return svc.post(urls, _build_ig_caption(s))
+
+
+def _handle_result(
+    db: Session, s: Series, result: dict, platform: str, facebook_result: dict | None = None
+) -> PostResult:
     if result["ok"]:
         if platform in ("telegram", "both"):
             s.posted_to_telegram_at = datetime.utcnow()
         if platform in ("instagram", "both"):
             s.posted_to_instagram_at = datetime.utcnow()
+            if facebook_result and facebook_result.get("ok") and not facebook_result.get("skipped"):
+                s.posted_to_facebook_at = datetime.utcnow()
         _after_post_success(s)
         db.commit()
-        return PostResult(success=True, message=f"Posted to {platform}")
+        message = f"Posted to {platform}"
+        if facebook_result and facebook_result.get("ok") and not facebook_result.get("skipped"):
+            message += " and FB Page"
+        return PostResult(success=True, message=message)
     msg = result.get("description", "Unknown error")
     s.notes = (s.notes + f"\n[{platform} error] {msg}").strip()
     db.commit()
@@ -90,7 +106,9 @@ def post_instagram(series_id: str, db: Session = Depends(get_db)) -> PostResult:
         raise HTTPException(status_code=404, detail="Series not found")
     _check_queued(s)
     settings = get_or_create_settings(db)
-    return _handle_result(db, s, _do_instagram(s, settings), "instagram")
+    ig = _do_instagram(s, settings)
+    fb = _do_facebook(s, settings)
+    return _handle_result(db, s, ig, "instagram", fb)
 
 
 @router.post("/{series_id}/post/both")
@@ -102,9 +120,12 @@ def post_both(series_id: str, db: Session = Depends(get_db)) -> PostResult:
     settings = get_or_create_settings(db)
     tg = _do_telegram(s, settings)
     ig = _do_instagram(s, settings)
+    fb = _do_facebook(s, settings)
     if tg["ok"] and ig["ok"]:
         s.posted_to_telegram_at = datetime.utcnow()
         s.posted_to_instagram_at = datetime.utcnow()
+        if fb.get("ok") and not fb.get("skipped"):
+            s.posted_to_facebook_at = datetime.utcnow()
         _after_post_success(s)
         db.commit()
         return PostResult(success=True, message="Posted to both")

@@ -353,9 +353,9 @@ function buildDescriptionsCard(series) {
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
   const form = h('div', { cls: 'row g-2' },
-    mkField('Description EN (Instagram)', descEn),
+    mkField('Description EN (Instagram & FB Page)', descEn),
     mkField('Description RU (Telegram)', descRu),
-    mkField('Instagram tags', tagsIg),
+    mkField('Instagram & FB Page tags', tagsIg),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
     h('div', { cls: 'col-12' }, saveBtn));
 
@@ -532,7 +532,7 @@ function buildActionsCard(series) {
         h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Post now' }),
         h('div', { cls: 'd-flex gap-2 flex-wrap' },
           mkPostBtn('Telegram',  'telegram',  'bi bi-telegram',  'btn-outline-info'),
-          mkPostBtn('Instagram', 'instagram', 'bi bi-instagram', 'btn-outline-danger'),
+          mkPostBtn('Instagram & FB Page', 'instagram', 'bi bi-instagram', 'btn-outline-danger'),
           mkPostBtn('Both',      'both',      'bi bi-send',      'btn-outline-secondary'))),
       h('div', null,
         h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule' }),

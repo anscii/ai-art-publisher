@@ -13,6 +13,7 @@ _SECRET_FIELDS = {
     "google_api_key",
     "telegram_bot_token",
     "instagram_access_token",
+    "facebook_page_access_token",
     "r2_access_key",
     "r2_secret_key",
 }
@@ -57,6 +58,9 @@ def test_connection(service: str, db: Session = Depends(get_db)):
     handlers = {
         "telegram": lambda: _test_telegram(s.telegram_bot_token),
         "instagram": lambda: _test_instagram(s.instagram_access_token, s.instagram_user_id),
+        "facebook_page": lambda: _test_facebook_page(
+            s.facebook_page_access_token, s.facebook_page_id
+        ),
         "anthropic": lambda: _test_anthropic(s.anthropic_api_key),
         "openai": lambda: _test_openai(s.openai_api_key),
         "google": lambda: _test_google(s.google_api_key),
@@ -89,13 +93,32 @@ def _test_instagram(token: str, user_id: str) -> dict:
         return {"ok": False, "message": "Token or user ID not configured"}
     try:
         r = httpx.get(
-            f"https://graph.instagram.com/v21.0/{user_id}",
+            f"https://graph.instagram.com/v25.0/{user_id}",
             params={"fields": "id,username", "access_token": token},
             timeout=5,
         )
         d = r.json()
         if "id" in d:
             return {"ok": True, "message": f"Connected as {d.get('username', user_id)}"}
+        return {"ok": False, "message": d.get("error", {}).get("message", "Unknown")}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+def _test_facebook_page(token: str, page_id: str) -> dict:
+    import httpx
+
+    if not token or not page_id:
+        return {"ok": False, "message": "Token or page ID not configured"}
+    try:
+        r = httpx.get(
+            f"https://graph.facebook.com/v25.0/{page_id}",
+            params={"fields": "id,name", "access_token": token},
+            timeout=5,
+        )
+        d = r.json()
+        if "id" in d:
+            return {"ok": True, "message": f"Connected to {d.get('name', page_id)}"}
         return {"ok": False, "message": d.get("error", {}).get("message", "Unknown")}
     except Exception as e:
         return {"ok": False, "message": str(e)}
