@@ -93,6 +93,7 @@ class AppSettings(Base):
     instagram_access_token: Mapped[str] = mapped_column(String, default="")
     instagram_user_id: Mapped[str] = mapped_column(String, default="")
     facebook_page_id: Mapped[str] = mapped_column(String, default="")
+    facebook_page_access_token: Mapped[str] = mapped_column(String, default="")
     r2_endpoint: Mapped[str] = mapped_column(String, default="")
     r2_access_key: Mapped[str] = mapped_column(String, default="")
     r2_secret_key: Mapped[str] = mapped_column(String, default="")

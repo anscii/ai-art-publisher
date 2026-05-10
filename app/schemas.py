@@ -18,6 +18,7 @@ class SettingsResponse(BaseModel):
     instagram_access_token: str
     instagram_user_id: str
     facebook_page_id: str
+    facebook_page_access_token: str
     r2_endpoint: str
     r2_access_key: str
     r2_secret_key: str
@@ -36,6 +37,7 @@ class SettingsUpdate(BaseModel):
     instagram_access_token: str | None = None
     instagram_user_id: str | None = None
     facebook_page_id: str | None = None
+    facebook_page_access_token: str | None = None
     r2_endpoint: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None

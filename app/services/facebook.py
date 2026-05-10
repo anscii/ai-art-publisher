@@ -1,6 +1,6 @@
 import httpx
 
-BASE = "https://graph.facebook.com/v21.0"
+BASE = "https://graph.facebook.com/v25.0"
 
 
 class FacebookService:

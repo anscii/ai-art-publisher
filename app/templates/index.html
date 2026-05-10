@@ -175,6 +175,13 @@
           <span class="input-group-text" style="width:170px">User ID</span>
           <input type="text" class="form-control" id="s_instagram_user_id">
         </div>
+        <h6 class="text-muted small mt-3">Facebook</h6>
+        <div class="mb-2 input-group input-group-sm">
+          <span class="input-group-text" style="width:170px">Access Token</span>
+          <input type="password" class="form-control" id="s_facebook_page_access_token">
+          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onclick="testConn('facebook_page',this)">Test</button>
+        </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Facebook Page ID</span>
           <input type="text" class="form-control" id="s_facebook_page_id" placeholder="123456789 (optional)">

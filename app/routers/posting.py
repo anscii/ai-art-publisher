@@ -57,7 +57,7 @@ def _do_instagram(s: Series, settings) -> dict:
 def _do_facebook(s: Series, settings) -> dict:
     if not settings.facebook_page_id:
         return {"ok": True, "skipped": True}
-    svc = FacebookService(settings.instagram_access_token, settings.facebook_page_id)
+    svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     urls = _image_urls(s, settings.r2_public_base_url)
     return svc.post(urls, _build_ig_caption(s))
 
@@ -74,7 +74,10 @@ def _handle_result(
                 s.posted_to_facebook_at = datetime.utcnow()
         _after_post_success(s)
         db.commit()
-        return PostResult(success=True, message=f"Posted to {platform}")
+        message = f"Posted to {platform}"
+        if facebook_result and facebook_result.get("ok") and not facebook_result.get("skipped"):
+            message += " and FB Page"
+        return PostResult(success=True, message=message)
     msg = result.get("description", "Unknown error")
     s.notes = (s.notes + f"\n[{platform} error] {msg}").strip()
     db.commit()

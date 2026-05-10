@@ -2,7 +2,7 @@ import time
 
 import httpx
 
-BASE = "https://graph.instagram.com/v21.0"
+BASE = "https://graph.instagram.com/v25.0"
 _POLL_INTERVAL = 3  # seconds between status checks
 _POLL_TIMEOUT = 120  # max seconds to wait for FINISHED
 

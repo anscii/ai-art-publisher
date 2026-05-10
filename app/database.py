@@ -53,6 +53,7 @@ def _bootstrap_settings(db):
         "instagram_access_token": "INSTAGRAM_ACCESS_TOKEN",
         "instagram_user_id": "INSTAGRAM_USER_ID",
         "facebook_page_id": "FACEBOOK_PAGE_ID",
+        "facebook_page_access_token": "FACEBOOK_PAGE_ACCESS_TOKEN",
         "r2_endpoint": "R2_ENDPOINT",
         "r2_access_key": "R2_ACCESS_KEY",
         "r2_secret_key": "R2_SECRET_KEY",

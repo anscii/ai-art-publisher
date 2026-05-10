@@ -20,9 +20,14 @@ def upgrade() -> None:
         "app_settings",
         sa.Column("facebook_page_id", sa.String(), nullable=False, server_default=""),
     )
+    op.add_column(
+        "app_settings",
+        sa.Column("facebook_page_access_token", sa.String(), nullable=False, server_default=""),
+    )
     op.add_column("series", sa.Column("posted_to_facebook_at", sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:
     op.drop_column("series", "posted_to_facebook_at")
     op.drop_column("app_settings", "facebook_page_id")
+    op.drop_column("app_settings", "facebook_page_access_token")
