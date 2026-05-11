@@ -471,7 +471,7 @@ function buildActionsCard(series) {
     if (s === series.status) o.selected = true;
     statusSel.appendChild(o);
   });
-  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary' });
+  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary' });
   saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
   saveStatusBtn.appendChild(document.createTextNode('Save status'));
   saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
