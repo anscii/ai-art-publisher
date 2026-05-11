@@ -1,9 +1,11 @@
 import json
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import get_config
 from app.database import get_db
 from app.models import Series
 from app.routers.settings import get_or_create_settings
@@ -11,6 +13,8 @@ from app.schemas import PostResult
 from app.services.facebook import FacebookService
 from app.services.instagram import InstagramService
 from app.services.telegram import TelegramService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/series", tags=["posting"])
 
@@ -43,23 +47,41 @@ def _after_post_success(s: Series) -> None:
 
 
 def _do_telegram(s: Series, settings) -> dict:
-    svc = TelegramService(settings.telegram_bot_token, settings.telegram_channel_id)
     urls = _image_urls(s, settings.r2_public_base_url)
-    return svc.post_media_group(urls, _build_tg_caption(s))
+    caption = _build_tg_caption(s)
+    if get_config().fake_posting:
+        logger.info(
+            "[FAKE] Telegram | series=%s | %d images | caption: %s", s.id, len(urls), caption[:120]
+        )
+        return {"ok": True, "fake": True}
+    svc = TelegramService(settings.telegram_bot_token, settings.telegram_channel_id)
+    return svc.post_media_group(urls, caption)
 
 
 def _do_instagram(s: Series, settings) -> dict:
-    svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
     urls = _image_urls(s, settings.r2_public_base_url)
-    return svc.post(urls, _build_ig_caption(s))
+    caption = _build_ig_caption(s)
+    if get_config().fake_posting:
+        logger.info(
+            "[FAKE] Instagram | series=%s | %d images | caption: %s", s.id, len(urls), caption[:120]
+        )
+        return {"ok": True, "fake": True}
+    svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
+    return svc.post(urls, caption)
 
 
 def _do_facebook(s: Series, settings) -> dict:
     if not settings.facebook_page_id:
         return {"ok": True, "skipped": True}
-    svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     urls = _image_urls(s, settings.r2_public_base_url)
-    return svc.post(urls, _build_ig_caption(s))
+    caption = _build_ig_caption(s)
+    if get_config().fake_posting:
+        logger.info(
+            "[FAKE] Facebook | series=%s | %d images | caption: %s", s.id, len(urls), caption[:120]
+        )
+        return {"ok": True, "fake": True}
+    svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
+    return svc.post(urls, caption)
 
 
 def _handle_result(
@@ -77,6 +99,8 @@ def _handle_result(
         message = f"Posted to {platform}"
         if facebook_result and facebook_result.get("ok") and not facebook_result.get("skipped"):
             message += " and FB Page"
+        if result.get("fake"):
+            message = f"[FAKE] {message}"
         return PostResult(success=True, message=message)
     msg = result.get("description", "Unknown error")
     s.notes = (s.notes + f"\n[{platform} error] {msg}").strip()
@@ -128,7 +152,8 @@ def post_both(series_id: str, db: Session = Depends(get_db)) -> PostResult:
             s.posted_to_facebook_at = datetime.utcnow()
         _after_post_success(s)
         db.commit()
-        return PostResult(success=True, message="Posted to both")
+        prefix = "[FAKE] " if tg.get("fake") or ig.get("fake") else ""
+        return PostResult(success=True, message=f"{prefix}Posted to both")
     errors = []
     if not tg["ok"]:
         errors.append(f"Telegram: {tg.get('description')}")
