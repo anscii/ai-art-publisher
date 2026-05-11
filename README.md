@@ -30,8 +30,8 @@ Accessible from Android tablet/phone via browser. Runs 24/7 on Fly.io with sched
 cd ai_art_publisher
 
 # Create venv and install deps (unset private PyPI index if on Welltory machine)
-UV_EXTRA_INDEX_URL="" uv venv .venv --python=python3.12
-UV_EXTRA_INDEX_URL="" uv pip install -r requirements.txt -r requirements-dev.txt
+uv venv .venv --python=python3.12
+uv pip install -r requirements.txt -r requirements-dev.txt
 
 # Install pre-commit hooks
 make hooks
@@ -176,7 +176,7 @@ Import your existing image folders into the app. Images go directly to R2 (bypas
 
 ```bash
 # Run import (resumable — safe to re-run if interrupted)
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/import_local.py \
+.venv/bin/python scripts/import_local.py \
   --source /path/to/series_folders \
   --app-url https://ai-art-publisher.fly.dev \
   --workers 8
@@ -201,11 +201,11 @@ Timestamps are parsed from filenames automatically. All imported series get stat
 Test prompts without opening the browser:
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+.venv/bin/python scripts/test_generation.py \
   --hint "glowing cathedral half-submerged in a frozen sea, red aurora overhead"
 
 # Override provider/model
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+.venv/bin/python scripts/test_generation.py \
   --hint "..." --provider openai --model gpt-4o-mini
 ```
 

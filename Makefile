@@ -1,6 +1,6 @@
 SHELL := $(shell which bash)
-UV    := UV_EXTRA_INDEX_URL="" uv
-PY    := UV_EXTRA_INDEX_URL="" .venv/bin/python
+UV    := uv
+PY    := .venv/bin/python
 
 # ── Dev server ────────────────────────────────────────────────────────────────
 run:

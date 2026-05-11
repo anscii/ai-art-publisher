@@ -1,17 +1,20 @@
 # AI Art Publisher — Claude Code Context
 
+## Git Workflow
+
+- Feature branches always target `develop` — use `--base develop` when creating PRs. `master` is production-only.
+
 ## Running tests
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/python -m pytest -v
+.venv/bin/python -m pytest -v
 ```
 
-`UV_EXTRA_INDEX_URL=""` is required on this machine — the env var points to a private Welltory PyPI that is unreachable outside the office network. Always prefix uv/pytest commands with it.
 
 ## Running the dev server
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/uvicorn app.main:app --reload
+.venv/bin/uvicorn app.main:app --reload
 ```
 
 ## Project layout
