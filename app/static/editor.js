@@ -130,7 +130,7 @@ function buildThumb(img, seriesId) {
   gripEl.appendChild(icon('bi bi-grip-vertical'));
 
   const statusBtn = h('button', {
-    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-0 border-0 bg-transparent',
+    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-1 border-0 bg-transparent',
     style: 'line-height:1',
     'data-select-btn': img.id,
   });
@@ -154,9 +154,9 @@ function buildThumb(img, seriesId) {
 }
 
 function _selectIcon(imgId, status) {
-  if (_selectedImages.has(imgId)) return 'bi bi-check-circle-fill text-primary';
-  if (status === 'posted') return 'bi bi-check-circle-fill text-success';
-  return 'bi bi-circle text-white';
+  if (_selectedImages.has(imgId)) return 'bi bi-check-circle-fill text-primary fs-5';
+  if (status === 'posted') return 'bi bi-check-circle-fill text-success fs-5';
+  return 'bi bi-circle text-white fs-5';
 }
 
 function _toggleSelection(imgId, imgStatus, seriesId) {

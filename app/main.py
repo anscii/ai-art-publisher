@@ -1,4 +1,5 @@
 import base64
+import logging
 import secrets
 from contextlib import asynccontextmanager
 
@@ -19,9 +20,29 @@ from app.routers import trash as trash_router
 from app.scheduler import start_scheduler, stop_scheduler
 
 
+def _configure_app_logging() -> None:
+    level = getattr(logging, get_config().log_level, logging.INFO)
+    app_logger = logging.getLogger("app")
+    app_logger.disabled = False
+    app_logger.setLevel(level)
+    # Remove alembic's plain StreamHandler from root to prevent duplicate output.
+    # type(h) is exactly StreamHandler preserves pytest's LogCaptureHandler (a subclass).
+    root = logging.getLogger()
+    root.handlers = [h for h in root.handlers if type(h) is not logging.StreamHandler]
+    if not app_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)-5.5s [%(name)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            )
+        )
+        app_logger.addHandler(handler)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    _configure_app_logging()  # after init_db so alembic's root handler exists to remove
     start_scheduler()
     yield
     stop_scheduler()
