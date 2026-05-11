@@ -2,6 +2,9 @@
 .env.import
 .venv/
 data/
+docs/todo/
+docs/superpowers/
+docs/_notes/
 __pycache__/
 *.pyc
 *.pyo
