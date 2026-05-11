@@ -87,6 +87,7 @@ function buildThumb(img, seriesId) {
   imgEl.className = 'rounded';
   imgEl.style.cssText = 'width:160px;height:140px;object-fit:cover';
   imgEl.loading = 'lazy';
+  imgEl.setAttribute('draggable', 'false');
   imgEl.style.cursor = 'zoom-in';
   imgEl.addEventListener('click', e => {
     e.stopPropagation();
@@ -403,8 +404,9 @@ function initImageSortable(seriesId) {
   _sortable = Sortable.create(strip, {
     animation: 150,
     ghostClass: 'sortable-ghost',
-    ...(touch ? { delay: 500 } : { handle: '.thumb-grip' }),
-    touchStartThreshold: 4,
+    ...(touch
+      ? { delay: 300, forceFallback: true, touchStartThreshold: 8 }
+      : { handle: '.thumb-grip', touchStartThreshold: 4 }),
     onEnd: async () => {
       const ids = [...strip.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
       try {
@@ -412,6 +414,7 @@ function initImageSortable(seriesId) {
       } catch (e) { showToast('Reorder failed: ' + e.message, 'danger'); }
     },
   });
+  if (touch) strip.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 function initLightbox() {

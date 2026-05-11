@@ -30,7 +30,10 @@
   user-select: none;
 }
 
-@media (pointer: coarse) { .thumb-grip { display: none; } }
+@media (pointer: coarse) {
+  .thumb-grip { display: none; }
+  #imageStrip [data-image-id] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+}
 
 .thumb-posted > img { opacity: 0.55; filter: grayscale(100%) blur(1px); }
 .thumb-skip > img { opacity: 0.4; filter: grayscale(10%) blur(2px); }
