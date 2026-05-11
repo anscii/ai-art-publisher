@@ -58,7 +58,7 @@ function buildImagesCard(series) {
   if (!series.images.length) {
     strip.appendChild(h('span', { cls: 'text-muted small align-self-center p-2', text: 'No images yet' }));
   } else {
-    const _group = s => s.status === 'posted' ? 1 : s.status === 'skip' ? 2 : 0;
+    const _group = s => _selectedImages.has(s.id) ? 0 : s.status === 'posted' ? 2 : s.status === 'skip' ? 3 : 1;
     [...series.images].sort((a, b) => _group(a) - _group(b))
       .forEach(img => strip.appendChild(buildThumb(img, series.id)));
   }
@@ -166,10 +166,27 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
   if (btn) { btn.replaceChildren(icon(_selectIcon(imgId, imgStatus))); }
   const thumb = document.querySelector('[data-image-id="' + imgId + '"]');
   if (thumb) thumb.classList.toggle('thumb-selected', isNowSelected);
+  _resortStrip();
   const total = App.currentSeries?.images?.length ?? 0;
   _refreshImagesHeader(total);
   _refreshActionBar(seriesId);
   _lightboxSyncSelectBtn(imgId);
+}
+
+function _resortStrip() {
+  const strip = document.getElementById('imageStrip');
+  if (!strip) return;
+  const thumbs = [...strip.querySelectorAll('[data-image-id]')];
+  if (!thumbs.length) return;
+  const _g = el => {
+    if (_selectedImages.has(el.dataset.imageId)) return 0;
+    const s = el.dataset.imageStatus || 'pending';
+    return s === 'posted' ? 2 : s === 'skip' ? 3 : 1;
+  };
+  thumbs
+    .map((el, i) => ({ el, g: _g(el), i }))
+    .sort((a, b) => a.g - b.g || a.i - b.i)
+    .forEach(({ el }) => strip.appendChild(el));
 }
 
 // ── Move to picker ────────────────────────────────────────────────────────────
@@ -382,10 +399,11 @@ function initImageSortable(seriesId) {
   const strip = document.getElementById('imageStrip');
   if (!strip) return;
   if (_sortable) { _sortable.destroy(); _sortable = null; }
+  const touch = window.matchMedia('(pointer: coarse)').matches;
   _sortable = Sortable.create(strip, {
     animation: 150,
     ghostClass: 'sortable-ghost',
-    handle: '.thumb-grip',
+    ...(touch ? { delay: 500 } : { handle: '.thumb-grip' }),
     touchStartThreshold: 4,
     onEnd: async () => {
       const ids = [...strip.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
