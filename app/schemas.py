@@ -92,6 +92,7 @@ class AIVariantResponse(BaseModel):
     description_ru: str
     tags_instagram: list[str]
     tags_telegram: list[str]
+    hint: str | None = None
     generated_at: datetime
 
 

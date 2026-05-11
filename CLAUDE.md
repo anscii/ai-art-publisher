@@ -40,7 +40,7 @@ app/
   static/          — app.js, editor.js, posting.js, settings.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS, dark theme)
 alembic/           — Alembic migration environment
-  versions/        — 001_image_status.py, 002_soft_delete.py
+  versions/        — 001_image_status.py, 002_soft_delete.py, 003_facebook_page.py, 004_variant_hint.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
