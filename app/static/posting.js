@@ -2,6 +2,7 @@ async function postNow(seriesId, platform) {
   const label = { telegram: 'Telegram', instagram: 'Instagram', both: 'both' }[platform] || platform;
   showConfirm('Post to ' + label + '?', async () => {
     try {
+      await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
       const result = await apiFetch('POST', '/api/series/' + seriesId + '/post/' + platform);
       if (result.success) {
         showToast(result.message, 'success');
@@ -23,6 +24,7 @@ async function scheduleSeries(seriesId) {
   if (document.getElementById('schedIg')?.checked) targets.push('instagram');
   if (!targets.length) { showToast('Select at least one platform', 'danger'); return; }
   try {
+    await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
     await apiFetch('POST', '/api/series/' + seriesId + '/schedule', {
       datetime_utc: new Date(dateVal).toISOString(),
       targets,

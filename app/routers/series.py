@@ -11,6 +11,7 @@ from app.routers.settings import get_or_create_settings
 from app.schemas import (
     AIVariantResponse,
     ImageResponse,
+    SaveQueueBody,
     SeriesCreate,
     SeriesDetail,
     SeriesListItem,
@@ -116,6 +117,7 @@ def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDe
 @router.get("")
 def list_series(
     status: str | None = Query(None),
+    search: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -126,6 +128,8 @@ def list_series(
         q = q.where(Series.status.in_(statuses))
     else:
         q = q.where(Series.status != "skip")
+    if search:
+        q = q.where(Series.title.ilike(f"%{search}%"))
     q = q.order_by(Series.created_at.asc())
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
@@ -137,6 +141,33 @@ def list_series(
         page=page,
         limit=limit,
     )
+
+
+@router.get("/unsorted")
+def get_or_create_unsorted(db: Session = Depends(get_db)) -> SeriesDetail:
+    s = db.scalars(
+        select(Series).where(Series.title == "Unsorted", Series.deleted_at.is_(None))
+    ).first()
+    if not s:
+        s = Series(title="Unsorted", status="new")
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+    return series_to_detail(s, db)
+
+
+@router.put("/{series_id}/queue")
+def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db)) -> SeriesDetail:
+    s = db.get(Series, series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Series not found")
+    selected = set(body.image_ids)
+    for img in s.images:
+        if img.deleted_at or img.status in ("posted", "skip"):
+            continue
+        img.status = "queued" if img.id in selected else "pending"
+    db.commit()
+    return series_to_detail(s, db)
 
 
 @router.get("/{series_id}")
