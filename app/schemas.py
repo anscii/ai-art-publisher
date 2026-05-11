@@ -79,6 +79,10 @@ class ReorderImagesBody(BaseModel):
     image_ids: list[str]
 
 
+class SaveQueueBody(BaseModel):
+    image_ids: list[str]
+
+
 # ── AI Variants ───────────────────────────────────────────────────────────────
 
 

@@ -33,6 +33,7 @@ const App = {
   activeStatuses: new Set(['new', 'draft', 'approved', 'scheduled', 'partial_posted']),
   currentSeriesId: null,
   currentSeries: null,
+  unsortedSeriesId: null,
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -114,11 +115,12 @@ async function loadSeries(reset) {
     App.series.push(...data.items);
     App.total = data.total;
     const container = document.getElementById('seriesItems');
-    data.items.forEach(s => container.appendChild(buildSeriesItem(s)));
+    const visible = data.items.filter(s => s.title !== 'Unsorted' && s.id !== App.unsortedSeriesId);
+    visible.forEach(s => container.appendChild(buildSeriesItem(s)));
     document.getElementById('loadMoreBtn').classList.toggle('d-none', App.series.length >= App.total);
-    if (reset && !App.currentSeriesId && data.items.length > 0) {
+    if (reset && !App.currentSeriesId && visible.length > 0) {
       if (window.innerWidth >= 992) {
-        selectSeries(data.items[0].id);
+        selectSeries(visible[0].id);
       } else {
         showView('list');
       }
@@ -177,7 +179,14 @@ function buildSeriesItem(s) {
 
 function updateSeriesItem(s) {
   const old = document.getElementById('si-' + s.id);
-  if (old) old.replaceWith(buildSeriesItem(s));
+  if (!old) return;
+  // SeriesDetail lacks cover_url / image_count — derive them from images[] when present
+  const item = ('cover_url' in s) ? s : {
+    ...s,
+    cover_url: s.images?.find(i => !i.deleted_at)?.public_url ?? null,
+    image_count: s.images?.filter(i => !i.deleted_at).length ?? 0,
+  };
+  old.replaceWith(buildSeriesItem(item));
 }
 
 async function selectSeries(id) {
@@ -199,6 +208,15 @@ async function loadSeriesDetail(id) {
   } catch (e) {
     panel.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
   }
+}
+
+async function selectUnsorted() {
+  try {
+    const s = await apiFetch('GET', '/api/series/unsorted');
+    App.unsortedSeriesId = s.id;
+    if (!App.series.find(x => x.id === s.id)) App.series.unshift(s);
+    await selectSeries(s.id);
+  } catch (e) { showToast(e.message, 'danger'); }
 }
 
 async function createSeries() {
