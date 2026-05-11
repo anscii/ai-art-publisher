@@ -377,6 +377,7 @@ function applyVariant(idx) {
   set('f_tags_ig', (v.tags_instagram || []).join(' '));
   set('f_tags_tg', (v.tags_telegram  || []).join(' '));
   if (v.title) { const t = document.getElementById('editorTitle'); if (t) t.value = v.title; }
+  const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
     btn.classList.toggle('btn-outline-secondary', i !== idx);
@@ -452,6 +453,7 @@ async function generateDescriptions(seriesId) {
       provider: provider || null, model: model || null, hint: hint || null, include_images: includeImages,
     });
     await loadSeriesDetail(seriesId);
+    applyVariant(0);
     showToast('Generated 3 new variants', 'success');
   } catch (e) {
     showToast(e.message, 'danger');

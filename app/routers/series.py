@@ -47,6 +47,7 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
         description_ru=v.description_ru,
         tags_instagram=json.loads(v.tags_instagram),
         tags_telegram=json.loads(v.tags_telegram),
+        hint=v.hint,
         generated_at=v.generated_at,
     )
 

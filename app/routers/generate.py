@@ -83,6 +83,7 @@ def generate_descriptions(
             description_ru=vd.description_ru,
             tags_instagram=json.dumps(vd.tags_instagram),
             tags_telegram=json.dumps(vd.tags_telegram),
+            hint=body.hint,
         )
         db.add(v)
     db.commit()

@@ -141,6 +141,44 @@ def _make_series_with_variants(client):
     return sid, variants
 
 
+def test_generate_saves_hint_on_variants(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox spirit"})
+    assert resp.status_code == 200
+    assert all(v["hint"] == "a fox spirit" for v in resp.json())
+
+
+def test_generate_hint_none_when_omitted(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "images/test.jpg", "original_filename": "test.jpg"},
+    )
+    with (
+        patch("app.routers.generate.get_provider") as mp,
+        patch("app.routers.generate.get_storage_from_settings") as ms,
+    ):
+        ms.return_value = MagicMock(download_bytes=lambda k: b"img")
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
+    assert resp.status_code == 200
+    assert all(v["hint"] is None for v in resp.json())
+
+
+def test_hint_preserved_in_series_detail(client):
+    sid, variants = _make_series_with_variants(client)
+    detail = client.get(f"/api/series/{sid}").json()
+    assert all(v["hint"] == "a fox" for v in detail["ai_variants"])
+
+
 def test_delete_variant(client):
     sid, variants = _make_series_with_variants(client)
     assert len(variants) == 3
