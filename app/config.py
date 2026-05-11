@@ -13,6 +13,7 @@ class AppConfig:
     auth_username: str = os.getenv("AUTH_USERNAME", "")
     auth_password: str = os.getenv("AUTH_PASSWORD", "")
     fake_posting: bool = os.getenv("FAKE_POSTING", "false").lower() == "true"
+    log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
 
 @lru_cache

@@ -11,6 +11,7 @@ scheduler = BackgroundScheduler()
 def run_scheduled_posts():
     from sqlalchemy import select
 
+    from app.config import get_config
     from app.database import SessionLocal
     from app.models import Series
     from app.routers.posting import _after_post_success, _do_facebook, _do_instagram, _do_telegram
@@ -37,6 +38,7 @@ def run_scheduled_posts():
                     result = _do_telegram(s, settings)
                     if result["ok"]:
                         s.posted_to_telegram_at = datetime.utcnow()
+                        targets.remove("telegram")
                     else:
                         raise RuntimeError(result.get("description", "TG error"))
                 if "instagram" in targets:
@@ -46,11 +48,11 @@ def run_scheduled_posts():
                         fb = _do_facebook(s, settings)
                         if fb.get("ok") and not fb.get("skipped"):
                             s.posted_to_facebook_at = datetime.utcnow()
+                        targets.remove("instagram")
                     else:
                         raise RuntimeError(result.get("description", "IG error"))
                 _after_post_success(s)
-                from app.config import get_config
-
+                s.scheduled_targets = json.dumps(targets)
                 prefix = "[FAKE] " if get_config().fake_posting else ""
                 logger.info("%sScheduled post success: %s", prefix, s.id)
             except Exception as e:
@@ -66,7 +68,7 @@ def start_scheduler():
     scheduler.add_job(
         run_scheduled_posts,
         "interval",
-        minutes=30,
+        minutes=3,
         id="scheduled_posts",
         replace_existing=True,
         next_run_time=datetime.utcnow(),
