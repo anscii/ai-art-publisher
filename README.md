@@ -30,8 +30,8 @@ Accessible from Android tablet/phone via browser. Runs 24/7 on Fly.io with sched
 cd ai_art_publisher
 
 # Create venv and install deps (unset private PyPI index if on Welltory machine)
-UV_EXTRA_INDEX_URL="" uv venv .venv --python=python3.12
-UV_EXTRA_INDEX_URL="" uv pip install -r requirements.txt -r requirements-dev.txt
+uv venv .venv --python=python3.12
+uv pip install -r requirements.txt -r requirements-dev.txt
 
 # Install pre-commit hooks
 make hooks
@@ -118,13 +118,65 @@ git push
 
 ---
 
+## Obtaining a Long-Lived Facebook Page Access Token
+
+Instagram posting via the Graph API requires a **Page access token** (not a user token). Short-lived tokens expire in about an hour; the steps below exchange one for a token valid for ~60 days.
+
+### Prerequisites
+
+- A Facebook Developer account with an app that has the `pages_read_engagement` and `instagram_basic` / `instagram_content_publish` permissions.
+- Admin or Editor access to the Facebook Page linked to your Instagram Business account.
+
+### Steps
+
+**1. Get a short-lived Page token via Graph API Explorer**
+
+Open [Graph API Explorer](https://developers.facebook.com/tools/explorer/), select your app, and make the following request (replace `{USER_ID}` with your Facebook user ID):
+
+```bash
+curl -X GET \
+  "https://graph.facebook.com/v25.0/{USER_ID}/accounts?access_token={USER_ACCESS_TOKEN}"
+```
+
+The response contains one entry per Page you manage:
+
+```json
+{
+  "data": [
+    {
+      "access_token": "SHORT_LIVED_PAGE_TOKEN",
+      "name": "Your Page Name",
+      "id": "123456789"
+    }
+  ]
+}
+```
+
+Copy the `access_token` value — this is your short-lived Page token.
+
+**2. Exchange for a long-lived token**
+
+Open the [Access Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/), paste the short-lived token into the field, and click **Debug**. At the bottom of the results page click **Extend Access Token**. Facebook will return a new token valid for approximately 60 days.
+
+> If the **Extend Access Token** button is absent, the token you pasted is already long-lived.
+
+**3. Set the token as a secret**
+
+```bash
+fly secrets set INSTAGRAM_ACCESS_TOKEN="<long-lived-token>"
+```
+
+You can also update it in the app's Settings UI (⚙️) without redeploying. Remember to refresh the token before it expires — the app does not auto-renew it.
+
+---
+
 ## Bulk Import (one-time)
 
 Import your existing image folders into the app. Images go directly to R2 (bypasses the app server for speed), only metadata is sent via the API.
 
 ```bash
 # Run import (resumable — safe to re-run if interrupted)
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/import_local.py \
+.venv/bin/python scripts/import_local.py \
   --source /path/to/series_folders \
   --app-url https://ai-art-publisher.fly.dev \
   --workers 8
@@ -149,11 +201,11 @@ Timestamps are parsed from filenames automatically. All imported series get stat
 Test prompts without opening the browser:
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+.venv/bin/python scripts/test_generation.py \
   --hint "glowing cathedral half-submerged in a frozen sea, red aurora overhead"
 
 # Override provider/model
-UV_EXTRA_INDEX_URL="" .venv/bin/python scripts/test_generation.py \
+.venv/bin/python scripts/test_generation.py \
   --hint "..." --provider openai --model gpt-4o-mini
 ```
 

@@ -74,6 +74,7 @@ class AIVariant(Base):
     description_ru: Mapped[str] = mapped_column(Text, default="")
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
+    hint: Mapped[str | None] = mapped_column(Text, nullable=True)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     series: Mapped["Series"] = relationship("Series", back_populates="ai_variants")

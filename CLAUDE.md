@@ -1,17 +1,20 @@
 # AI Art Publisher — Claude Code Context
 
+## Git Workflow
+
+- Feature branches always target `develop` — use `--base develop` when creating PRs. `master` is production-only.
+
 ## Running tests
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/python -m pytest -v
+.venv/bin/python -m pytest -v
 ```
 
-`UV_EXTRA_INDEX_URL=""` is required on this machine — the env var points to a private Welltory PyPI that is unreachable outside the office network. Always prefix uv/pytest commands with it.
 
 ## Running the dev server
 
 ```bash
-UV_EXTRA_INDEX_URL="" .venv/bin/uvicorn app.main:app --reload
+.venv/bin/uvicorn app.main:app --reload
 ```
 
 ## Project layout
@@ -40,7 +43,7 @@ app/
   static/          — app.js, editor.js, posting.js, settings.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS, dark theme)
 alembic/           — Alembic migration environment
-  versions/        — 001_image_status.py, 002_soft_delete.py
+  versions/        — 001_image_status.py, 002_soft_delete.py, 003_facebook_page.py, 004_variant_hint.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command

@@ -1,5 +1,12 @@
+// ── Selection state ───────────────────────────────────────────────────────────
+let _selectedImages = new Set();
+
+function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
+  _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
+
   const titleInput = h('input', {
     type: 'text', cls: 'form-control form-control-sm fw-semibold',
     id: 'editorTitle', placeholder: 'Series title...',
@@ -43,24 +50,35 @@ function buildImagesCard(series) {
   addBtn.appendChild(document.createTextNode(' Add'));
   addBtn.addEventListener('click', () => addImages(series.id));
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
+  const headerLabel = h('span', { cls: 'small fw-medium', id: 'imagesCardLabel' });
   headerLabel.appendChild(icon('bi bi-images me-1'));
-  const queuedCount = series.images.filter(i => i.status === 'queued').length;
-  const countLabel = queuedCount > 0
-    ? 'Images (' + queuedCount + ' queued / ' + series.images.length + ')'
-    : 'Images (' + series.images.length + ')';
-  headerLabel.appendChild(document.createTextNode(countLabel));
+  headerLabel.appendChild(document.createTextNode(_imagesCountLabel(series.images.length)));
 
   const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:160px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
   if (!series.images.length) {
     strip.appendChild(h('span', { cls: 'text-muted small align-self-center p-2', text: 'No images yet' }));
   } else {
-    series.images.forEach(img => strip.appendChild(buildThumb(img, series.id)));
+    const _group = s => s.status === 'posted' ? 1 : s.status === 'skip' ? 2 : 0;
+    [...series.images].sort((a, b) => _group(a) - _group(b))
+      .forEach(img => strip.appendChild(buildThumb(img, series.id)));
   }
 
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header d-flex justify-content-between align-items-center py-2' }, headerLabel, addBtn),
-    h('div', { cls: 'card-body p-2' }, strip));
+    h('div', { cls: 'card-body p-2' }, strip, buildActionBar(series.id)));
+}
+
+function _imagesCountLabel(total) {
+  const sel = _selectedImages.size;
+  return sel > 0
+    ? 'Images (' + sel + ' selected / ' + total + ')'
+    : 'Images (' + total + ')';
+}
+
+function _refreshImagesHeader(total) {
+  const el = document.getElementById('imagesCardLabel');
+  if (!el) return;
+  el.replaceChildren(icon('bi bi-images me-1'), document.createTextNode(_imagesCountLabel(total)));
 }
 
 function buildThumb(img, seriesId) {
@@ -90,22 +108,14 @@ function buildThumb(img, seriesId) {
   const dropItems = document.createElement('ul');
   dropItems.className = 'dropdown-menu dropdown-menu-end';
 
-  const movable = App.series.filter(s => s.id !== seriesId).slice(0, 15);
-  if (movable.length) {
-    const hdr = document.createElement('li');
-    hdr.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
-    dropItems.appendChild(hdr);
-    movable.forEach(s => {
-      const li = document.createElement('li');
-      const a = h('a', { cls: 'dropdown-item small', href: '#', text: s.title || s.original_folder_name || s.id.slice(0,8) });
-      a.addEventListener('click', e => { e.preventDefault(); moveImage(img.id, s.id, seriesId); });
-      li.appendChild(a);
-      dropItems.appendChild(li);
-    });
-    const divLi = document.createElement('li');
-    divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
-    dropItems.appendChild(divLi);
-  }
+  // "Move to" header + items
+  const hdr = document.createElement('li');
+  hdr.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
+  dropItems.appendChild(hdr);
+  buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
+  const divLi = document.createElement('li');
+  divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
+  dropItems.appendChild(divLi);
 
   const delLi = document.createElement('li');
   const delA = h('a', { cls: 'dropdown-item small text-danger', href: '#' });
@@ -121,21 +131,19 @@ function buildThumb(img, seriesId) {
   const statusBtn = h('button', {
     cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-0 border-0 bg-transparent',
     style: 'line-height:1',
+    'data-select-btn': img.id,
   });
-  statusBtn.appendChild(icon(_statusIcon(img.status)));
-  statusBtn.addEventListener('click', async e => {
+  statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
+  statusBtn.addEventListener('click', e => {
     e.stopPropagation();
-    const next = img.status === 'queued' ? 'pending' : img.status === 'skip' ? 'pending' : 'queued';
-    try {
-      const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: next });
-      App.currentSeries = updated;
-      renderEditor(updated);
-    } catch (err) { showToast(err.message, 'danger'); }
+    _toggleSelection(img.id, img.status, seriesId);
   });
 
+  const isSelected = _selectedImages.has(img.id);
   const outerCls = 'position-relative flex-shrink-0' +
     (img.status === 'posted' ? ' thumb-posted' : '') +
-    (img.status === 'skip' ? ' thumb-skip' : '');
+    (img.status === 'skip' ? ' thumb-skip' : '') +
+    (isSelected ? ' thumb-selected' : '');
   return h('div', { cls: outerCls, 'data-image-id': img.id, 'data-image-status': img.status },
     imgEl,
     statusBtn,
@@ -144,11 +152,225 @@ function buildThumb(img, seriesId) {
       h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
 }
 
-function _statusIcon(status) {
-  if (status === 'queued') return 'bi bi-check-circle-fill text-primary';
+function _selectIcon(imgId, status) {
+  if (_selectedImages.has(imgId)) return 'bi bi-check-circle-fill text-primary';
   if (status === 'posted') return 'bi bi-check-circle-fill text-success';
-  if (status === 'skip')   return 'bi bi-x-circle-fill text-secondary';
   return 'bi bi-circle text-white';
+}
+
+function _toggleSelection(imgId, imgStatus, seriesId) {
+  if (imgStatus === 'posted') return;
+  const isNowSelected = !_selectedImages.has(imgId);
+  if (isNowSelected) _selectedImages.add(imgId); else _selectedImages.delete(imgId);
+  const btn = document.querySelector('[data-select-btn="' + imgId + '"]');
+  if (btn) { btn.replaceChildren(icon(_selectIcon(imgId, imgStatus))); }
+  const thumb = document.querySelector('[data-image-id="' + imgId + '"]');
+  if (thumb) thumb.classList.toggle('thumb-selected', isNowSelected);
+  const total = App.currentSeries?.images?.length ?? 0;
+  _refreshImagesHeader(total);
+  _refreshActionBar(seriesId);
+  _lightboxSyncSelectBtn(imgId);
+}
+
+// ── Move to picker ────────────────────────────────────────────────────────────
+// Returns <li> elements for the "Move to" section.
+// bulk=false → moves just imageId; bulk=true → moves all _selectedImages
+function buildMoveToItems(imageId, seriesId, bulk) {
+  const items = [];
+
+  const mkItem = (label, iconCls, onClick) => {
+    const li = document.createElement('li');
+    const a = h('a', { cls: 'dropdown-item small', href: '#' });
+    if (iconCls) a.appendChild(icon(iconCls + ' me-1'));
+    a.appendChild(document.createTextNode(label));
+    a.addEventListener('click', e => { e.preventDefault(); onClick(); });
+    li.appendChild(a);
+    return li;
+  };
+
+  // Unsorted — always pinned first
+  items.push(mkItem('Unsorted', 'bi bi-folder', async () => {
+    try {
+      const s = await _getOrCacheUnsorted();
+      const ids = bulk ? [..._selectedImages] : [imageId];
+      await moveImages(ids, s.id, seriesId);
+    } catch (e) { showToast(e.message, 'danger'); }
+  }));
+
+  const activeStatuses = ['new', 'draft', 'approved', 'scheduled', 'partial_posted'];
+  const _isUnsorted = s => s.title === 'Unsorted' || (App.unsortedSeriesId && s.id === App.unsortedSeriesId);
+  const active = App.series.filter(s => s.id !== seriesId && !_isUnsorted(s) && activeStatuses.includes(s.status));
+
+  // Always show search/create input; ≤10 series → filter client-side, >10 → fetch API
+  const li = document.createElement('li');
+  li.className = 'px-2 py-1';
+  const input = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Search or create series…' });
+  input.setAttribute('autocomplete', 'off');
+  const results = h('ul', { cls: 'list-unstyled mb-0 mt-1', style: 'max-height:160px;overflow-y:auto' });
+
+  const renderRow = (s) => {
+    const name = s.title || s.original_folder_name || s.id.slice(0, 8);
+    const row = h('li', null, h('a', { cls: 'dropdown-item small', href: '#', text: name }));
+    row.firstChild.addEventListener('click', async e => {
+      e.preventDefault();
+      const ids = bulk ? [..._selectedImages] : [imageId];
+      await moveImages(ids, s.id, seriesId);
+    });
+    return row;
+  };
+
+  const appendCreate = (query) => {
+    const createRow = h('li', null, h('a', { cls: 'dropdown-item small text-primary', href: '#' }));
+    createRow.firstChild.appendChild(icon('bi bi-plus me-1'));
+    createRow.firstChild.appendChild(document.createTextNode('Create "' + query + '"'));
+    createRow.firstChild.addEventListener('click', async e => {
+      e.preventDefault();
+      // Capture selection immediately — before any async call that might change state
+      const ids = bulk ? [..._selectedImages] : [imageId];
+      try {
+        const newSeries = await apiFetch('POST', '/api/series', { title: query });
+        App.series.push(newSeries);
+        await Promise.all(ids.map(id => apiFetch('PUT', '/api/images/' + id + '/move', { target_series_id: newSeries.id })));
+        _selectedImages.clear();
+        // Update source series in sidebar, then open the new series
+        const sourceUpdated = await apiFetch('GET', '/api/series/' + seriesId);
+        updateSeriesItem(sourceUpdated);
+        document.getElementById('seriesItems')?.prepend(buildSeriesItem(newSeries));
+        await selectSeries(newSeries.id);
+        updateSeriesItem(App.currentSeries);
+        showToast(ids.length > 1 ? ids.length + ' images moved' : 'Image moved', 'success');
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+    results.appendChild(createRow);
+  };
+
+  const renderResults = async (query) => {
+    results.replaceChildren();
+    if (App.total <= 10) {
+      // client-side filter
+      const filtered = query
+        ? active.filter(s => (s.title || s.original_folder_name || '').toLowerCase().includes(query.toLowerCase()))
+        : active;
+      filtered.forEach(s => results.appendChild(renderRow(s)));
+      if (query) {
+        const exactMatch = active.some(s => (s.title || '').toLowerCase() === query.toLowerCase());
+        if (!exactMatch) appendCreate(query);
+      }
+    } else {
+      if (!query) return;
+      try {
+        const statusParam = activeStatuses.join(',');
+        const data = await apiFetch('GET', '/api/series?search=' + encodeURIComponent(query) + '&status=' + statusParam + '&limit=10');
+        const filtered = data.items.filter(s => s.id !== seriesId && !_isUnsorted(s));
+        filtered.forEach(s => results.appendChild(renderRow(s)));
+        const exactMatch = filtered.some(s => (s.title || '').toLowerCase() === query.toLowerCase());
+        if (!exactMatch) appendCreate(query);
+      } catch (e) { showToast(e.message, 'danger'); }
+    }
+  };
+
+  // show all active series immediately (≤10 mode only)
+  if (App.total <= 10) renderResults('');
+
+  const debouncedSearch = _debounce(renderResults, 280);
+  input.addEventListener('input', e => debouncedSearch(e.target.value.trim()));
+  input.addEventListener('click', e => e.stopPropagation());
+  li.appendChild(input);
+  li.appendChild(results);
+  items.push(li);
+
+  return items;
+}
+
+async function _getOrCacheUnsorted() {
+  if (!App.unsortedSeriesId) {
+    const s = await apiFetch('GET', '/api/series/unsorted');
+    App.unsortedSeriesId = s.id;
+    return s;
+  }
+  return { id: App.unsortedSeriesId };
+}
+
+// ── Action bar ────────────────────────────────────────────────────────────────
+function buildActionBar(seriesId) {
+  const bar = h('div', { id: 'imageActionBar', cls: 'd-flex align-items-center gap-2 flex-wrap mt-2 pt-2 border-top' });
+  if (_selectedImages.size === 0) { bar.classList.add('d-none'); return bar; }
+
+  bar.appendChild(h('span', { cls: 'small text-muted', text: _selectedImages.size + ' selected' }));
+
+  // Move to dropdown
+  const moveBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
+  moveBtn.appendChild(icon('bi bi-box-arrow-right me-1'));
+  moveBtn.appendChild(document.createTextNode('Move to…'));
+  moveBtn.setAttribute('data-bs-toggle', 'dropdown');
+
+  const moveDropItems = document.createElement('ul');
+  moveDropItems.className = 'dropdown-menu';
+  buildMoveToItems(null, seriesId, true).forEach(li => moveDropItems.appendChild(li));
+
+  bar.appendChild(h('div', { cls: 'dropdown' }, moveBtn, moveDropItems));
+
+  // Skip / Unskip — shown based on what's selected
+  const statusMap = new Map((App.currentSeries?.images ?? []).map(i => [i.id, i.status]));
+  const toSkip   = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toUnskip = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
+
+  const _mkStatusAction = (label, iconCls, ids, newStatus) => {
+    const btn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
+    btn.appendChild(icon(iconCls + ' me-1'));
+    btn.appendChild(document.createTextNode(label));
+    btn.addEventListener('click', async () => {
+      try {
+        await Promise.all(ids.map(id => apiFetch('PATCH', '/api/images/' + id + '/status', { status: newStatus })));
+        const updated = await apiFetch('GET', '/api/series/' + seriesId);
+        App.currentSeries = updated;
+        renderEditor(updated);
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    return btn;
+  };
+
+  if (toSkip.length > 0)   bar.appendChild(_mkStatusAction('Skip',   'bi bi-eye-slash', toSkip,   'skip'));
+  if (toUnskip.length > 0) bar.appendChild(_mkStatusAction('Unskip', 'bi bi-eye',       toUnskip, 'pending'));
+
+  // Delete selected
+  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  delBtn.appendChild(icon('bi bi-trash me-1'));
+  delBtn.appendChild(document.createTextNode('Delete'));
+  delBtn.addEventListener('click', () => {
+    showConfirm('Delete ' + _selectedImages.size + ' image(s)?', async () => {
+      try {
+        const toDelete = [..._selectedImages];
+        await Promise.all(toDelete.map(id => apiFetch('DELETE', '/api/images/' + id)));
+        const updated = await apiFetch('GET', '/api/series/' + seriesId);
+        App.currentSeries = updated;
+        renderEditor(updated);
+        showToast('Moved to Trash', 'success');
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+  });
+  bar.appendChild(delBtn);
+
+  // Save (persist selection as queued)
+  const saveBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
+  saveBtn.appendChild(icon('bi bi-floppy me-1'));
+  saveBtn.appendChild(document.createTextNode('Save'));
+  saveBtn.addEventListener('click', async () => {
+    try {
+      const updated = await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
+      App.currentSeries = updated;
+      updateSeriesItem(updated);
+      showToast('Queue saved', 'success');
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
+  bar.appendChild(saveBtn);
+
+  return bar;
+}
+
+function _refreshActionBar(seriesId) {
+  const old = document.getElementById('imageActionBar');
+  if (old) old.replaceWith(buildActionBar(seriesId));
 }
 
 let _sortable = null;
@@ -199,15 +421,23 @@ function initLightbox() {
     try {
       const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: newStatus });
       _lightboxImages[_lightboxIdx] = { ...img, status: newStatus };
-      _lightboxRender();
+      // preserve frontend selection across re-render; remove patched image if it became skip/posted
+      const savedSelection = new Set(_selectedImages);
+      if (newStatus === 'skip' || newStatus === 'posted') savedSelection.delete(img.id);
       App.currentSeries = updated;
       renderEditor(updated);
+      // restore selection (renderEditor re-inits from DB queued; we override with saved)
+      _selectedImages = savedSelection;
+      _lightboxRender();
     } catch (err) { showToast(err.message, 'danger'); }
   }
 
   document.getElementById('lightboxQueueBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
-    _lightboxPatch(img.status === 'queued' ? 'pending' : 'queued');
+    if (img.status === 'posted') return;
+    const seriesId = App.currentSeriesId;
+    _toggleSelection(img.id, img.status, seriesId);
+    _lightboxRender();
   });
   document.getElementById('lightboxSkipBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
@@ -250,9 +480,10 @@ function _lightboxRender() {
   document.getElementById('lightboxNext').classList.toggle('invisible', single);
 
   const qBtn = document.getElementById('lightboxQueueBtn');
-  const isQueued = img.status === 'queued';
-  qBtn.replaceChildren(icon(isQueued ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
-    document.createTextNode(isQueued ? 'Unqueue' : 'Queue'));
+  const isSelected = _selectedImages.has(img.id);
+  qBtn.replaceChildren(icon(isSelected ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
+    document.createTextNode(isSelected ? 'Deselect' : 'Select'));
+  qBtn.disabled = img.status === 'posted';
 
   const sBtn = document.getElementById('lightboxSkipBtn');
   const isSkip = img.status === 'skip';
@@ -263,6 +494,12 @@ function _lightboxRender() {
 function lightboxNav(delta) {
   _lightboxIdx = (_lightboxIdx + delta + _lightboxImages.length) % _lightboxImages.length;
   _lightboxRender();
+}
+
+function _lightboxSyncSelectBtn(imgId) {
+  if (!_lightboxOpen) return;
+  const current = _lightboxImages[_lightboxIdx];
+  if (current && current.id === imgId) _lightboxRender();
 }
 
 async function addImages(seriesId) {
@@ -276,19 +513,21 @@ async function addImages(seriesId) {
       const resp = await fetch('/api/series/' + seriesId + '/images', { method: 'POST', body: fd });
       if (!resp.ok) { const e = await resp.json(); throw new Error(e.detail); }
       await loadSeriesDetail(seriesId);
+      updateSeriesItem(App.currentSeries);
       showToast('Images uploaded', 'success');
     } catch (e) { showToast(e.message, 'danger'); }
   });
   input.click();
 }
 
-async function moveImage(imageId, targetId, currentId) {
+async function moveImages(imageIds, targetId, currentId) {
   try {
-    await apiFetch('PUT', '/api/images/' + imageId + '/move', { target_series_id: targetId });
+    await Promise.all(imageIds.map(id => apiFetch('PUT', '/api/images/' + id + '/move', { target_series_id: targetId })));
+    _selectedImages.clear();
     await loadSeriesDetail(currentId);
     const t = await apiFetch('GET', '/api/series/' + targetId);
     updateSeriesItem(t);
-    showToast('Image moved', 'success');
+    showToast(imageIds.length > 1 ? imageIds.length + ' images moved' : 'Image moved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
@@ -377,6 +616,7 @@ function applyVariant(idx) {
   set('f_tags_ig', (v.tags_instagram || []).join(' '));
   set('f_tags_tg', (v.tags_telegram  || []).join(' '));
   if (v.title) { const t = document.getElementById('editorTitle'); if (t) t.value = v.title; }
+  const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
     btn.classList.toggle('btn-outline-secondary', i !== idx);
@@ -452,6 +692,7 @@ async function generateDescriptions(seriesId) {
       provider: provider || null, model: model || null, hint: hint || null, include_images: includeImages,
     });
     await loadSeriesDetail(seriesId);
+    applyVariant(0);
     showToast('Generated 3 new variants', 'success');
   } catch (e) {
     showToast(e.message, 'danger');
@@ -471,7 +712,7 @@ function buildActionsCard(series) {
     if (s === series.status) o.selected = true;
     statusSel.appendChild(o);
   });
-  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary' });
+  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary' });
   saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
   saveStatusBtn.appendChild(document.createTextNode('Save status'));
   saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
@@ -556,7 +797,7 @@ async function deleteSeries(seriesId) {
     App.series = App.series.filter(s => s.id !== seriesId);
     App.currentSeriesId = null;
     App.currentSeries = null;
-    document.getElementById('seriesItems').querySelector(`[data-series-id="${seriesId}"]`)?.remove();
+    document.getElementById('si-' + seriesId)?.remove();
     document.getElementById('editorPanel').replaceChildren(
       h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
     );

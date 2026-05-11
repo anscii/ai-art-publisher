@@ -79,6 +79,10 @@ class ReorderImagesBody(BaseModel):
     image_ids: list[str]
 
 
+class SaveQueueBody(BaseModel):
+    image_ids: list[str]
+
+
 # ── AI Variants ───────────────────────────────────────────────────────────────
 
 
@@ -92,6 +96,7 @@ class AIVariantResponse(BaseModel):
     description_ru: str
     tags_instagram: list[str]
     tags_telegram: list[str]
+    hint: str | None = None
     generated_at: datetime
 
 

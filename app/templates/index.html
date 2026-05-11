@@ -10,12 +10,13 @@
 </head>
 <body class="d-flex flex-column overflow-hidden" style="height:100dvh">
 
-<nav class="navbar bg-body-secondary px-3 flex-shrink-0" style="height:52px">
+<nav class="navbar bg-body-secondary px-3 flex-shrink-0 flex-nowrap" style="min-height:52px">
   <span class="navbar-brand fw-bold fs-6 mb-0">&#x1F3A8; AI Art Publisher</span>
-  <div class="d-flex align-items-center gap-2">
+  <div class="d-flex align-items-center gap-2 flex-shrink-1" style="overflow-x:auto; min-width:0">
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
-              id="filterBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside">Filter</button>
+              id="filterBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+        <i class="bi bi-funnel"></i><span class="d-none d-sm-inline ms-1">Filter</span></button>
       <ul class="dropdown-menu dropdown-menu-end" id="statusFilterMenu">
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
           <input class="form-check-input m-0" type="checkbox" value="new" checked onchange="onFilterChange()">
@@ -33,7 +34,7 @@
           <input class="form-check-input m-0" type="checkbox" value="partial_posted" checked onchange="onFilterChange()">
           <span class="badge bg-warning text-dark">partial</span></label></li>
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
-          <input class="form-check-input m-0" type="checkbox" value="posted" checked onchange="onFilterChange()">
+          <input class="form-check-input m-0" type="checkbox" value="posted" onchange="onFilterChange()">
           <span class="badge bg-success">posted</span></label></li>
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
           <input class="form-check-input m-0" type="checkbox" value="skip" onchange="onFilterChange()">
@@ -63,16 +64,20 @@
 <div class="d-flex flex-grow-1 overflow-hidden">
   <div id="seriesSidebar" class="border-end d-flex flex-column"
        style="width:280px;min-width:280px;overflow-y:auto;flex-shrink:0">
-    <div class="p-2 border-bottom">
-      <button class="btn btn-sm btn-outline-primary w-100" onclick="createSeries()">
-        <i class="bi bi-plus-lg"></i> New series</button>
-    </div>
     <div id="seriesItems" class="flex-grow-1"></div>
     <div id="seriesListLoading" class="text-center p-3 d-none">
       <div class="spinner-border spinner-border-sm text-secondary"></div></div>
     <div id="loadMoreBtn" class="p-2 border-top d-none">
       <button class="btn btn-sm btn-outline-secondary w-100" onclick="loadMoreSeries()">
         Load more</button></div>
+    <div class="p-2 border-top">
+      <button class="btn btn-sm btn-outline-secondary w-100" onclick="selectUnsorted()">
+        <i class="bi bi-folder me-1"></i> Unsorted</button>
+    </div>
+    <div class="p-2 border-top">
+      <button class="btn btn-sm btn-outline-primary w-100" onclick="createSeries()">
+        <i class="bi bi-plus-lg"></i> New series</button>
+    </div>
   </div>
 
   <div class="flex-grow-1 d-flex flex-column overflow-hidden">
