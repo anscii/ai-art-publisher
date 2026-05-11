@@ -30,7 +30,7 @@ const App = {
   total: 0,
   page: 1,
   limit: 15,
-  activeStatuses: new Set(['new', 'draft', 'approved', 'scheduled', 'partial_posted', 'posted']),
+  activeStatuses: new Set(['new', 'draft', 'approved', 'scheduled', 'partial_posted']),
   currentSeriesId: null,
   currentSeries: null,
 };
