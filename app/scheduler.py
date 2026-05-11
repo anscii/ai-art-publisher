@@ -68,7 +68,7 @@ def start_scheduler():
     scheduler.add_job(
         run_scheduled_posts,
         "interval",
-        minutes=3,
+        hours=1,
         id="scheduled_posts",
         replace_existing=True,
         next_run_time=datetime.utcnow(),
