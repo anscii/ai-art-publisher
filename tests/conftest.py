@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.database as _db_module
+from app.config import AppConfig
 from app.database import Base, get_db
 from app.main import app
 
@@ -16,6 +17,14 @@ _engine = create_engine(
     poolclass=StaticPool,
 )
 _TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_fake_posting(monkeypatch):
+    """Ensure FAKE_POSTING is always off in tests regardless of the local .env.
+    AppConfig attributes are class-level (set at import time), so we patch the
+    class attribute directly rather than relying on env var re-reads."""
+    monkeypatch.setattr(AppConfig, "fake_posting", False)
 
 
 @pytest.fixture(autouse=True)
