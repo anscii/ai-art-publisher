@@ -116,6 +116,13 @@ async function loadSeries(reset) {
     const container = document.getElementById('seriesItems');
     data.items.forEach(s => container.appendChild(buildSeriesItem(s)));
     document.getElementById('loadMoreBtn').classList.toggle('d-none', App.series.length >= App.total);
+    if (reset && !App.currentSeriesId && data.items.length > 0) {
+      if (window.innerWidth >= 992) {
+        selectSeries(data.items[0].id);
+      } else {
+        showView('list');
+      }
+    }
   } catch (e) {
     showToast(e.message, 'danger');
   } finally {
