@@ -585,6 +585,7 @@ function buildDescriptionsCard(series) {
       });
       btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
       btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:10px', text: v.provider }));
+      if (v.cost_usd > 0) btn.appendChild(h('span', { cls: 'opacity-50 ms-1', style: 'font-size:10px', text: '$' + v.cost_usd.toFixed(4) }));
       const delBtn = h('button', {
         cls: 'btn btn-xs btn-outline-danger px-1',
         title: 'Delete variant',
@@ -672,7 +673,10 @@ function buildGenerateCard(seriesId) {
   [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google']].forEach(([val, lbl]) => {
     const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
   });
-  const modelInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genModel', placeholder: 'default', style: 'width:150px' });
+  const modelSel = document.createElement('select');
+  modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
+  buildProviderModelSelect(modelSel, '', { withDefault: true });
+  provSel.addEventListener('change', () => buildProviderModelSelect(modelSel, provSel.value, { withDefault: true }));
   const genBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'generateBtn' });
   genBtn.appendChild(icon('bi bi-robot me-1'));
   genBtn.appendChild(document.createTextNode('Generate'));
@@ -693,7 +697,7 @@ function buildGenerateCard(seriesId) {
       h('div', { cls: 'd-flex gap-2 flex-wrap align-items-end' },
         h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelInput),
+        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelSel),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
         h('div', { cls: 'align-self-end pb-1' }, imgLabel))));
 }
@@ -709,12 +713,14 @@ async function generateDescriptions(seriesId) {
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
   }
   try {
-    await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
+    const newVariants = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
       provider: provider || null, model: model || null, hint: hint || null, include_images: includeImages,
     });
     await loadSeriesDetail(seriesId);
     applyVariant(0);
-    showToast('Generated 3 new variants', 'success');
+    const cost = newVariants[0]?.cost_usd;
+    const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
+    showToast(`Generated new variants${costLabel}`, 'success');
   } catch (e) {
     showToast(e.message, 'danger');
     if (btn) {

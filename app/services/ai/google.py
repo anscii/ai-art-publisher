@@ -9,9 +9,11 @@ from app.services.ai.base import (
     SYSTEM_PROMPT,
     AIProvider,
     AIVariantData,
+    attach_usage,
     build_user_text,
     extract_json,
 )
+from app.services.ai.catalogue import calc_cost
 
 
 class GoogleProvider(AIProvider):
@@ -32,4 +34,12 @@ class GoogleProvider(AIProvider):
         m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
         resp = m.generate_content(parts)
         raw = json.loads(extract_json(resp.text))
-        return [AIVariantData(**v) for v in raw]
+        variants = [AIVariantData(**v) for v in raw]
+        u = resp.usage_metadata
+        attach_usage(
+            variants,
+            u.prompt_token_count,
+            u.candidates_token_count,
+            calc_cost(model, u.prompt_token_count, u.candidates_token_count),
+        )
+        return variants

@@ -1,6 +1,6 @@
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 SYSTEM_PROMPT = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
 
@@ -75,15 +75,29 @@ class AIVariantData:
     title: str
     description_en: str
     description_ru: str
-    tags_instagram: list[str]
-    tags_telegram: list[str]
+    tags_instagram: list[str] = field(default_factory=list)
+    tags_telegram: list[str] = field(default_factory=list)
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
         self.description_en = fix_llm_text(self.description_en)
         self.description_ru = fix_llm_text(self.description_ru)
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]
+        if "#aiart" not in self.tags_instagram:
+            self.tags_instagram.append("#aiart")
         self.tags_telegram = [fix_llm_tag(t) for t in self.tags_telegram]
+
+
+def attach_usage(
+    variants: list[AIVariantData], input_tokens: int, output_tokens: int, cost_usd: float
+) -> None:
+    for vd in variants:
+        vd.cost_usd = cost_usd
+        vd.input_tokens = input_tokens
+        vd.output_tokens = output_tokens
 
 
 class AIProvider(ABC):

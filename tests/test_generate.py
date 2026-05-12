@@ -44,8 +44,19 @@ def test_ai_variant_data_normalises_on_construction():
     assert vd.title == "The End — A Beginning"
     assert vd.description_en == "Something — wicked."
     assert vd.description_ru == "Нечто — страшное."
-    assert vd.tags_instagram == ["#dark_fantasy", "#space_opera"]
+    assert vd.tags_instagram == ["#dark_fantasy", "#space_opera", "#aiart"]
     assert vd.tags_telegram == ["#тёмное_фэнтези"]
+
+
+def test_aiart_tag_not_duplicated():
+    vd = AIVariantData(
+        title="T",
+        description_en="E",
+        description_ru="R",
+        tags_instagram=["#aiart", "#dark-fantasy"],
+        tags_telegram=[],
+    )
+    assert vd.tags_instagram.count("#aiart") == 1
 
 
 _FAKE = [
@@ -57,6 +68,33 @@ _FAKE = [
         tags_telegram=["#арт"],
     )
 ] * 3
+
+
+def test_generate_uses_provider_default_model(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-opus-4-7"},
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all(v["model"] == "claude-opus-4-7" for v in resp.json())
+
+
+def test_generate_response_includes_cost_usd(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all("cost_usd" in v for v in resp.json())
 
 
 def test_generate_creates_variants(client):

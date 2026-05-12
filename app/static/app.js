@@ -1,3 +1,20 @@
+// ── AI provider model catalogue (fetched from /api/settings/providers) ────────
+let PROVIDER_MODELS = {};
+
+function buildProviderModelSelect(selectEl, provider, { withDefault = false, selectedValue = '' } = {}) {
+  const models = PROVIDER_MODELS[provider] || [];
+  selectEl.replaceChildren();
+  if (withDefault) {
+    const o = document.createElement('option'); o.value = ''; o.textContent = 'Default'; selectEl.appendChild(o);
+  }
+  models.forEach(({ id, label }) => {
+    const o = document.createElement('option'); o.value = id; o.textContent = label;
+    if (id === selectedValue) o.selected = true;
+    selectEl.appendChild(o);
+  });
+  if (!withDefault && !selectedValue && models.length) selectEl.value = models[0].id;
+}
+
 // ── DOM helper ────────────────────────────────────────────────────────────────
 function h(tag, props, ...children) {
   const el = document.createElement(tag);
@@ -437,6 +454,7 @@ function getDraftEdits() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   document.getElementById('limitSel').value = String(App.limit);
   loadSeries(true);
   initLightbox();
