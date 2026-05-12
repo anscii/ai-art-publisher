@@ -2,6 +2,7 @@ import base64
 import logging
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.requests import Request
@@ -50,6 +51,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Art Publisher", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+_cfg = get_config()
+if _cfg.local_storage:
+    _uploads_dir = Path(_cfg.data_dir) / "uploads"
+    _uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
 
 
 @app.middleware("http")

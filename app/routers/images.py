@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -142,6 +142,6 @@ def delete_image(image_id: str, db: Session = Depends(get_db)):
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Image not found")
-    img.deleted_at = datetime.utcnow()
+    img.deleted_at = datetime.now(UTC)
     db.commit()
     return series_to_detail(img.series, db)

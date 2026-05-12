@@ -1,4 +1,40 @@
+import shutil
+from pathlib import Path
+
 import boto3
+
+from app.config import get_config
+
+_LOCAL_URL_PREFIX = "/uploads"
+
+
+class LocalStorageService:
+    def __init__(self, data_dir: Path) -> None:
+        self._dir = data_dir
+
+    def public_url(self, key: str) -> str:
+        return f"{_LOCAL_URL_PREFIX}/{key}"
+
+    def upload_bytes(self, data: bytes, key: str, content_type: str = "image/jpeg") -> str:
+        dest = self._dir / key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        return key
+
+    def upload_file(self, filepath: str, key: str) -> str:
+        dest = self._dir / key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(filepath, dest)
+        return key
+
+    def download_bytes(self, key: str) -> bytes:
+        return (self._dir / key).read_bytes()
+
+    def delete(self, key: str) -> None:
+        try:
+            (self._dir / key).unlink()
+        except FileNotFoundError:
+            pass
 
 
 class R2StorageService:
@@ -34,7 +70,16 @@ class R2StorageService:
         self._client.delete_object(Bucket=self._bucket, Key=key)
 
 
-def get_storage_from_settings(settings) -> R2StorageService:
+def get_public_base_url(settings) -> str:
+    if get_config().local_storage:
+        return _LOCAL_URL_PREFIX
+    return settings.r2_public_base_url.rstrip("/")
+
+
+def get_storage_from_settings(settings) -> R2StorageService | LocalStorageService:
+    cfg = get_config()
+    if cfg.local_storage:
+        return LocalStorageService(Path(cfg.data_dir) / "uploads")
     return R2StorageService(
         endpoint=settings.r2_endpoint,
         access_key=settings.r2_access_key,
