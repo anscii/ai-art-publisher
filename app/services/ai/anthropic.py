@@ -7,9 +7,11 @@ from app.services.ai.base import (
     SYSTEM_PROMPT,
     AIProvider,
     AIVariantData,
+    attach_usage,
     build_user_text,
     extract_json,
 )
+from app.services.ai.catalogue import calc_cost
 
 
 class AnthropicProvider(AIProvider):
@@ -39,4 +41,11 @@ class AnthropicProvider(AIProvider):
         block = resp.content[0]
         assert isinstance(block, _anthropic.types.TextBlock)
         raw = json.loads(extract_json(block.text))
-        return [AIVariantData(**v) for v in raw]
+        variants = [AIVariantData(**v) for v in raw]
+        attach_usage(
+            variants,
+            resp.usage.input_tokens,
+            resp.usage.output_tokens,
+            calc_cost(model, resp.usage.input_tokens, resp.usage.output_tokens),
+        )
+        return variants

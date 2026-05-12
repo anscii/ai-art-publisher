@@ -59,6 +59,33 @@ _FAKE = [
 ] * 3
 
 
+def test_generate_uses_provider_default_model(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-opus-4-7"},
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all(v["model"] == "claude-opus-4-7" for v in resp.json())
+
+
+def test_generate_response_includes_cost_usd(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all("cost_usd" in v for v in resp.json())
+
+
 def test_generate_creates_variants(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.post(

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppSettings
 from app.schemas import SettingsUpdate
+from app.services.ai.catalogue import PROVIDER_MODELS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -36,6 +37,11 @@ def _mask(field: str, value: str) -> str:
 def _to_dict(s: AppSettings) -> dict:
     fields = [c.key for c in AppSettings.__table__.columns if c.key != "id"]
     return {f: _mask(f, getattr(s, f)) for f in fields}
+
+
+@router.get("/providers")
+def get_providers():
+    return PROVIDER_MODELS
 
 
 @router.get("")
@@ -131,7 +137,7 @@ def _test_anthropic(key: str) -> dict:
         import anthropic
 
         anthropic.Anthropic(api_key=key).messages.create(
-            model="claude-haiku-4-5",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1,
             messages=[{"role": "user", "content": "hi"}],
         )

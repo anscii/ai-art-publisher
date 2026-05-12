@@ -145,7 +145,7 @@
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('google',this)">Test</button>
         </div>
         <div class="row g-2 mb-2">
-          <div class="col"><div class="input-group input-group-sm">
+          <div class="col-auto"><div class="input-group input-group-sm">
             <span class="input-group-text">Default provider</span>
             <select class="form-select" id="s_default_provider">
               <option value="anthropic">Anthropic</option>
@@ -153,9 +153,19 @@
               <option value="google">Google</option>
             </select>
           </div></div>
+        </div>
+        <div class="row g-2 mb-2">
           <div class="col"><div class="input-group input-group-sm">
-            <span class="input-group-text">Default model</span>
-            <input type="text" class="form-control" id="s_default_model" placeholder="claude-haiku-4-5">
+            <span class="input-group-text" style="width:140px">Anthropic model</span>
+            <select class="form-select" id="s_anthropic_default_model"></select>
+          </div></div>
+          <div class="col"><div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:140px">OpenAI model</span>
+            <select class="form-select" id="s_openai_default_model"></select>
+          </div></div>
+          <div class="col"><div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:140px">Google model</span>
+            <select class="form-select" id="s_google_default_model"></select>
           </div></div>
         </div>
         <h6 class="text-muted small mt-3">Telegram</h6>

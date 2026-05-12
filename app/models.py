@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -75,6 +75,7 @@ class AIVariant(Base):
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
     hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     series: Mapped["Series"] = relationship("Series", back_populates="ai_variants")
@@ -88,7 +89,9 @@ class AppSettings(Base):
     openai_api_key: Mapped[str] = mapped_column(String, default="")
     google_api_key: Mapped[str] = mapped_column(String, default="")
     default_provider: Mapped[str] = mapped_column(String, default="anthropic")
-    default_model: Mapped[str] = mapped_column(String, default="claude-haiku-4-5")
+    anthropic_default_model: Mapped[str] = mapped_column(String, default="")
+    openai_default_model: Mapped[str] = mapped_column(String, default="")
+    google_default_model: Mapped[str] = mapped_column(String, default="")
     telegram_bot_token: Mapped[str] = mapped_column(String, default="")
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
     instagram_access_token: Mapped[str] = mapped_column(String, default="")

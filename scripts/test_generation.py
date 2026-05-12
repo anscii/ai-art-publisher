@@ -11,12 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.routers.generate import _get_api_key, get_provider  # noqa: E402
-
-
-class _FakeSettings:
-    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-    google_api_key = os.environ.get("GOOGLE_API_KEY", "")
+from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS  # noqa: E402
+from scripts._utils import FakeSettings  # noqa: E402
 
 
 def main() -> None:
@@ -29,21 +25,30 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("DEFAULT_MODEL", "claude-haiku-4-5"),
-        help="Model name",
+        default=None,
+        help="Model name (default: provider's catalogue default)",
     )
     args = parser.parse_args()
 
-    api_key = _get_api_key(_FakeSettings(), args.provider)
+    model = args.model or PROVIDER_DEFAULT_MODELS.get(args.provider, "")
+    api_key = _get_api_key(FakeSettings(), args.provider)
     if not api_key:
         print(f"Error: no API key for provider '{args.provider}' (set env var)", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Provider: {args.provider}  Model: {args.model}")
+    print(f"Provider: {args.provider}  Model: {model}")
     print(f"Hint: {args.hint}\n")
 
     provider = get_provider(args.provider, api_key)
-    variants = provider.generate_variants(images_b64=[], model=args.model, hint=args.hint)
+    variants = provider.generate_variants(images_b64=[], model=model, hint=args.hint)
+
+    if variants:
+        v0 = variants[0]
+        cost_line = (
+            f"Cost: ${v0.cost_usd:.6f}  ({v0.input_tokens} in + {v0.output_tokens} out tokens)"
+        )
+        print(cost_line)
+        print()
 
     for i, v in enumerate(variants, 1):
         print(f"── Variant {i} ─────────────────────────────")
