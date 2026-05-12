@@ -44,8 +44,19 @@ def test_ai_variant_data_normalises_on_construction():
     assert vd.title == "The End — A Beginning"
     assert vd.description_en == "Something — wicked."
     assert vd.description_ru == "Нечто — страшное."
-    assert vd.tags_instagram == ["#dark_fantasy", "#space_opera"]
+    assert vd.tags_instagram == ["#dark_fantasy", "#space_opera", "#aiart"]
     assert vd.tags_telegram == ["#тёмное_фэнтези"]
+
+
+def test_aiart_tag_not_duplicated():
+    vd = AIVariantData(
+        title="T",
+        description_en="E",
+        description_ru="R",
+        tags_instagram=["#aiart", "#dark-fantasy"],
+        tags_telegram=[],
+    )
+    assert vd.tags_instagram.count("#aiart") == 1
 
 
 _FAKE = [

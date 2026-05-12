@@ -86,6 +86,8 @@ class AIVariantData:
         self.description_en = fix_llm_text(self.description_en)
         self.description_ru = fix_llm_text(self.description_ru)
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]
+        if "#aiart" not in self.tags_instagram:
+            self.tags_instagram.append("#aiart")
         self.tags_telegram = [fix_llm_tag(t) for t in self.tags_telegram]
 
 
