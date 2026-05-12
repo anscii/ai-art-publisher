@@ -10,6 +10,7 @@ from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import GenerateRequest
 from app.services.ai.base import AIProvider
+from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
 
 router = APIRouter(prefix="/api/series", tags=["generate"])
@@ -56,7 +57,11 @@ def generate_descriptions(
 
     settings = get_or_create_settings(db)
     provider_name = body.provider or settings.default_provider
-    model = body.model or settings.default_model
+    model = (
+        body.model
+        or getattr(settings, f"{provider_name}_default_model", None)
+        or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
+    )
     api_key = _get_api_key(settings, provider_name)
     if not api_key:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
@@ -84,6 +89,7 @@ def generate_descriptions(
             tags_instagram=json.dumps(vd.tags_instagram),
             tags_telegram=json.dumps(vd.tags_telegram),
             hint=body.hint,
+            cost_usd=vd.cost_usd,
         )
         db.add(v)
     db.commit()

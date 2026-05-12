@@ -13,10 +13,28 @@ def test_update_then_get_masks_token(client):
 
 
 def test_update_non_secret_field(client):
-    client.put("/api/settings", json={"default_provider": "openai", "default_model": "gpt-4o-mini"})
+    client.put(
+        "/api/settings",
+        json={"default_provider": "openai", "anthropic_default_model": "claude-sonnet-4-6"},
+    )
     data = client.get("/api/settings").json()
     assert data["default_provider"] == "openai"
-    assert data["default_model"] == "gpt-4o-mini"
+    assert data["anthropic_default_model"] == "claude-sonnet-4-6"
+
+
+def test_per_provider_model_defaults(client):
+    client.put(
+        "/api/settings",
+        json={
+            "anthropic_default_model": "claude-opus-4-7",
+            "openai_default_model": "gpt-5.4",
+            "google_default_model": "gemini-2.5-flash",
+        },
+    )
+    data = client.get("/api/settings").json()
+    assert data["anthropic_default_model"] == "claude-opus-4-7"
+    assert data["openai_default_model"] == "gpt-5.4"
+    assert data["google_default_model"] == "gemini-2.5-flash"
 
 
 def test_partial_update_preserves_other_fields(client):

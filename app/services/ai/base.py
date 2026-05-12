@@ -77,6 +77,9 @@ class AIVariantData:
     description_ru: str
     tags_instagram: list[str]
     tags_telegram: list[str]
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
@@ -84,6 +87,15 @@ class AIVariantData:
         self.description_ru = fix_llm_text(self.description_ru)
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]
         self.tags_telegram = [fix_llm_tag(t) for t in self.tags_telegram]
+
+
+def attach_usage(
+    variants: list[AIVariantData], input_tokens: int, output_tokens: int, cost_usd: float
+) -> None:
+    for vd in variants:
+        vd.cost_usd = cost_usd
+        vd.input_tokens = input_tokens
+        vd.output_tokens = output_tokens
 
 
 class AIProvider(ABC):
