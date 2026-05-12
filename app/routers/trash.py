@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import Image, Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import TrashImage, TrashResponse, TrashSeries
+from app.services.storage import get_public_base_url
 
 router = APIRouter(prefix="/api/trash", tags=["trash"])
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/api/trash", tags=["trash"])
 @router.get("")
 def get_trash(db: Session = Depends(get_db)) -> TrashResponse:
     settings = get_or_create_settings(db)
-    base_url = settings.r2_public_base_url.rstrip("/")
+    base_url = get_public_base_url(settings)
 
     del_series = db.scalars(
         select(Series).where(Series.deleted_at.isnot(None)).order_by(Series.deleted_at.desc())

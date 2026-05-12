@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-from app.services.storage import R2StorageService
+import pytest
+
+from app.services.storage import LocalStorageService, R2StorageService
 
 
 def _svc():
@@ -44,3 +46,43 @@ def test_download_bytes(mock_boto):
     mock_client.get_object.return_value = {"Body": MagicMock(read=lambda: b"img")}
     mock_boto.return_value = mock_client
     assert _svc().download_bytes("images/test.jpg") == b"img"
+
+
+# --- LocalStorageService ---
+
+
+@pytest.fixture
+def local_svc(tmp_path):
+    return LocalStorageService(tmp_path)
+
+
+def test_local_public_url(local_svc):
+    assert local_svc.public_url("images/abc.jpg") == "/uploads/images/abc.jpg"
+
+
+def test_local_upload_and_download(local_svc, tmp_path):
+    local_svc.upload_bytes(b"hello", "images/test.jpg", "image/jpeg")
+    assert (tmp_path / "images" / "test.jpg").read_bytes() == b"hello"
+    assert local_svc.download_bytes("images/test.jpg") == b"hello"
+
+
+def test_local_upload_file(local_svc, tmp_path):
+    src = tmp_path / "src.jpg"
+    src.write_bytes(b"pixels")
+    local_svc.upload_file(str(src), "images/copy.jpg")
+    assert local_svc.download_bytes("images/copy.jpg") == b"pixels"
+
+
+def test_local_delete(local_svc, tmp_path):
+    local_svc.upload_bytes(b"data", "images/del.jpg", "image/jpeg")
+    local_svc.delete("images/del.jpg")
+    assert not (tmp_path / "images" / "del.jpg").exists()
+
+
+def test_local_delete_nonexistent(local_svc):
+    local_svc.delete("images/ghost.jpg")  # no error
+
+
+def test_local_download_missing(local_svc):
+    with pytest.raises(FileNotFoundError):
+        local_svc.download_bytes("images/missing.jpg")

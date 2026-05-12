@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 
 def _series(client, status="approved"):
@@ -12,7 +12,7 @@ def _series(client, status="approved"):
 
 def test_schedule_sets_status(client):
     sid = _series(client)
-    future = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     resp = client.post(
         f"/api/series/{sid}/schedule",
         json={
@@ -28,7 +28,7 @@ def test_schedule_sets_status(client):
 
 def test_cancel_schedule(client):
     sid = _series(client)
-    future = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     client.post(
         f"/api/series/{sid}/schedule", json={"datetime_utc": future, "targets": ["telegram"]}
     )
@@ -39,7 +39,7 @@ def test_cancel_schedule(client):
 
 
 def test_queue_sorted_by_datetime(client):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     s1 = _series(client)
     s2 = _series(client)
     client.post(
