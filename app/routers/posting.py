@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -89,11 +89,11 @@ def _handle_result(
 ) -> PostResult:
     if result["ok"]:
         if platform in ("telegram", "both"):
-            s.posted_to_telegram_at = datetime.utcnow()
+            s.posted_to_telegram_at = datetime.now(UTC)
         if platform in ("instagram", "both"):
-            s.posted_to_instagram_at = datetime.utcnow()
+            s.posted_to_instagram_at = datetime.now(UTC)
             if facebook_result and facebook_result.get("ok") and not facebook_result.get("skipped"):
-                s.posted_to_facebook_at = datetime.utcnow()
+                s.posted_to_facebook_at = datetime.now(UTC)
         _after_post_success(s)
         db.commit()
         message = f"Posted to {platform}"
@@ -146,10 +146,10 @@ def post_both(series_id: str, db: Session = Depends(get_db)) -> PostResult:
     ig = _do_instagram(s, settings)
     fb = _do_facebook(s, settings)
     if tg["ok"] and ig["ok"]:
-        s.posted_to_telegram_at = datetime.utcnow()
-        s.posted_to_instagram_at = datetime.utcnow()
+        s.posted_to_telegram_at = datetime.now(UTC)
+        s.posted_to_instagram_at = datetime.now(UTC)
         if fb.get("ok") and not fb.get("skipped"):
-            s.posted_to_facebook_at = datetime.utcnow()
+            s.posted_to_facebook_at = datetime.now(UTC)
         _after_post_success(s)
         db.commit()
         prefix = "[FAKE] " if tg.get("fake") or ig.get("fake") else ""

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -19,7 +19,7 @@ def run_scheduled_posts():
 
     db = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         due = db.scalars(
             select(Series)
             .where(Series.status == "scheduled")
@@ -37,17 +37,17 @@ def run_scheduled_posts():
                 if "telegram" in targets:
                     result = _do_telegram(s, settings)
                     if result["ok"]:
-                        s.posted_to_telegram_at = datetime.utcnow()
+                        s.posted_to_telegram_at = datetime.now(UTC)
                         targets.remove("telegram")
                     else:
                         raise RuntimeError(result.get("description", "TG error"))
                 if "instagram" in targets:
                     result = _do_instagram(s, settings)
                     if result["ok"]:
-                        s.posted_to_instagram_at = datetime.utcnow()
+                        s.posted_to_instagram_at = datetime.now(UTC)
                         fb = _do_facebook(s, settings)
                         if fb.get("ok") and not fb.get("skipped"):
-                            s.posted_to_facebook_at = datetime.utcnow()
+                            s.posted_to_facebook_at = datetime.now(UTC)
                         targets.remove("instagram")
                     else:
                         raise RuntimeError(result.get("description", "IG error"))
@@ -71,7 +71,7 @@ def start_scheduler():
         hours=1,
         id="scheduled_posts",
         replace_existing=True,
-        next_run_time=datetime.utcnow(),
+        next_run_time=datetime.now(UTC),
     )
     scheduler.start()
 

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -18,6 +18,7 @@ from app.schemas import (
     SeriesListResponse,
     SeriesUpdate,
 )
+from app.services.storage import get_public_base_url
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 
@@ -55,7 +56,7 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
 
 def series_to_detail(s: Series, db: Session) -> SeriesDetail:
     settings = get_or_create_settings(db)
-    base_url = settings.r2_public_base_url.rstrip("/")
+    base_url = get_public_base_url(settings)
     images = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
     variants = sorted(s.ai_variants, key=lambda v: v.generated_at, reverse=True)
     return SeriesDetail(
@@ -106,7 +107,7 @@ def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDe
         title=body.title,
         status=body.status,
         original_folder_name=body.original_folder_name,
-        created_at=body.created_at or datetime.utcnow(),
+        created_at=body.created_at or datetime.now(UTC),
     )
     db.add(s)
     db.commit()
@@ -134,7 +135,7 @@ def list_series(
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
     settings = get_or_create_settings(db)
-    base_url = settings.r2_public_base_url.rstrip("/")
+    base_url = get_public_base_url(settings)
     return SeriesListResponse(
         items=[series_to_list_item(s, base_url) for s in rows],
         total=total,
@@ -199,6 +200,6 @@ def delete_series(series_id: str, db: Session = Depends(get_db)):
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
-    s.deleted_at = datetime.utcnow()
+    s.deleted_at = datetime.now(UTC)
     db.commit()
     return {"deleted": series_id}
