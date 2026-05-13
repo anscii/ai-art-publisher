@@ -1,12 +1,9 @@
-# .github/actions/python-setup/action.yml
 name: Python setup
-description: Checkout, setup Python, setup uv, create venv, install dependencies
+description: Setup Python, uv, venv, and dependencies
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-
     - uses: actions/setup-python@v5
       with:
         python-version: "3.12"

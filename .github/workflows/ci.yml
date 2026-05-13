@@ -11,6 +11,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/python-setup
 
       - name: Lint
@@ -19,6 +20,7 @@ jobs:
   type-check:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/python-setup
 
       - name: Type check
@@ -27,6 +29,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/python-setup
 
       - name: Install Playwright Chromium for tests
