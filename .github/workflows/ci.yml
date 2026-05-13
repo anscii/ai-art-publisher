@@ -11,23 +11,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            requirements*.txt
-      
-      - name: Create venv
-        run: make venv
-
-      - name: Install dependencies
-        run: make install-dev
+      - uses: ./.github/actions/python-setup
 
       - name: Lint
         run: make lint
@@ -35,23 +19,7 @@ jobs:
   type-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            requirements*.txt
-
-      - name: Create venv
-        run: make venv
-
-      - name: Install dependencies
-        run: make install-dev
+      - uses: ./.github/actions/python-setup
 
       - name: Type check
         run: make types
@@ -59,23 +27,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            requirements*.txt
-
-      - name: Create venv
-        run: make venv
-
-      - name: Install dependencies
-        run: make install-dev
+      - uses: ./.github/actions/python-setup
 
       - name: Install Playwright Chromium for tests
         run: make playwright-install

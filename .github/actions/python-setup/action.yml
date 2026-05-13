@@ -1,0 +1,26 @@
+# .github/actions/python-setup/action.yml
+name: Python setup
+description: Checkout, setup Python, setup uv, create venv, install dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          requirements*.txt
+
+    - name: Create venv
+      shell: bash
+      run: make venv
+
+    - name: Install dependencies
+      shell: bash
+      run: make install-dev
