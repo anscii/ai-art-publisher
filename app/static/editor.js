@@ -515,6 +515,20 @@ function _lightboxRender() {
   const isSkip = img.status === 'skip';
   sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
     document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
+
+  const moveMenu = document.getElementById('lightboxMoveMenu');
+  if (moveMenu) {
+    moveMenu.replaceChildren();
+    buildMoveToItems(img.id, App.currentSeriesId, false, () => {
+      _lightboxImages.splice(_lightboxIdx, 1);
+      if (!_lightboxImages.length) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
+      } else {
+        _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
+        _lightboxRender();
+      }
+    }).forEach(li => moveMenu.appendChild(li));
+  }
 }
 
 function lightboxNav(delta) {
