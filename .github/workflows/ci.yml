@@ -27,5 +27,8 @@ jobs:
       - name: Type check
         run: python -m mypy app
 
+      - name: Install playwrite chromium for tests
+        run: playwright install chromium
+
       - name: Tests
         run: python -m pytest -v .
