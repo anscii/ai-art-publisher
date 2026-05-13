@@ -20,7 +20,7 @@ test-back:
 	$(PY) -m pytest  -m "not e2e" -v
 
 playwright-install:
-	playwright install chromium
+	$(PY) -m playwright install chromium
 
 # ── Lint & format ─────────────────────────────────────────────────────────────
 format:
