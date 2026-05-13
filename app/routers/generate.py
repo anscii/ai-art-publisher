@@ -18,6 +18,12 @@ variants_router = APIRouter(prefix="/api/ai_variants", tags=["ai_variants"])
 
 
 def get_provider(provider_name: str, api_key: str) -> AIProvider:
+    from app.config import get_config
+
+    if get_config().fake_ai:
+        from app.services.ai.fake import FakeAIProvider
+
+        return FakeAIProvider()
     if provider_name == "anthropic":
         from app.services.ai.anthropic import AnthropicProvider
 
@@ -62,8 +68,10 @@ def generate_descriptions(
         or getattr(settings, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
+    from app.config import get_config
+
     api_key = _get_api_key(settings, provider_name)
-    if not api_key:
+    if not api_key and not get_config().fake_ai:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
     images_b64: list[str] = []

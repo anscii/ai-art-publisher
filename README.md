@@ -33,6 +33,9 @@ cd ai_art_publisher
 uv venv .venv --python=python3.12
 uv pip install -r requirements.txt -r requirements-dev.txt
 
+# Install Playwright browser (needed for E2E tests)
+.venv/bin/playwright install chromium
+
 # Install pre-commit hooks
 make hooks
 
@@ -218,7 +221,9 @@ Test prompts without opening the browser:
 ```bash
 # Development
 make run          # dev server with auto-reload
-make test         # run all tests
+make test         # run all tests (unit + E2E)
+make test-back    # backend unit tests only (fast)
+make test-front   # E2E browser tests only
 make check        # format + lint + types + tests
 make migrate      # apply DB migrations
 make migrate-new msg="add foo column"  # create new Alembic migration

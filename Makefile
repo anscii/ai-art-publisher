@@ -13,6 +13,12 @@ test:
 test-fast:
 	$(PY) -m pytest -v .
 
+test-front:
+	$(PY) -m pytest -m e2e -v
+
+test-back:
+	$(PY) -m pytest  -m "not e2e" -v
+
 # ── Lint & format ─────────────────────────────────────────────────────────────
 format:
 	$(PY) -m ruff format app
