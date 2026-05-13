@@ -71,12 +71,18 @@ def _bootstrap_settings(db):
 def _run_migrations() -> None:
     if ":memory:" in str(engine.url):
         return  # tests use create_all with the full model, no migration needed
+    from sqlalchemy import inspect as sa_inspect
+
     from alembic import command as alembic_command
     from alembic.config import Config
 
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", str(engine.url))
-    alembic_command.upgrade(cfg, "head")
+    if not sa_inspect(engine).has_table("alembic_version"):
+        # Fresh DB — create_all already applied current schema; just stamp.
+        alembic_command.stamp(cfg, "head")
+    else:
+        alembic_command.upgrade(cfg, "head")
 
 
 def init_db():

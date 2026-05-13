@@ -7,8 +7,12 @@
 ## Running tests
 
 ```bash
-.venv/bin/python -m pytest -v
+make test-back    # backend unit tests only (fast, no browser)
+make test-front   # E2E browser tests via Playwright (requires: playwright install chromium)
+make test         # full suite (unit + E2E)
 ```
+
+E2E tests spin up a real `uvicorn` subprocess on port 18765 with `FAKE_POSTING=true` and `FAKE_AI=true` — no external API calls are made. The `FAKE_AI` flag makes the generate endpoint return stub variants without an API key.
 
 
 ## Running the dev server

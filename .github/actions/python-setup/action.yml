@@ -1,0 +1,23 @@
+name: Python setup
+description: Setup Python, uv, venv, and dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          requirements*.txt
+
+    - name: Create venv
+      shell: bash
+      run: make venv
+
+    - name: Install dependencies
+      shell: bash
+      run: make install-dev
