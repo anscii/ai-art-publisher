@@ -211,8 +211,9 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
     try {
       const s = await _getOrCacheUnsorted();
       const ids = bulk ? [..._selectedImages] : [imageId];
-      await moveImages(ids, s.id, seriesId);
-      if (afterMove) afterMove();
+      if (await moveImages(ids, s.id, seriesId)) {
+        if (afterMove) afterMove();
+      }
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
@@ -233,8 +234,9 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
     row.firstChild.addEventListener('click', async e => {
       e.preventDefault();
       const ids = bulk ? [..._selectedImages] : [imageId];
-      await moveImages(ids, s.id, seriesId);
-      if (afterMove) afterMove();
+      if (await moveImages(ids, s.id, seriesId)) {
+        if (afterMove) afterMove();
+      }
     });
     return row;
   };
@@ -552,6 +554,7 @@ async function moveImages(imageIds, targetId, currentId) {
     const t = await apiFetch('GET', '/api/series/' + targetId);
     updateSeriesItem(t);
     showToast(imageIds.length > 1 ? imageIds.length + ' images moved' : 'Image moved', 'success');
+    return true;
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
