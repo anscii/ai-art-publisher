@@ -193,7 +193,7 @@ function _resortStrip() {
 // ── Move to picker ────────────────────────────────────────────────────────────
 // Returns <li> elements for the "Move to" section.
 // bulk=false → moves just imageId; bulk=true → moves all _selectedImages
-function buildMoveToItems(imageId, seriesId, bulk) {
+function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
   const items = [];
 
   const mkItem = (label, iconCls, onClick) => {
@@ -211,7 +211,9 @@ function buildMoveToItems(imageId, seriesId, bulk) {
     try {
       const s = await _getOrCacheUnsorted();
       const ids = bulk ? [..._selectedImages] : [imageId];
-      await moveImages(ids, s.id, seriesId);
+      if (await moveImages(ids, s.id, seriesId)) {
+        if (afterMove) afterMove();
+      }
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
@@ -232,7 +234,9 @@ function buildMoveToItems(imageId, seriesId, bulk) {
     row.firstChild.addEventListener('click', async e => {
       e.preventDefault();
       const ids = bulk ? [..._selectedImages] : [imageId];
-      await moveImages(ids, s.id, seriesId);
+      if (await moveImages(ids, s.id, seriesId)) {
+        if (afterMove) afterMove();
+      }
     });
     return row;
   };
@@ -257,6 +261,7 @@ function buildMoveToItems(imageId, seriesId, bulk) {
         await selectSeries(newSeries.id);
         updateSeriesItem(App.currentSeries);
         showToast(ids.length > 1 ? ids.length + ' images moved' : 'Image moved', 'success');
+        if (afterMove) afterMove();
       } catch (err) { showToast(err.message, 'danger'); }
     });
     results.appendChild(createRow);
@@ -510,6 +515,21 @@ function _lightboxRender() {
   const isSkip = img.status === 'skip';
   sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
     document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
+
+  const moveMenu = document.getElementById('lightboxMoveMenu');
+  if (moveMenu) {
+    const currentSeriesId = App.currentSeriesId;
+    moveMenu.replaceChildren();
+    buildMoveToItems(img.id, currentSeriesId, false, () => {
+      _lightboxImages.splice(_lightboxIdx, 1);
+      if (!_lightboxImages.length || App.currentSeriesId !== currentSeriesId) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
+      } else {
+        _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
+        _lightboxRender();
+      }
+    }).forEach(li => moveMenu.appendChild(li));
+  }
 }
 
 function lightboxNav(delta) {
@@ -549,6 +569,7 @@ async function moveImages(imageIds, targetId, currentId) {
     const t = await apiFetch('GET', '/api/series/' + targetId);
     updateSeriesItem(t);
     showToast(imageIds.length > 1 ? imageIds.length + ' images moved' : 'Image moved', 'success');
+    return true;
   } catch (e) { showToast(e.message, 'danger'); }
 }
 

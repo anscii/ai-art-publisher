@@ -254,6 +254,14 @@
       <div class="modal-footer border-0 justify-content-center py-2 gap-2">
         <button id="lightboxQueueBtn" class="btn btn-sm btn-outline-primary"></button>
         <button id="lightboxSkipBtn" class="btn btn-sm btn-outline-secondary"></button>
+        <div class="dropdown">
+          <button id="lightboxMoveBtn" class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                  data-bs-toggle="dropdown">
+            <i class="bi bi-box-arrow-right me-1"></i>Move to…
+          </button>
+          <ul id="lightboxMoveMenu" class="dropdown-menu dropdown-menu-end"
+              aria-labelledby="lightboxMoveBtn"></ul>
+        </div>
         <button id="lightboxDeleteBtn" class="btn btn-sm btn-outline-danger">
           <i class="bi bi-trash me-1"></i>Delete
         </button>
