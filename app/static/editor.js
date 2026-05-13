@@ -518,10 +518,11 @@ function _lightboxRender() {
 
   const moveMenu = document.getElementById('lightboxMoveMenu');
   if (moveMenu) {
+    const currentSeriesId = App.currentSeriesId;
     moveMenu.replaceChildren();
-    buildMoveToItems(img.id, App.currentSeriesId, false, () => {
+    buildMoveToItems(img.id, currentSeriesId, false, () => {
       _lightboxImages.splice(_lightboxIdx, 1);
-      if (!_lightboxImages.length) {
+      if (!_lightboxImages.length || App.currentSeriesId !== currentSeriesId) {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal')).hide();
       } else {
         _lightboxIdx = Math.min(_lightboxIdx, _lightboxImages.length - 1);
