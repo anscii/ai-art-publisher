@@ -4,8 +4,11 @@ on:
   pull_request:
     branches: [master, develop]
 
+permissions:
+  contents: read
+
 jobs:
-  check:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,20 +18,58 @@ jobs:
           python-version: "3.12"
 
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements*.txt
 
       - name: Install dependencies
         run: uv pip install -r requirements.txt -r requirements-dev.txt --system
 
       - name: Lint
-        run: |
-          python -m ruff format --diff app
-          python -m ruff check app
+        run: make lint
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements*.txt
+
+      - name: Install dependencies
+        run: uv pip install -r requirements.txt -r requirements-dev.txt --system
 
       - name: Type check
-        run: python -m mypy app
+        run: make types
 
-      - name: Install playwrite chromium for tests
-        run: playwright install chromium
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements*.txt
+
+      - name: Install dependencies
+        run: uv pip install -r requirements.txt -r requirements-dev.txt --system
+
+      - name: Install Playwright Chromium for tests
+        run: make playwright-install
 
       - name: Tests
-        run: python -m pytest -v .
+        run: make test

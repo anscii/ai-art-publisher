@@ -19,6 +19,9 @@ test-front:
 test-back:
 	$(PY) -m pytest  -m "not e2e" -v
 
+playwright-install:
+	playwright install chromium
+
 # ── Lint & format ─────────────────────────────────────────────────────────────
 format:
 	$(PY) -m ruff format app
@@ -54,7 +57,6 @@ install:
 
 install-dev:
 	$(UV) pip install -r requirements.txt -r requirements-dev.txt
-	$(PY) -m pre_commit install
 
 hooks:
 	$(PY) -m pre_commit install
