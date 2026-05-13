@@ -22,9 +22,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: |
             requirements*.txt
+      
+      - name: Create venv
+        run: make venv
 
       - name: Install dependencies
-        run: uv pip install -r requirements.txt -r requirements-dev.txt --system
+        run: make install-dev
 
       - name: Lint
         run: make lint
@@ -44,8 +47,11 @@ jobs:
           cache-dependency-glob: |
             requirements*.txt
 
+      - name: Create venv
+        run: make venv
+
       - name: Install dependencies
-        run: uv pip install -r requirements.txt -r requirements-dev.txt --system
+        run: make install-dev
 
       - name: Type check
         run: make types
@@ -65,8 +71,11 @@ jobs:
           cache-dependency-glob: |
             requirements*.txt
 
+      - name: Create venv
+        run: make venv
+
       - name: Install dependencies
-        run: uv pip install -r requirements.txt -r requirements-dev.txt --system
+        run: make install-dev
 
       - name: Install Playwright Chromium for tests
         run: make playwright-install

@@ -69,4 +69,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: dev test test-fast format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean
+.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean
