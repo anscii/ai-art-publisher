@@ -193,7 +193,7 @@ function _resortStrip() {
 // ── Move to picker ────────────────────────────────────────────────────────────
 // Returns <li> elements for the "Move to" section.
 // bulk=false → moves just imageId; bulk=true → moves all _selectedImages
-function buildMoveToItems(imageId, seriesId, bulk) {
+function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
   const items = [];
 
   const mkItem = (label, iconCls, onClick) => {
@@ -212,6 +212,7 @@ function buildMoveToItems(imageId, seriesId, bulk) {
       const s = await _getOrCacheUnsorted();
       const ids = bulk ? [..._selectedImages] : [imageId];
       await moveImages(ids, s.id, seriesId);
+      if (afterMove) afterMove();
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
@@ -233,6 +234,7 @@ function buildMoveToItems(imageId, seriesId, bulk) {
       e.preventDefault();
       const ids = bulk ? [..._selectedImages] : [imageId];
       await moveImages(ids, s.id, seriesId);
+      if (afterMove) afterMove();
     });
     return row;
   };
@@ -257,6 +259,7 @@ function buildMoveToItems(imageId, seriesId, bulk) {
         await selectSeries(newSeries.id);
         updateSeriesItem(App.currentSeries);
         showToast(ids.length > 1 ? ids.length + ' images moved' : 'Image moved', 'success');
+        if (afterMove) afterMove();
       } catch (err) { showToast(err.message, 'danger'); }
     });
     results.appendChild(createRow);
