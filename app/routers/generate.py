@@ -18,6 +18,12 @@ variants_router = APIRouter(prefix="/api/ai_variants", tags=["ai_variants"])
 
 
 def get_provider(provider_name: str, api_key: str) -> AIProvider:
+    from app.config import get_config
+
+    if get_config().fake_ai:
+        from app.services.ai.fake import FakeAIProvider
+
+        return FakeAIProvider()
     if provider_name == "anthropic":
         from app.services.ai.anthropic import AnthropicProvider
 
@@ -62,16 +68,21 @@ def generate_descriptions(
         or getattr(settings, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
+    from app.config import get_config
+
     api_key = _get_api_key(settings, provider_name)
-    if not api_key:
+    if not api_key and not get_config().fake_ai:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
     images_b64: list[str] = []
     if body.include_images:
         storage = get_storage_from_settings(settings)
-        for img in sorted(
-            [i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index
-        )[:4]:
+        active = {i.id: i for i in s.images if i.deleted_at is None}
+        if body.selected_image_ids:
+            ordered = [active[id] for id in body.selected_image_ids if id in active][:3]
+        else:
+            ordered = sorted(active.values(), key=lambda i: i.order_index)[:3]
+        for img in ordered:
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 

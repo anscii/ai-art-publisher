@@ -13,6 +13,15 @@ test:
 test-fast:
 	$(PY) -m pytest -v .
 
+test-front:
+	$(PY) -m pytest -m e2e -v
+
+test-back:
+	$(PY) -m pytest  -m "not e2e" -v
+
+playwright-install:
+	$(PY) -m playwright install chromium
+
 # ── Lint & format ─────────────────────────────────────────────────────────────
 format:
 	$(PY) -m ruff format app
@@ -48,7 +57,6 @@ install:
 
 install-dev:
 	$(UV) pip install -r requirements.txt -r requirements-dev.txt
-	$(PY) -m pre_commit install
 
 hooks:
 	$(PY) -m pre_commit install
@@ -61,4 +69,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: dev test test-fast format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean
+.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean

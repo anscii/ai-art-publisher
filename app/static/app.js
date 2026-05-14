@@ -51,6 +51,7 @@ const App = {
   currentSeriesId: null,
   currentSeries: null,
   unsortedSeriesId: null,
+  search: '',
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ async function loadSeries(reset) {
   try {
     const statuses = [...App.activeStatuses].join(',') || 'new';
     const q = new URLSearchParams({ page: App.page, limit: App.limit, status: statuses });
+    if (App.search) q.set('search', App.search);
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
@@ -253,6 +255,15 @@ function onFilterChange() {
     [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
   );
   loadSeries(true);
+}
+
+let _searchDebounce = null;
+function onSearchChange(val) {
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(() => {
+    App.search = val.trim();
+    loadSeries(true);
+  }, 300);
 }
 
 // ── View switching ────────────────────────────────────────────────────────────
@@ -458,6 +469,25 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('limitSel').value = String(App.limit);
   loadSeries(true);
   initLightbox();
+  const filterBtn  = document.getElementById('filterBtn');
+  const filterMenu = document.getElementById('statusFilterMenu');
+  filterBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = filterMenu.classList.contains('show');
+    if (!open) {
+      const r = filterBtn.getBoundingClientRect();
+      filterMenu.style.position = 'fixed';
+      filterMenu.style.top      = r.bottom + 'px';
+      filterMenu.style.left     = 'auto';
+      filterMenu.style.right    = (window.innerWidth - r.right) + 'px';
+    }
+    filterMenu.classList.toggle('show');
+    filterBtn.setAttribute('aria-expanded', String(!open));
+  });
+  document.addEventListener('click', () => {
+    filterMenu.classList.remove('show');
+    filterBtn.setAttribute('aria-expanded', 'false');
+  });
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();

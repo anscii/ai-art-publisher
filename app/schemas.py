@@ -179,6 +179,7 @@ class GenerateRequest(BaseModel):
     model: str | None = None
     hint: str | None = None
     include_images: bool = False
+    selected_image_ids: list[str] | None = None
 
 
 # ── Scheduling ────────────────────────────────────────────────────────────────
