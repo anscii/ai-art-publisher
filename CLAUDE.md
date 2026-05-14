@@ -3,6 +3,8 @@
 ## Git Workflow
 
 - Feature branches always target `develop` — use `--base develop` when creating PRs. `master` is production-only.
+- Always use `origin/<branch>` refs (not local branch names) in `git log`/`git diff` for PR descriptions and release notes — local branches may be stale.
+- Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped.
 
 ## Running tests
 
