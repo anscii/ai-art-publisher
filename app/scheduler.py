@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import UTC, datetime
 
@@ -10,56 +9,50 @@ scheduler = BackgroundScheduler()
 
 def run_scheduled_posts():
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
-    from app.config import get_config
     from app.database import SessionLocal
-    from app.models import Series
-    from app.routers.posting import _after_post_success, _do_facebook, _do_instagram, _do_telegram
+    from app.models import Post, PostImage
+    from app.routers.posts import execute_post
     from app.routers.settings import get_or_create_settings
 
     db = SessionLocal()
     try:
         now = datetime.now(UTC)
         due = db.scalars(
-            select(Series)
-            .where(Series.status == "scheduled")
-            .where(Series.scheduled_at <= now)
-            .order_by(Series.scheduled_at)
-            .limit(5)
+            select(Post)
+            .options(selectinload(Post.post_images).selectinload(PostImage.image))
+            .where(Post.status == "scheduled", Post.deleted_at.is_(None))
+            .where(Post.scheduled_at <= now)
+            .order_by(Post.scheduled_at)
+            .limit(10)
         ).all()
 
-        logger.info(f"Found {len(due)} scheduled posts")
+        logger.info("Found %d scheduled posts due", len(due))
 
         settings = get_or_create_settings(db)
-        for s in due:
-            targets = json.loads(s.scheduled_targets)
+        for post in due:
             try:
-                if "telegram" in targets:
-                    result = _do_telegram(s, settings)
-                    if result["ok"]:
-                        s.posted_to_telegram_at = datetime.now(UTC)
-                        targets.remove("telegram")
-                    else:
-                        raise RuntimeError(result.get("description", "TG error"))
-                if "instagram" in targets:
-                    result = _do_instagram(s, settings)
-                    if result["ok"]:
-                        s.posted_to_instagram_at = datetime.now(UTC)
-                        fb = _do_facebook(s, settings)
-                        if fb.get("ok") and not fb.get("skipped"):
-                            s.posted_to_facebook_at = datetime.now(UTC)
-                        targets.remove("instagram")
-                    else:
-                        raise RuntimeError(result.get("description", "IG error"))
-                _after_post_success(s)
-                s.scheduled_targets = json.dumps(targets)
-                prefix = "[FAKE] " if get_config().fake_posting else ""
-                logger.info("%sScheduled post success: %s", prefix, s.id)
+                result = execute_post(post, db, settings)
+                prefix = "[FAKE] " if not result.success and "FAKE" in result.message else ""
+                if result.success:
+                    logger.info(
+                        "%sScheduled post success: %s platform=%s", prefix, post.id, post.platform
+                    )
+                else:
+                    logger.error(
+                        "Scheduled post failed: %s platform=%s msg=%s",
+                        post.id,
+                        post.platform,
+                        result.message,
+                    )
             except Exception as e:
-                s.status = "approved"
-                s.notes = (s.notes + f"\n[scheduler error] {e}").strip()
-                logger.error("Scheduled post failed for %s: %s", s.id, e)
-            db.commit()
+                post.status = "failed"
+                post.error_message = str(e)
+                db.commit()
+                logger.error(
+                    "Scheduled post exception: %s platform=%s: %s", post.id, post.platform, e
+                )
     finally:
         db.close()
 

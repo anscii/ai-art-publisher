@@ -3,13 +3,15 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import AIVariant, Image, Series
+from app.models import AIVariant, Image, Post, PostImage, Series
+from app.routers.posts import post_to_resp
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
     AIVariantResponse,
+    CollectionRef,
     ImageResponse,
     SaveQueueBody,
     SeriesCreate,
@@ -50,6 +52,7 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
         tags_instagram=json.loads(v.tags_instagram),
         tags_telegram=json.loads(v.tags_telegram),
         hint=v.hint,
+        cost_usd=v.cost_usd,
         generated_at=v.generated_at,
     )
 
@@ -59,51 +62,87 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
     base_url = get_public_base_url(settings)
     images = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
     variants = sorted(s.ai_variants, key=lambda v: v.generated_at, reverse=True)
+    active_posts = db.scalars(
+        select(Post)
+        .options(selectinload(Post.post_images).selectinload(PostImage.image))
+        .where(Post.series_id == s.id, Post.deleted_at.is_(None))
+        .order_by(Post.created_at)
+    ).all()
+    collection_ref = (
+        CollectionRef(
+            id=s.collection.id,
+            name=s.collection.name,
+            collection_index=s.collection_index,
+            collection_number=s.collection_number,
+        )
+        if s.collection and s.collection.deleted_at is None
+        else None
+    )
     return SeriesDetail(
         id=s.id,
         original_folder_name=s.original_folder_name,
+        name=s.name,
         title=s.title,
         description_en=s.description_en,
         description_ru=s.description_ru,
         tags_instagram=json.loads(s.tags_instagram),
         tags_telegram=json.loads(s.tags_telegram),
         status=s.status,
-        notes=s.notes,
-        needs_review=s.needs_review,
-        review_reason=s.review_reason,
+        collection=collection_ref,
+        collection_index=s.collection_index,
+        collection_number=s.collection_number,
         created_at=s.created_at,
-        scheduled_at=s.scheduled_at,
-        scheduled_targets=json.loads(s.scheduled_targets),
-        posted_to_telegram_at=s.posted_to_telegram_at,
-        posted_to_instagram_at=s.posted_to_instagram_at,
-        posted_to_facebook_at=s.posted_to_facebook_at,
         images=[image_to_resp(img, base_url) for img in images],
         ai_variants=[variant_to_resp(v) for v in variants],
+        posts=[post_to_resp(p) for p in active_posts],
     )
 
 
 def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
     active = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
     cover_url = f"{base_url}/{active[0].r2_key}" if active and base_url else None
+    coll = s.collection if s.collection and s.collection.deleted_at is None else None
     return SeriesListItem(
         id=s.id,
         original_folder_name=s.original_folder_name,
+        name=s.name,
         title=s.title,
         status=s.status,
-        needs_review=s.needs_review,
+        collection_name=coll.name if coll else None,
+        collection_name_ru=coll.name_ru if coll else None,
+        collection_number=s.collection_number,
         created_at=s.created_at,
-        scheduled_at=s.scheduled_at,
-        posted_to_telegram_at=s.posted_to_telegram_at,
-        posted_to_instagram_at=s.posted_to_instagram_at,
-        posted_to_facebook_at=s.posted_to_facebook_at,
         image_count=len(active),
         cover_url=cover_url,
     )
 
 
+def _assign_collection_index(s: Series, new_cid: str | None, db: Session) -> None:
+    old_cid = s.collection_id
+    if new_cid == old_cid:
+        return
+    if new_cid is None:
+        s.collection_index = None
+        s.collection_number = None
+    else:
+        max_idx = (
+            db.scalar(
+                select(func.max(Series.collection_index)).where(
+                    Series.collection_id == new_cid,
+                    Series.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        s.collection_index = max_idx + 1
+        if s.collection_number is None:
+            s.collection_number = str(s.collection_index)
+
+
 @router.post("")
 def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDetail:
     s = Series(
+        name=body.name or body.title,
         title=body.title,
         status=body.status,
         original_folder_name=body.original_folder_name,
@@ -119,6 +158,7 @@ def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDe
 def list_series(
     status: str | None = Query(None),
     search: str | None = Query(None),
+    collection_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -130,7 +170,9 @@ def list_series(
     else:
         q = q.where(Series.status != "skip")
     if search:
-        q = q.where(Series.title.ilike(f"%{search}%"))
+        q = q.where(Series.name.ilike(f"%{search}%") | Series.title.ilike(f"%{search}%"))
+    if collection_id:
+        q = q.where(Series.collection_id == collection_id)
     q = q.order_by(Series.created_at.asc())
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
@@ -150,7 +192,7 @@ def get_or_create_unsorted(db: Session = Depends(get_db)) -> SeriesDetail:
         select(Series).where(Series.title == "Unsorted", Series.deleted_at.is_(None))
     ).first()
     if not s:
-        s = Series(title="Unsorted", status="new")
+        s = Series(name="Unsorted", title="Unsorted", status="new")
         db.add(s)
         db.commit()
         db.refresh(s)
@@ -186,7 +228,10 @@ def update_series(
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
-    for field, value in body.model_dump(exclude_none=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    if "collection_id" in updates:
+        _assign_collection_index(s, updates["collection_id"], db)
+    for field, value in updates.items():
         if field in ("tags_instagram", "tags_telegram"):
             value = json.dumps(value)
         setattr(s, field, value)

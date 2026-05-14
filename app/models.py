@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -11,28 +11,39 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class Collection(Base):
+    __tablename__ = "collections"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String, default="")
+    name_ru: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    series: Mapped[list["Series"]] = relationship("Series", back_populates="collection")
+
+
 class Series(Base):
     __tablename__ = "series"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     original_folder_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String, default="")
     title: Mapped[str] = mapped_column(String, default="")
     description_en: Mapped[str] = mapped_column(Text, default="")
     description_ru: Mapped[str] = mapped_column(Text, default="")
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
     status: Mapped[str] = mapped_column(String, default="new")
-    notes: Mapped[str] = mapped_column(Text, default="")
-    needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
-    review_reason: Mapped[str] = mapped_column(String, default="")
+    collection_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("collections.id"), nullable=True
+    )
+    collection_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    collection_number: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    scheduled_targets: Mapped[str] = mapped_column(Text, default="[]")
-    posted_to_telegram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    posted_to_instagram_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    posted_to_facebook_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    collection: Mapped["Collection | None"] = relationship("Collection", back_populates="series")
     images: Mapped[list["Image"]] = relationship(
         "Image",
         back_populates="series",
@@ -43,6 +54,12 @@ class Series(Base):
         "AIVariant",
         back_populates="series",
         cascade="all, delete-orphan",
+    )
+    posts: Mapped[list["Post"]] = relationship(
+        "Post",
+        back_populates="series",
+        cascade="all, delete-orphan",
+        order_by="Post.created_at",
     )
 
 
@@ -60,6 +77,52 @@ class Image(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="images")
+    post_images: Mapped[list["PostImage"]] = relationship("PostImage", back_populates="image")
+
+
+class PostImage(Base):
+    __tablename__ = "post_images"
+
+    post_id: Mapped[str] = mapped_column(
+        String, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    image_id: Mapped[str] = mapped_column(
+        String, ForeignKey("images.id", ondelete="CASCADE"), primary_key=True
+    )
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    post: Mapped["Post"] = relationship("Post", back_populates="post_images")
+    image: Mapped["Image"] = relationship("Image", back_populates="post_images")
+
+
+class Post(Base):
+    __tablename__ = "posts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    series_id: Mapped[str] = mapped_column(String, ForeignKey("series.id", ondelete="CASCADE"))
+    platform: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[str] = mapped_column(Text, default="[]")
+    status: Mapped[str] = mapped_column(String, default="draft")
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    external_post_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_message: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    collection_line: Mapped[str | None] = mapped_column(String, nullable=True)
+    collection_line_ru: Mapped[str | None] = mapped_column(String, nullable=True)
+    title_ru: Mapped[str] = mapped_column(String, default="")
+
+    series: Mapped["Series"] = relationship("Series", back_populates="posts")
+    post_images: Mapped[list["PostImage"]] = relationship(
+        "PostImage",
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="PostImage.order_index",
+    )
 
 
 class AIVariant(Base):

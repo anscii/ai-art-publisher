@@ -130,7 +130,7 @@ def update_image_status(
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Image not found")
-    if body.status not in {"pending", "queued", "posted", "skip"}:
+    if body.status not in {"pending", "skip"}:
         raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
     img.status = body.status
     db.commit()
