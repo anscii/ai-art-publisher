@@ -121,13 +121,25 @@ def upgrade() -> None:
             ) = row
 
             def _make_post(platform, description, tags_json, post_status, scheduled_at, posted_at):
+                # Enumerate columns defensively: prod DB may have extra NOT NULL
+                # columns added by later migrations that ran in a prior partial deploy.
+                cols = {c["name"] for c in inspector.get_columns("posts")}
+                extra = {}
+                if "title_ru" in cols:
+                    extra["title_ru"] = ""
+                col_list = (
+                    "id, series_id, platform, title, description, tags, "
+                    "status, scheduled_at, posted_at, error_message, created_at"
+                )
+                val_list = (
+                    ":id, :sid, :platform, :title, :desc, :tags, "
+                    ":status, :sched, :posted, :error_message, :created"
+                )
+                for k in extra:
+                    col_list += f", {k}"
+                    val_list += f", :{k}"
                 bind.execute(
-                    text(
-                        "INSERT INTO posts (id, series_id, platform, title, description, tags, "
-                        "status, scheduled_at, posted_at, error_message, created_at) "
-                        "VALUES (:id, :sid, :platform, :title, :desc, :tags, "
-                        ":status, :sched, :posted, :error_message, :created)"
-                    ),
+                    text(f"INSERT INTO posts ({col_list}) VALUES ({val_list})"),
                     {
                         "id": str(uuid.uuid4()),
                         "sid": series_id,
@@ -140,6 +152,7 @@ def upgrade() -> None:
                         "posted": posted_at,
                         "error_message": "",
                         "created": now,
+                        **extra,
                     },
                 )
 
