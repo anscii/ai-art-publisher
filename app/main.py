@@ -19,7 +19,6 @@ from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
 from app.routers import settings as settings_router
 from app.routers import trash as trash_router
-from app.scheduler import start_scheduler, stop_scheduler
 
 
 def _configure_app_logging() -> None:
@@ -45,9 +44,7 @@ def _configure_app_logging() -> None:
 async def lifespan(app: FastAPI):
     init_db()
     _configure_app_logging()  # after init_db so alembic's root handler exists to remove
-    start_scheduler()
     yield
-    stop_scheduler()
 
 
 app = FastAPI(title="AI Art Publisher", lifespan=lifespan)
@@ -65,7 +62,7 @@ async def basic_auth(request: Request, call_next):
     cfg = get_config()
     if not cfg.auth_username or not cfg.auth_password:
         return await call_next(request)
-    if request.url.path == "/health":
+    if request.url.path in ("/health", "/internal/run-scheduler"):
         return await call_next(request)
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Basic "):

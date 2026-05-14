@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 
 def _make_post(client, platform="telegram"):
@@ -75,3 +76,38 @@ def test_cancel_non_scheduled_returns_400(client):
     _, pid = _make_post(client)
     resp = client.delete(f"/api/posts/{pid}/schedule")
     assert resp.status_code == 400
+
+
+def _fake_config(secret="test-secret"):
+    cfg = MagicMock()
+    cfg.scheduler_secret = secret
+    return cfg
+
+
+def test_run_scheduler_no_token(client):
+    with patch("app.routers.scheduling.get_config", return_value=_fake_config()):
+        resp = client.post("/internal/run-scheduler")
+    assert resp.status_code == 401
+
+
+def test_run_scheduler_wrong_token(client):
+    with patch("app.routers.scheduling.get_config", return_value=_fake_config()):
+        resp = client.post("/internal/run-scheduler", headers={"X-Scheduler-Token": "wrong"})
+    assert resp.status_code == 401
+
+
+def test_run_scheduler_correct_token(client):
+    with (
+        patch("app.routers.scheduling.get_config", return_value=_fake_config()),
+        patch("app.routers.scheduling.run_scheduled_posts") as mock_run,
+    ):
+        resp = client.post("/internal/run-scheduler", headers={"X-Scheduler-Token": "test-secret"})
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+    mock_run.assert_called_once()
+
+
+def test_run_scheduler_empty_secret_rejects(client):
+    with patch("app.routers.scheduling.get_config", return_value=_fake_config(secret="")):
+        resp = client.post("/internal/run-scheduler", headers={"X-Scheduler-Token": ""})
+    assert resp.status_code == 401
