@@ -25,9 +25,7 @@ def upgrade() -> None:
     if "name_ru" not in coll_cols:
         op.add_column("collections", sa.Column("name_ru", sa.String(), nullable=True))
     if "title_ru" not in post_cols:
-        op.add_column(
-            "posts", sa.Column("title_ru", sa.String(), nullable=False, server_default="")
-        )
+        op.add_column("posts", sa.Column("title_ru", sa.String(), nullable=True))
     if "collection_line_ru" not in post_cols:
         op.add_column("posts", sa.Column("collection_line_ru", sa.String(), nullable=True))
 

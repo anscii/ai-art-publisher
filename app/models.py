@@ -114,7 +114,7 @@ class Post(Base):
 
     collection_line: Mapped[str | None] = mapped_column(String, nullable=True)
     collection_line_ru: Mapped[str | None] = mapped_column(String, nullable=True)
-    title_ru: Mapped[str] = mapped_column(String, default="")
+    title_ru: Mapped[str | None] = mapped_column(String, nullable=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="posts")
     post_images: Mapped[list["PostImage"]] = relationship(

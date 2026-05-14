@@ -135,7 +135,7 @@ class PostResponse(BaseModel):
     series_id: str
     platform: str
     title: str
-    title_ru: str
+    title_ru: str | None
     description: str
     tags: list[str]
     collection_line: str | None
