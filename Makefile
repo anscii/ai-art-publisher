@@ -61,6 +61,12 @@ install-dev:
 hooks:
 	$(PY) -m pre_commit install
 
+# ── Database snapshots ───────────────────────────────────────────────────────
+pull-prod-db:
+	$(eval SNAP := ./data/prod_snapshot_$(shell date +%Y%m%d_%H%M).db)
+	fly sftp get /app/data/db.sqlite $(SNAP)
+	@echo "Saved to $(SNAP)"
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean:
 	find . -name __pycache__ -exec rm -rf {} +
@@ -69,4 +75,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean
+.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean pull-prod-db
