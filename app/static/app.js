@@ -458,6 +458,25 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('limitSel').value = String(App.limit);
   loadSeries(true);
   initLightbox();
+  const filterBtn  = document.getElementById('filterBtn');
+  const filterMenu = document.getElementById('statusFilterMenu');
+  filterBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = filterMenu.classList.contains('show');
+    if (!open) {
+      const r = filterBtn.getBoundingClientRect();
+      filterMenu.style.position = 'fixed';
+      filterMenu.style.top      = r.bottom + 'px';
+      filterMenu.style.left     = 'auto';
+      filterMenu.style.right    = (window.innerWidth - r.right) + 'px';
+    }
+    filterMenu.classList.toggle('show');
+    filterBtn.setAttribute('aria-expanded', String(!open));
+  });
+  document.addEventListener('click', () => {
+    filterMenu.classList.remove('show');
+    filterBtn.setAttribute('aria-expanded', 'false');
+  });
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();
