@@ -28,14 +28,8 @@
           <input class="form-check-input m-0" type="checkbox" value="approved" checked onchange="onFilterChange()">
           <span class="badge bg-primary">approved</span></label></li>
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
-          <input class="form-check-input m-0" type="checkbox" value="scheduled" checked onchange="onFilterChange()">
-          <span class="badge bg-purple">scheduled</span></label></li>
-        <li><label class="dropdown-item d-flex gap-2 align-items-center">
-          <input class="form-check-input m-0" type="checkbox" value="partial_posted" checked onchange="onFilterChange()">
-          <span class="badge bg-warning text-dark">partial</span></label></li>
-        <li><label class="dropdown-item d-flex gap-2 align-items-center">
           <input class="form-check-input m-0" type="checkbox" value="posted" onchange="onFilterChange()">
-          <span class="badge bg-success">posted</span></label></li>
+          <span class="badge bg-success">posted (legacy)</span></label></li>
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
           <input class="form-check-input m-0" type="checkbox" value="skip" onchange="onFilterChange()">
           <span class="badge bg-secondary">skip</span></label></li>
@@ -52,6 +46,17 @@
     <input id="seriesSearch" type="search" class="form-control form-control-sm"
            placeholder="Find series…" style="width:140px"
            oninput="onSearchChange(this.value)">
+    <div id="collectionFilterWrap">
+      <button id="collectionFilterBtn" type="button"
+              class="btn btn-sm btn-outline-secondary"
+              style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        All collections
+      </button>
+      <ul id="collectionFilterMenu" class="dropdown-menu" style="min-width:180px"></ul>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="showView('collections')">
+      <i class="bi bi-collection"></i>
+      <span class="d-none d-md-inline ms-1">Collections</span></button>
     <button class="btn btn-sm btn-outline-secondary" onclick="showView('queue')">
       <i class="bi bi-calendar3"></i>
       <span class="d-none d-md-inline ms-1">Queue</span></button>
@@ -101,6 +106,18 @@
           <i class="bi bi-trash3-fill me-1"></i>Empty Trash</button>
       </div>
       <div id="trashContent"></div>
+    </div>
+    <div id="collectionsPanel" class="flex-grow-1 overflow-y-auto p-3 d-none">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0"><i class="bi bi-collection me-2"></i>Collections</h5>
+      </div>
+      <div class="d-flex gap-2 mb-3 flex-wrap" style="max-width:500px">
+        <input type="text" class="form-control form-control-sm" id="newCollectionName" placeholder="Name (EN)…" style="min-width:160px;flex:1">
+        <input type="text" class="form-control form-control-sm" id="newCollectionNameRu" placeholder="Name (RU)…" style="min-width:160px;flex:1">
+        <button class="btn btn-sm btn-outline-primary" onclick="createCollection()">
+          <i class="bi bi-plus-lg me-1"></i>Create</button>
+      </div>
+      <div id="collectionsContent"></div>
     </div>
   </div>
 </div>

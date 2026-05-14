@@ -49,6 +49,28 @@ class SettingsUpdate(BaseModel):
     r2_public_base_url: str | None = None
 
 
+# ── Collections ───────────────────────────────────────────────────────────────
+
+
+class CollectionResponse(BaseModel):
+    id: str
+    name: str
+    name_ru: str | None = None
+    created_at: datetime
+    series_total: int = 0
+    series_by_status: dict[str, int] = {}
+
+
+class CollectionCreate(BaseModel):
+    name: str
+    name_ru: str | None = None
+
+
+class CollectionUpdate(BaseModel):
+    name: str
+    name_ru: str | None = None
+
+
 # ── Images ────────────────────────────────────────────────────────────────────
 
 
@@ -66,7 +88,7 @@ class ImageResponse(BaseModel):
 
 
 class ImageStatusUpdate(BaseModel):
-    status: str
+    status: str  # allowed: "pending", "skip"
 
 
 class RegisterImageBody(BaseModel):
@@ -105,39 +127,106 @@ class AIVariantResponse(BaseModel):
     generated_at: datetime
 
 
+# ── Posts ─────────────────────────────────────────────────────────────────────
+
+
+class PostResponse(BaseModel):
+    id: str
+    series_id: str
+    platform: str
+    title: str
+    title_ru: str
+    description: str
+    tags: list[str]
+    collection_line: str | None
+    collection_line_ru: str | None
+    status: str
+    scheduled_at: datetime | None
+    posted_at: datetime | None
+    external_post_id: str | None
+    error_message: str
+    created_at: datetime
+    image_ids: list[str]
+
+
+class PostCreate(BaseModel):
+    platform: str
+    title: str
+    title_ru: str = ""
+    description: str
+    tags: list[str] = []
+    image_ids: list[str]
+    scheduled_at: datetime | None = None
+
+
+class PostBatchCreate(BaseModel):
+    platforms: list[str]
+    title: str
+    title_ru: str = ""
+    description_telegram: str
+    description_other: str
+    tags_telegram: list[str] = []
+    tags_other: list[str] = []
+    collection_line: str | None = None
+    collection_line_ru: str | None = None
+    image_ids: list[str]
+    scheduled_at: datetime | None = None
+
+
+class PostUpdate(BaseModel):
+    title: str | None = None
+    title_ru: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+    image_ids: list[str] | None = None
+    collection_line: str | None = None
+    collection_line_ru: str | None = None
+
+
+class PostScheduleRequest(BaseModel):
+    datetime_utc: datetime
+
+
 # ── Series ────────────────────────────────────────────────────────────────────
 
 
 class SeriesCreate(BaseModel):
     original_folder_name: str | None = None
+    name: str = ""
     title: str = ""
     status: str = "new"
     created_at: datetime | None = None
 
 
 class SeriesUpdate(BaseModel):
+    name: str | None = None
     title: str | None = None
     description_en: str | None = None
     description_ru: str | None = None
     tags_instagram: list[str] | None = None
     tags_telegram: list[str] | None = None
     status: str | None = None
-    notes: str | None = None
-    needs_review: bool | None = None
-    review_reason: str | None = None
+    collection_id: str | None = None
+    collection_number: str | None = None
+
+
+class CollectionRef(BaseModel):
+    id: str
+    name: str
+    collection_index: int | None = None
+    collection_number: str | None = None
 
 
 class SeriesListItem(BaseModel):
     id: str
     original_folder_name: str | None
+    name: str
     title: str
     status: str
-    needs_review: bool
+    collection_name: str | None
+    collection_name_ru: str | None
+    collection_number: str | None
     created_at: datetime
-    scheduled_at: datetime | None
-    posted_to_telegram_at: datetime | None
-    posted_to_instagram_at: datetime | None
-    posted_to_facebook_at: datetime | None
     image_count: int
     cover_url: str | None
 
@@ -152,23 +241,20 @@ class SeriesListResponse(BaseModel):
 class SeriesDetail(BaseModel):
     id: str
     original_folder_name: str | None
+    name: str
     title: str
     description_en: str
     description_ru: str
     tags_instagram: list[str]
     tags_telegram: list[str]
     status: str
-    notes: str
-    needs_review: bool
-    review_reason: str
+    collection: CollectionRef | None
+    collection_index: int | None
+    collection_number: str | None
     created_at: datetime
-    scheduled_at: datetime | None
-    scheduled_targets: list[str]
-    posted_to_telegram_at: datetime | None
-    posted_to_instagram_at: datetime | None
-    posted_to_facebook_at: datetime | None
     images: list[ImageResponse]
     ai_variants: list[AIVariantResponse]
+    posts: list[PostResponse]
 
 
 # ── Generation ────────────────────────────────────────────────────────────────
@@ -182,20 +268,16 @@ class GenerateRequest(BaseModel):
     selected_image_ids: list[str] | None = None
 
 
-# ── Scheduling ────────────────────────────────────────────────────────────────
-
-
-class ScheduleRequest(BaseModel):
-    datetime_utc: datetime
-    targets: list[str]
+# ── Scheduling (legacy queue view) ────────────────────────────────────────────
 
 
 class QueueItem(BaseModel):
+    post_id: str
     series_id: str
+    series_name: str
+    platform: str
     title: str
-    original_folder_name: str | None
     scheduled_at: datetime
-    targets: list[str]
 
 
 # ── Posting ───────────────────────────────────────────────────────────────────

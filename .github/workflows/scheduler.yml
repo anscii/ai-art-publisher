@@ -1,0 +1,21 @@
+name: Hourly scheduler
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduler
+        env:
+          SCHEDULER_SECRET: ${{ secrets.SCHEDULER_SECRET }}
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "X-Scheduler-Token: $SCHEDULER_SECRET" \
+            https://ai-art-publisher.fly.dev/internal/run-scheduler)
+          echo "Response: $STATUS"
+          [ "$STATUS" = "200" ]

@@ -21,10 +21,10 @@ def test_flytoml_exists():
     assert os.path.exists("fly.toml"), "fly.toml missing"
 
 
-def test_flytoml_auto_stop_off():
+def test_flytoml_auto_stop_suspend():
     content = open("fly.toml").read()
     assert "auto_stop_machines" in content
-    assert '"off"' in content or "'off'" in content
+    assert '"suspend"' in content or "'suspend'" in content
 
 
 def test_flytoml_has_volume_mount():

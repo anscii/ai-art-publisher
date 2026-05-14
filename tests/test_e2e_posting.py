@@ -10,7 +10,8 @@ _TINY_PNG = base64.b64decode(
 )
 
 
-def _create_series_with_selected_image(page, live_server, tmp_path):
+def _create_series_with_post(page, live_server, tmp_path, platform="telegram"):
+    """Create a series, upload an image, select it, open New post form, save a draft post."""
     png_path = tmp_path / "test.png"
     png_path.write_bytes(_TINY_PNG)
 
@@ -23,37 +24,65 @@ def _create_series_with_selected_image(page, live_server, tmp_path):
     fc.value.set_files(str(png_path))
 
     page.locator("#imageStrip [data-image-id]").wait_for(timeout=10000)
+    # Select the image
     page.locator("[data-select-btn]").first.click()
     page.locator(".thumb-selected").wait_for(timeout=3000)
 
+    # Open "New post" form
+    page.get_by_role("button", name="New post").click()
+
+    _plat_ids = {"telegram": "pf_tg", "instagram": "pf_ig", "facebook": "pf_fb"}
+    # Uncheck all platforms, then check only the desired one
+    for plat in ["telegram", "instagram", "facebook"]:
+        cb = page.locator(f"#{_plat_ids[plat]}")
+        if plat == platform:
+            if not cb.is_checked():
+                cb.check()
+        else:
+            if cb.is_checked():
+                cb.uncheck()
+
+    page.locator("#pf_title").fill("Test post")
+    page.get_by_role("button", name="Save post(s)").click()
+
+    # Wait for post row to appear in Posts card
+    page.locator(".card").filter(has_text="Posts").locator("[data-post-row]").wait_for(timeout=8000)
+
 
 def test_post_telegram_fake(page, live_server, tmp_path):
-    _create_series_with_selected_image(page, live_server, tmp_path)
-    page.get_by_role("button", name="Telegram").click()
+    _create_series_with_post(page, live_server, tmp_path, platform="telegram")
+    # Click post-now button (send icon) on the first post row
+    page.locator(".card").filter(has_text="Posts").locator("button[title='Post now']").first.click()
     page.locator("#confirmModal").wait_for(state="visible", timeout=3000)
     page.locator("#confirmOkBtn").click()
     page.locator("#toastContainer").get_by_text("[FAKE] Posted to telegram").wait_for(timeout=10000)
 
 
 def test_schedule_series(page, live_server, tmp_path):
-    _create_series_with_selected_image(page, live_server, tmp_path)
-    page.locator("#schedDate").fill("2099-12-31T12:00")
-    page.locator("#schedTg").check()
-    page.get_by_role("button", name="Schedule").click()
+    _create_series_with_post(page, live_server, tmp_path, platform="telegram")
+    # Click schedule button on the post row
+    page.locator(".card").filter(has_text="Posts").locator("button[title='Schedule']").first.click()
+    # Inline picker appears — fill datetime and click Schedule
+    page.locator("input[type='datetime-local']").last.fill("2099-12-31T12:00")
+    page.locator("button:has-text('Schedule')").last.click()
     page.locator("#toastContainer").get_by_text("Scheduled").wait_for(timeout=5000)
-    assert page.locator("#schedResult").get_by_text("Scheduled for").is_visible()
 
 
 def test_cancel_schedule(page, live_server, tmp_path):
-    _create_series_with_selected_image(page, live_server, tmp_path)
-    page.locator("#schedDate").fill("2099-12-31T12:00")
-    page.locator("#schedTg").check()
-    page.get_by_role("button", name="Schedule").click()
+    _create_series_with_post(page, live_server, tmp_path, platform="telegram")
+    # Schedule the post
+    page.locator(".card").filter(has_text="Posts").locator("button[title='Schedule']").first.click()
+    page.locator("input[type='datetime-local']").last.fill("2099-12-31T12:00")
+    page.locator("button:has-text('Schedule')").last.click()
     page.locator("#toastContainer").get_by_text("Scheduled").wait_for(timeout=5000)
-    # Re-click the sidebar item to re-render editor with updated series.status='scheduled'
-    page.locator("#seriesItems [id^='si-']").first.click()
-    page.get_by_role("button", name="Cancel").wait_for(timeout=5000)
-    page.get_by_role("button", name="Cancel").click()
+    # Reload to see updated post status, then cancel
+    page.wait_for_timeout(500)
+    page.locator(".card").filter(has_text="Posts").locator(
+        "button[title='Cancel schedule']"
+    ).wait_for(timeout=5000)
+    page.locator(".card").filter(has_text="Posts").locator(
+        "button[title='Cancel schedule']"
+    ).click()
     page.locator("#confirmModal").wait_for(state="visible", timeout=3000)
     page.locator("#confirmOkBtn").click()
     page.locator("#toastContainer").get_by_text("Schedule cancelled").wait_for(timeout=5000)

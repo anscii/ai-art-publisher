@@ -16,6 +16,7 @@ class AppConfig:
     fake_ai: bool = os.getenv("FAKE_AI", "false").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     local_storage: bool = os.getenv("LOCAL_STORAGE", "false").lower() in ("1", "true")
+    scheduler_secret: str = os.getenv("SCHEDULER_SECRET", "")
 
 
 @lru_cache

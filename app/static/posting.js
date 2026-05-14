@@ -1,54 +1,37 @@
-async function postNow(seriesId, platform) {
-  const label = { telegram: 'Telegram', instagram: 'Instagram', both: 'both' }[platform] || platform;
-  showConfirm('Post to ' + label + '?', async () => {
+async function postNow(postId) {
+  showConfirm('Post now?', async () => {
     try {
-      await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
-      const result = await apiFetch('POST', '/api/series/' + seriesId + '/post/' + platform);
-      if (result.success) {
-        showToast(result.message, 'success');
-        const updated = await apiFetch('GET', '/api/series/' + seriesId);
-        App.currentSeries = updated;
-        updateSeriesItem(updated);
-      } else {
-        showToast('Error: ' + result.message, 'danger');
-      }
+      const result = await apiFetch('POST', '/api/posts/' + postId + '/post');
+      showToast(result.success ? result.message : 'Error: ' + result.message, result.success ? 'success' : 'danger');
+      if (App.currentSeriesId) await loadSeriesDetail(App.currentSeriesId);
     } catch (e) { showToast(e.message, 'danger'); }
   });
 }
 
-async function scheduleSeries(seriesId) {
-  const dateVal = document.getElementById('schedDate')?.value;
-  if (!dateVal) { showToast('Please select a date and time', 'danger'); return; }
-  const targets = [];
-  if (document.getElementById('schedTg')?.checked) targets.push('telegram');
-  if (document.getElementById('schedIg')?.checked) targets.push('instagram');
-  if (!targets.length) { showToast('Select at least one platform', 'danger'); return; }
+async function schedulePost(postId, datetimeUtc) {
   try {
-    await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
-    await apiFetch('POST', '/api/series/' + seriesId + '/schedule', {
-      datetime_utc: new Date(dateVal).toISOString(),
-      targets,
-    });
-    const resultEl = document.getElementById('schedResult');
-    if (resultEl) {
-      resultEl.replaceChildren(h('span', { cls: 'text-success', text: '✅ Scheduled for ' + dateVal + ' UTC' }));
-    }
-    const updated = await apiFetch('GET', '/api/series/' + seriesId);
-    App.currentSeries = updated;
-    updateSeriesItem(updated);
+    await apiFetch('POST', '/api/posts/' + postId + '/schedule', { datetime_utc: datetimeUtc });
     showToast('Scheduled', 'success');
+    if (App.currentSeriesId) await loadSeriesDetail(App.currentSeriesId);
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-async function cancelSchedule(seriesId) {
+async function cancelPostSchedule(postId) {
   showConfirm('Cancel this scheduled post?', async () => {
     try {
-      await apiFetch('DELETE', '/api/series/' + seriesId + '/schedule');
-      const updated = await apiFetch('GET', '/api/series/' + seriesId);
-      App.currentSeries = updated;
-      updateSeriesItem(updated);
-      await loadSeriesDetail(seriesId);
+      await apiFetch('DELETE', '/api/posts/' + postId + '/schedule');
       showToast('Schedule cancelled', 'success');
+      if (App.currentSeriesId) await loadSeriesDetail(App.currentSeriesId);
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
+}
+
+async function deletePost(postId) {
+  showConfirm('Delete this post?', async () => {
+    try {
+      await apiFetch('DELETE', '/api/posts/' + postId);
+      showToast('Post deleted', 'success');
+      if (App.currentSeriesId) await loadSeriesDetail(App.currentSeriesId);
     } catch (e) { showToast(e.message, 'danger'); }
   });
 }
