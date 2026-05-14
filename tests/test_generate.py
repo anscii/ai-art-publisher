@@ -231,3 +231,88 @@ def test_delete_variant(client):
 def test_delete_variant_not_found(client):
     resp = client.delete("/api/ai_variants/nonexistent-id")
     assert resp.status_code == 404
+
+
+def _register_images(client, sid, keys):
+    ids = []
+    for key in keys:
+        r = client.post(
+            f"/api/series/{sid}/images/register",
+            json={"r2_key": key, "original_filename": key.split("/")[-1]},
+        )
+        ids.append(r.json()["id"])
+    return ids
+
+
+def test_generate_selected_image_ids_used_in_order(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    img_ids = _register_images(client, sid, ["images/a.jpg", "images/b.jpg", "images/c.jpg"])
+
+    captured = {}
+    with (
+        patch("app.routers.generate.get_provider") as mp,
+        patch("app.routers.generate.get_storage_from_settings") as ms,
+    ):
+        ms.return_value = MagicMock(download_bytes=lambda k: b"img-" + k.encode())
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda imgs, *a, **kw: (captured.update({"imgs": imgs}) or _FAKE)
+        )
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate",
+            json={"include_images": True, "selected_image_ids": [img_ids[2], img_ids[0]]},
+        )
+    assert resp.status_code == 200
+    # only 2 images passed, in the requested order (c then a)
+    assert len(captured["imgs"]) == 2
+    import base64
+
+    assert base64.b64decode(captured["imgs"][0]) == b"img-images/c.jpg"
+    assert base64.b64decode(captured["imgs"][1]) == b"img-images/a.jpg"
+
+
+def test_generate_selected_image_ids_capped_at_3(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    img_ids = _register_images(client, sid, [f"images/{c}.jpg" for c in "abcd"])
+
+    captured = {}
+    with (
+        patch("app.routers.generate.get_provider") as mp,
+        patch("app.routers.generate.get_storage_from_settings") as ms,
+    ):
+        ms.return_value = MagicMock(download_bytes=lambda k: b"img")
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda imgs, *a, **kw: (captured.update({"imgs": imgs}) or _FAKE)
+        )
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate",
+            json={"include_images": True, "selected_image_ids": img_ids},
+        )
+    assert resp.status_code == 200
+    assert len(captured["imgs"]) == 3
+
+
+def test_generate_fallback_to_order_index_without_selected_ids(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    _register_images(client, sid, ["images/x.jpg", "images/y.jpg"])
+
+    captured = {}
+    with (
+        patch("app.routers.generate.get_provider") as mp,
+        patch("app.routers.generate.get_storage_from_settings") as ms,
+    ):
+        ms.return_value = MagicMock(download_bytes=lambda k: b"img")
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda imgs, *a, **kw: (captured.update({"imgs": imgs}) or _FAKE)
+        )
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
+    assert resp.status_code == 200
+    assert len(captured["imgs"]) == 2
