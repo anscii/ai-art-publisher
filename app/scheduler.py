@@ -1,10 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from apscheduler.schedulers.background import BackgroundScheduler
-
 logger = logging.getLogger(__name__)
-scheduler = BackgroundScheduler()
 
 
 def run_scheduled_posts():
@@ -55,20 +52,3 @@ def run_scheduled_posts():
                 )
     finally:
         db.close()
-
-
-def start_scheduler():
-    scheduler.add_job(
-        run_scheduled_posts,
-        "interval",
-        hours=1,
-        id="scheduled_posts",
-        replace_existing=True,
-        next_run_time=datetime.now(UTC),
-    )
-    scheduler.start()
-
-
-def stop_scheduler():
-    if scheduler.running:
-        scheduler.shutdown()
