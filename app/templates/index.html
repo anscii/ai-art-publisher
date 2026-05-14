@@ -49,6 +49,9 @@
       <option>30</option>
       <option>50</option>
     </select>
+    <input id="seriesSearch" type="search" class="form-control form-control-sm"
+           placeholder="Find series…" style="width:140px"
+           oninput="onSearchChange(this.value)">
     <button class="btn btn-sm btn-outline-secondary" onclick="showView('queue')">
       <i class="bi bi-calendar3"></i>
       <span class="d-none d-md-inline ms-1">Queue</span></button>

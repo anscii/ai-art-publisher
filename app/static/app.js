@@ -51,6 +51,7 @@ const App = {
   currentSeriesId: null,
   currentSeries: null,
   unsortedSeriesId: null,
+  search: '',
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ async function loadSeries(reset) {
   try {
     const statuses = [...App.activeStatuses].join(',') || 'new';
     const q = new URLSearchParams({ page: App.page, limit: App.limit, status: statuses });
+    if (App.search) q.set('search', App.search);
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
@@ -253,6 +255,15 @@ function onFilterChange() {
     [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
   );
   loadSeries(true);
+}
+
+let _searchDebounce = null;
+function onSearchChange(val) {
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(() => {
+    App.search = val.trim();
+    loadSeries(true);
+  }, 300);
 }
 
 // ── View switching ────────────────────────────────────────────────────────────
