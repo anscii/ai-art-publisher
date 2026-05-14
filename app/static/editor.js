@@ -686,6 +686,29 @@ async function saveDescription(seriesId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
+function _restoreSelectionAfterRender(savedSel, seriesId) {
+  _selectedImages = savedSel;
+  (App.currentSeries?.images ?? []).forEach(img => {
+    const isSelected = savedSel.has(img.id);
+    const btn = document.querySelector('[data-select-btn="' + img.id + '"]');
+    if (btn) btn.replaceChildren(icon(_selectIcon(img.id, img.status)));
+    const thumb = document.querySelector('[data-image-id="' + img.id + '"]');
+    if (thumb) thumb.classList.toggle('thumb-selected', isSelected);
+  });
+  const strip = document.getElementById('imageStrip');
+  if (strip) {
+    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
+    const _grp = el => {
+      const id = el.dataset.imageId, st = el.dataset.imageStatus;
+      return savedSel.has(id) ? 0 : st === 'posted' ? 2 : st === 'skip' ? 3 : 1;
+    };
+    thumbs.sort((a, b) => _grp(a) - _grp(b)).forEach(t => strip.appendChild(t));
+  }
+  const bar = document.getElementById('imageActionBar');
+  if (bar) bar.replaceWith(buildActionBar(seriesId));
+  _refreshImagesHeader((App.currentSeries?.images ?? []).length);
+}
+
 // ── Generate card ─────────────────────────────────────────────────────────────
 function buildGenerateCard(seriesId) {
   const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
@@ -733,12 +756,25 @@ async function generateDescriptions(seriesId) {
     btn.disabled = true;
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
   }
+  let selectedImageIds = null;
+  if (includeImages && _selectedImages.size > 0) {
+    const strip = document.getElementById('imageStrip');
+    selectedImageIds = strip
+      ? [...strip.querySelectorAll('[data-image-id]')]
+          .map(el => el.dataset.imageId)
+          .filter(id => _selectedImages.has(id))
+          .slice(0, 3)
+      : [..._selectedImages].slice(0, 3);
+  }
   try {
     const newVariants = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
-      provider: provider || null, model: model || null, hint: hint || null, include_images: includeImages,
+      provider: provider || null, model: model || null, hint: hint || null,
+      include_images: includeImages, selected_image_ids: selectedImageIds,
     });
+    const savedSelection = new Set(_selectedImages);
     await loadSeriesDetail(seriesId);
     applyVariant(0);
+    _restoreSelectionAfterRender(savedSelection, seriesId);
     const cost = newVariants[0]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
     showToast(`Generated new variants${costLabel}`, 'success');

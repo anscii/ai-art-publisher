@@ -77,9 +77,12 @@ def generate_descriptions(
     images_b64: list[str] = []
     if body.include_images:
         storage = get_storage_from_settings(settings)
-        for img in sorted(
-            [i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index
-        )[:4]:
+        active = {i.id: i for i in s.images if i.deleted_at is None}
+        if body.selected_image_ids:
+            ordered = [active[id] for id in body.selected_image_ids if id in active][:3]
+        else:
+            ordered = sorted(active.values(), key=lambda i: i.order_index)[:3]
+        for img in ordered:
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 
