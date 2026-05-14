@@ -54,7 +54,7 @@ def upgrade() -> None:
             sa.Column("scheduled_at", sa.DateTime(), nullable=True),
             sa.Column("posted_at", sa.DateTime(), nullable=True),
             sa.Column("external_post_id", sa.String(), nullable=True),
-            sa.Column("error_message", sa.String(), nullable=False, server_default=""),
+            sa.Column("error_message", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("deleted_at", sa.DateTime(), nullable=True),
         )
@@ -124,9 +124,9 @@ def upgrade() -> None:
                 bind.execute(
                     text(
                         "INSERT INTO posts (id, series_id, platform, title, description, tags, "
-                        "status, scheduled_at, posted_at, created_at) "
+                        "status, scheduled_at, posted_at, error_message, created_at) "
                         "VALUES (:id, :sid, :platform, :title, :desc, :tags, "
-                        ":status, :sched, :posted, :created)"
+                        ":status, :sched, :posted, :error_message, :created)"
                     ),
                     {
                         "id": str(uuid.uuid4()),
@@ -138,6 +138,7 @@ def upgrade() -> None:
                         "status": post_status,
                         "sched": scheduled_at,
                         "posted": posted_at,
+                        "error_message": "",
                         "created": now,
                     },
                 )
