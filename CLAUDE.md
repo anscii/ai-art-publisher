@@ -98,3 +98,21 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - `showView(view)` — switches between `'editor'`, `'queue'`, `'trash'`, `'list'` (mobile)
 - `refreshTrash()` — fetches `/api/trash` and re-renders the trash panel
 - `renderEditor(series)` — rebuilds the full editor from a SeriesDetail object (can be called safely while lightbox is open)
+
+## Task Delegation
+
+When spawning subagents, use the cheapest model that can handle the task:
+- Haiku: bulk mechanical tasks - file ops, formatting, renaming, 
+  simple transformations. No judgment required.
+- Sonnet: scoped research, code exploration, summarization, 
+  synthesis across sources.
+- Opus: only when real planning or tradeoffs are involved - 
+  architecture, ambiguous requirements, high-stakes decisions.
+
+### Spawn rules:
+- Haiku subagents cannot spawn further subagents. 
+  If they need to, the task was wrong-sized - return to parent.
+- Max spawn depth: 2 (parent → subagent → one more tier, no deeper)
+- If a subagent realizes it needs a smarter model, 
+  it returns to the parent instead of escalating on its own.
+
