@@ -1,6 +1,11 @@
 // ── Selection state ───────────────────────────────────────────────────────────
 let _selectedImages = new Set();
 
+// Single document-level listener for closing the collection picker panel.
+// Stored here so it is added once and never accumulates.
+let _activeCollPickerHide = null;
+document.addEventListener('click', () => { if (_activeCollPickerHide) _activeCollPickerHide(); });
+
 function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
 // ── Editor entry point ────────────────────────────────────────────────────────
@@ -9,12 +14,12 @@ function renderEditor(series) {
 
   const titleInput = h('input', {
     type: 'text', cls: 'form-control form-control-sm fw-semibold',
-    id: 'editorTitle', placeholder: 'Series title...',
+    id: 'editorTitle', placeholder: 'Series name (internal)...',
   });
-  titleInput.value = series.title || '';
+  titleInput.value = series.name || series.title || '';
   titleInput.addEventListener('blur', () => saveTitle(series.id));
 
-  const titleRow = h('div', { cls: 'd-flex align-items-center gap-2 mb-3' }, titleInput);
+  const titleRow = h('div', { cls: 'd-flex align-items-center gap-2 mb-2' }, titleInput);
   if (series.original_folder_name) {
     const note = h('span', { cls: 'text-muted small text-truncate flex-shrink-1', style: 'max-width:180px', text: series.original_folder_name });
     note.title = series.original_folder_name;
@@ -23,10 +28,12 @@ function renderEditor(series) {
 
   document.getElementById('editorPanel').replaceChildren(
     titleRow,
+    buildCollectionPicker(series),
     buildImagesCard(series),
     buildDescriptionsCard(series),
     buildGenerateCard(series.id),
     buildActionsCard(series),
+    buildPostsCard(series),
   );
 
   initImageSortable(series.id);
@@ -35,9 +42,9 @@ function renderEditor(series) {
 
 async function saveTitle(seriesId) {
   const val = document.getElementById('editorTitle')?.value?.trim() ?? '';
-  if (val === (App.currentSeries?.title ?? '')) return;
+  if (val === (App.currentSeries?.name ?? '')) return;
   try {
-    const updated = await apiFetch('PUT', '/api/series/' + seriesId, { title: val });
+    const updated = await apiFetch('PUT', '/api/series/' + seriesId, { name: val });
     App.currentSeries = updated;
     updateSeriesItem(updated);
   } catch (e) { showToast(e.message, 'danger'); }
@@ -217,8 +224,8 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
-  const activeStatuses = ['new', 'draft', 'approved', 'scheduled', 'partial_posted'];
-  const _isUnsorted = s => s.title === 'Unsorted' || (App.unsortedSeriesId && s.id === App.unsortedSeriesId);
+  const activeStatuses = ['new', 'draft', 'approved'];
+  const _isUnsorted = s => (s.name || s.title) === 'Unsorted' || (App.unsortedSeriesId && s.id === App.unsortedSeriesId);
   const active = App.series.filter(s => s.id !== seriesId && !_isUnsorted(s) && activeStatuses.includes(s.status));
 
   // Always show search/create input; ≤10 series → filter client-side, >10 → fetch API
@@ -229,7 +236,7 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
   const results = h('ul', { cls: 'list-unstyled mb-0 mt-1', style: 'max-height:160px;overflow-y:auto' });
 
   const renderRow = (s) => {
-    const name = s.title || s.original_folder_name || s.id.slice(0, 8);
+    const name = s.name || s.title || s.original_folder_name || s.id.slice(0, 8);
     const row = h('li', null, h('a', { cls: 'dropdown-item small', href: '#', text: name }));
     row.firstChild.addEventListener('click', async e => {
       e.preventDefault();
@@ -250,7 +257,7 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
       // Capture selection immediately — before any async call that might change state
       const ids = bulk ? [..._selectedImages] : [imageId];
       try {
-        const newSeries = await apiFetch('POST', '/api/series', { title: query });
+        const newSeries = await apiFetch('POST', '/api/series', { name: query, title: query });
         App.series.push(newSeries);
         await Promise.all(ids.map(id => apiFetch('PUT', '/api/images/' + id + '/move', { target_series_id: newSeries.id })));
         _selectedImages.clear();
@@ -286,7 +293,7 @@ function buildMoveToItems(imageId, seriesId, bulk, afterMove = null) {
         const data = await apiFetch('GET', '/api/series?search=' + encodeURIComponent(query) + '&status=' + statusParam + '&limit=10');
         const filtered = data.items.filter(s => s.id !== seriesId && !_isUnsorted(s));
         filtered.forEach(s => results.appendChild(renderRow(s)));
-        const exactMatch = filtered.some(s => (s.title || '').toLowerCase() === query.toLowerCase());
+        const exactMatch = filtered.some(s => (s.name || s.title || '').toLowerCase() === query.toLowerCase());
         if (!exactMatch) appendCreate(query);
       } catch (e) { showToast(e.message, 'danger'); }
     }
@@ -626,6 +633,9 @@ function buildDescriptionsCard(series) {
   const tagsTg = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_tags_tg' });
   tagsTg.value = (series.tags_telegram || []).join(' ');
 
+  const pubTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title', placeholder: 'Publication title (pre-fills new posts)' });
+  pubTitle.value = series.title || '';
+
   const saveBtn = h('button', { cls: 'btn btn-sm btn-primary' });
   saveBtn.appendChild(icon('bi bi-floppy me-1'));
   saveBtn.appendChild(document.createTextNode('Save'));
@@ -635,6 +645,7 @@ function buildDescriptionsCard(series) {
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
   const form = h('div', { cls: 'row g-2' },
+    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title (pre-fills posts)' }), pubTitle),
     mkField('Description EN (Instagram & FB Page)', descEn),
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram & FB Page tags', tagsIg),
@@ -658,7 +669,7 @@ function applyVariant(idx) {
   set('f_desc_ru', v.description_ru);
   set('f_tags_ig', (v.tags_instagram || []).join(' '));
   set('f_tags_tg', (v.tags_telegram  || []).join(' '));
-  if (v.title) { const t = document.getElementById('editorTitle'); if (t) t.value = v.title; }
+  if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
   const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
@@ -671,7 +682,8 @@ async function saveDescription(seriesId) {
   const tagsTg = (document.getElementById('f_tags_tg')?.value || '').split(/\s+/).filter(Boolean);
   try {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, {
-      title:          document.getElementById('editorTitle')?.value?.trim() || '',
+      name:           document.getElementById('editorTitle')?.value?.trim() || '',
+      title:          document.getElementById('f_pub_title')?.value?.trim() || '',
       description_en: document.getElementById('f_desc_en')?.value || '',
       description_ru: document.getElementById('f_desc_ru')?.value || '',
       tags_instagram: tagsIg,
@@ -680,7 +692,7 @@ async function saveDescription(seriesId) {
     App.currentSeries = updated;
     updateSeriesItem(updated);
     const t = document.getElementById('editorTitle');
-    if (t && updated.title) t.value = updated.title;
+    if (t) t.value = updated.name || updated.title || '';
     localStorage.removeItem('draft_' + seriesId);
     showToast('Saved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
@@ -791,56 +803,23 @@ async function generateDescriptions(seriesId) {
 function buildActionsCard(series) {
   const statusSel = document.createElement('select');
   statusSel.className = 'form-select form-select-sm'; statusSel.id = 'statusSelect'; statusSel.style.width = '140px';
-  ['new','draft','approved','scheduled','partial_posted','posted','skip'].forEach(s => {
+  ['new', 'draft', 'approved', 'skip'].forEach(s => {
     const o = document.createElement('option'); o.value = s; o.textContent = s;
     if (s === series.status) o.selected = true;
     statusSel.appendChild(o);
   });
+  if (!['new', 'draft', 'approved', 'skip'].includes(series.status)) {
+    const o = document.createElement('option'); o.value = series.status; o.textContent = series.status; o.selected = true;
+    statusSel.appendChild(o);
+  }
   const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary' });
   saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
   saveStatusBtn.appendChild(document.createTextNode('Save status'));
   saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
 
-  const mkPostBtn = (label, platform, iconCls, btnCls) => {
-    const btn = h('button', { cls: 'btn btn-sm ' + btnCls });
-    btn.appendChild(icon(iconCls + ' me-1'));
-    btn.appendChild(document.createTextNode(label));
-    btn.addEventListener('click', () => postNow(series.id, platform));
-    return btn;
-  };
-
-  const dateInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm', id: 'schedDate', style: 'width:200px' });
-  if (series.scheduled_at) {
-    const d = new Date(series.scheduled_at.endsWith('Z') ? series.scheduled_at : series.scheduled_at + 'Z');
-    dateInput.value = d.toISOString().slice(0, 16);
-  }
-  const tgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'schedTg' });
-  if ((series.scheduled_targets || []).includes('telegram')) tgCheck.checked = true;
-  const igCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'schedIg' });
-  if ((series.scheduled_targets || []).includes('instagram')) igCheck.checked = true;
-
-  const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-primary' });
-  schedBtn.appendChild(icon('bi bi-calendar-plus me-1'));
-  schedBtn.appendChild(document.createTextNode('Schedule'));
-  schedBtn.addEventListener('click', () => scheduleSeries(series.id));
-
-  const schedControls = h('div', { cls: 'd-flex gap-2 flex-wrap align-items-center' },
-    dateInput,
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, tgCheck, document.createTextNode(' TG')),
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' IG')),
-    schedBtn);
-
-  if (series.status === 'scheduled') {
-    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning' });
-    cancelBtn.appendChild(icon('bi bi-x-circle me-1'));
-    cancelBtn.appendChild(document.createTextNode('Cancel'));
-    cancelBtn.addEventListener('click', () => cancelSchedule(series.id));
-    schedControls.appendChild(cancelBtn);
-  }
-
   const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-send me-1'));
-  headerLabel.appendChild(document.createTextNode('Actions'));
+  headerLabel.appendChild(icon('bi bi-gear me-1'));
+  headerLabel.appendChild(document.createTextNode('Series'));
 
   const deleteSeriesBtn = h('button', {
     cls: 'btn btn-xs btn-outline-danger ms-auto',
@@ -852,17 +831,7 @@ function buildActionsCard(series) {
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header d-flex align-items-center py-2' }, headerLabel, deleteSeriesBtn),
     h('div', { cls: 'card-body p-2' },
-      h('div', { cls: 'd-flex gap-2 align-items-center mb-3' }, statusSel, saveStatusBtn),
-      h('div', { cls: 'mb-3' },
-        h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Post now' }),
-        h('div', { cls: 'd-flex gap-2 flex-wrap' },
-          mkPostBtn('Telegram',  'telegram',  'bi bi-telegram',  'btn-outline-info'),
-          mkPostBtn('Instagram & FB Page', 'instagram', 'bi bi-instagram', 'btn-outline-danger'),
-          mkPostBtn('Both',      'both',      'bi bi-send',      'btn-outline-secondary'))),
-      h('div', null,
-        h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule' }),
-        schedControls,
-        h('div', { id: 'schedResult', cls: 'mt-1 small' }))));
+      h('div', { cls: 'd-flex gap-2 align-items-center' }, statusSel, saveStatusBtn)));
 }
 
 async function saveStatus(seriesId) {
@@ -887,6 +856,508 @@ async function deleteSeries(seriesId) {
     );
     showToast('Moved to Trash', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── Collection picker ─────────────────────────────────────────────────────────
+function buildCollectionPicker(series) {
+  let currentCollection = series.collection || null;
+  let currentNumber = series.collection_number || null;
+  let currentIndex = series.collection_index || null;
+
+  const wrap = h('div', { id: 'collectionPickerWrap', cls: 'd-flex align-items-center gap-1 mb-2 position-relative', style: 'z-index:1050' });
+
+  // ── Toggle button ──────────────────────────────────────────────────────────
+  const toggleBtn = h('button', {
+    type: 'button',
+    cls: 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1',
+  });
+  const _updateBtn = () => {
+    toggleBtn.replaceChildren(icon('bi bi-collection'));
+    if (currentCollection) {
+      toggleBtn.appendChild(h('span', { cls: 'badge bg-purple ms-1 lh-sm d-flex flex-column align-items-start' },
+        document.createTextNode(currentCollection.name),
+        currentCollection.name_ru
+          ? h('span', { style: 'font-size:10px;opacity:0.85', text: currentCollection.name_ru })
+          : null,
+      ));
+    } else {
+      toggleBtn.appendChild(document.createTextNode(' Collection…'));
+    }
+  };
+  _updateBtn();
+
+  // ── Dropdown panel (search + list) ────────────────────────────────────────
+  const panel = h('div', {
+    cls: 'position-absolute bg-body border rounded shadow-sm p-2',
+    style: 'z-index:100;min-width:240px;display:none;top:100%;left:0',
+  });
+
+  const searchInput = h('input', {
+    type: 'text', cls: 'form-control form-control-sm mb-1',
+    placeholder: 'Search or create…',
+  });
+  searchInput.setAttribute('autocomplete', 'off');
+
+  const listEl = h('ul', { cls: 'list-unstyled mb-0', style: 'max-height:200px;overflow-y:auto' });
+
+  panel.appendChild(searchInput);
+  panel.appendChild(listEl);
+
+  const _hidePanel = () => { panel.style.display = 'none'; searchInput.value = ''; _activeCollPickerHide = null; };
+  const _showPanel = () => { panel.style.display = 'block'; searchInput.focus(); _renderList(''); };
+
+  // ── Number input ──────────────────────────────────────────────────────────
+  let numWrap = null;
+  const _setNumberInput = (show, numberVal, indexVal) => {
+    if (numWrap) { numWrap.remove(); numWrap = null; }
+    if (!show) return;
+    const numInput = h('input', {
+      type: 'text', cls: 'form-control form-control-sm',
+      id: 'collectionNumberInput', placeholder: '#number',
+      style: 'width:80px',
+    });
+    numInput.value = numberVal || '';
+    numInput.addEventListener('blur', async () => {
+      const val = numInput.value.trim();
+      if (val === (currentNumber || '')) return;
+      try {
+        const updated = await apiFetch('PUT', '/api/series/' + series.id, { collection_number: val || null });
+        App.currentSeries = updated;
+        currentNumber = updated.collection_number;
+      } catch (e) { showToast(e.message, 'danger'); numInput.value = currentNumber || ''; }
+    });
+    const idxHint = indexVal != null
+      ? h('span', { cls: 'text-muted small', text: '(' + indexVal + ')' })
+      : null;
+    numWrap = h('span', { cls: 'd-flex align-items-center gap-1' }, numInput, idxHint);
+    wrap.appendChild(numWrap);
+  };
+
+  // ── Assign / unassign ─────────────────────────────────────────────────────
+  const _assign = async (collectionId, collectionName, collectionNameRu) => {
+    _hidePanel();
+    currentCollection = { id: collectionId, name: collectionName, name_ru: collectionNameRu || null };
+    _updateBtn();
+    try {
+      const updated = await apiFetch('PUT', '/api/series/' + series.id, { collection_id: collectionId });
+      App.currentSeries = updated;
+      currentNumber = updated.collection_number;
+      currentIndex = updated.collection_index;
+      updateSeriesItem(updated);
+      _setNumberInput(true, currentNumber, currentIndex);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      currentCollection = series.collection || null;
+      _updateBtn();
+    }
+  };
+
+  const _unassign = async () => {
+    _hidePanel();
+    currentCollection = null;
+    _updateBtn();
+    _setNumberInput(false);
+    try {
+      const updated = await apiFetch('PUT', '/api/series/' + series.id, { collection_id: null });
+      App.currentSeries = updated;
+      currentNumber = null;
+      currentIndex = null;
+      updateSeriesItem(updated);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      currentCollection = series.collection || null;
+      _updateBtn();
+      _setNumberInput(true, currentNumber, currentIndex);
+    }
+  };
+
+  // ── List rendering ────────────────────────────────────────────────────────
+  const _renderList = (query) => {
+    listEl.replaceChildren();
+    const all = App.collections || [];
+    const q = query.toLowerCase();
+    const filtered = q
+      ? all.filter(c => c.name.toLowerCase().includes(q) || (c.name_ru || '').toLowerCase().includes(q))
+      : all;
+
+    filtered.forEach(c => {
+      const link = h('a', { cls: 'dropdown-item small py-1', href: '#', style: 'line-height:1.3' });
+      link.appendChild(document.createTextNode(c.name));
+      if (c.name_ru) link.appendChild(h('span', { cls: 'text-muted d-block', style: 'font-size:11px', text: c.name_ru }));
+      link.addEventListener('click', e => { e.preventDefault(); _assign(c.id, c.name, c.name_ru); });
+      listEl.appendChild(h('li', null, link));
+    });
+
+    if (query && !filtered.some(c => c.name.toLowerCase() === query.toLowerCase())) {
+      const createLink = h('a', { cls: 'dropdown-item small text-primary', href: '#' });
+      createLink.appendChild(icon('bi bi-plus me-1'));
+      createLink.appendChild(document.createTextNode('Create "' + query + '"'));
+      createLink.addEventListener('click', async e => {
+        e.preventDefault();
+        try {
+          const c = await apiFetch('POST', '/api/collections', { name: query });
+          App.collections = [...(App.collections || []), c];
+          await _assign(c.id, c.name, c.name_ru);
+        } catch (err) { showToast(err.message, 'danger'); }
+      });
+      listEl.appendChild(h('li', null, createLink));
+    }
+
+    if (currentCollection) {
+      listEl.appendChild(h('li', null,
+        h('a', { cls: 'dropdown-item small text-muted', href: '#', text: '— Remove collection',
+          onclick: e => { e.preventDefault(); _unassign(); } })));
+    }
+  };
+
+  searchInput.addEventListener('input', e => _renderList(e.target.value.trim()));
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Escape') _hidePanel(); });
+
+  // ── Toggle ────────────────────────────────────────────────────────────────
+  toggleBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (panel.style.display === 'none') {
+      _activeCollPickerHide = _hidePanel;
+      _showPanel();
+    } else {
+      _hidePanel();
+    }
+  });
+
+  wrap.appendChild(toggleBtn);
+  wrap.appendChild(panel);
+  _setNumberInput(!!currentCollection, currentNumber, currentIndex);
+  return wrap;
+}
+
+// ── Shared image selector (used by create and edit post forms) ────────────────
+function _buildImageSelector(allImages, initialSelected, imgMap) {
+  const selected = new Set(initialSelected);
+  const grid = h('div', { cls: 'd-flex gap-1 flex-wrap mb-2' });
+  allImages.forEach(img => {
+    const on = selected.has(img.id);
+    const imgEl = document.createElement('img');
+    imgEl.setAttribute('src', imgMap[img.id] || img.public_url || '');
+    imgEl.style.cssText = 'width:52px;height:46px;object-fit:cover;border-radius:3px;cursor:pointer;opacity:' + (on ? '1' : '0.35');
+    const tick = h('div', { cls: 'position-absolute top-0 end-0', style: 'font-size:12px;line-height:1;background:rgba(0,0,0,.5);border-radius:2px;padding:1px 3px;color:#fff;display:' + (on ? '' : 'none') });
+    tick.textContent = '✓';
+    const wrap = h('div', { cls: 'position-relative', style: 'display:inline-block' });
+    wrap.appendChild(imgEl); wrap.appendChild(tick);
+    wrap.addEventListener('click', () => {
+      if (selected.has(img.id)) { selected.delete(img.id); imgEl.style.opacity = '0.35'; tick.style.display = 'none'; }
+      else { selected.add(img.id); imgEl.style.opacity = '1'; tick.style.display = ''; }
+    });
+    grid.appendChild(wrap);
+  });
+  return { grid, selected };
+}
+
+// ── Posts card ────────────────────────────────────────────────────────────────
+const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook' };
+const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', posted: 'bg-success', failed: 'bg-danger' };
+
+function buildPostsCard(series) {
+  const imgMap = {};
+  series.images.forEach(i => { if (!i.deleted_at) imgMap[i.id] = i.public_url; });
+
+  const headerLabel = h('span', { cls: 'small fw-medium' });
+  headerLabel.appendChild(icon('bi bi-send me-1'));
+  headerLabel.appendChild(document.createTextNode('Posts'));
+
+  const newPostBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
+  newPostBtn.appendChild(icon('bi bi-plus me-1'));
+  newPostBtn.appendChild(document.createTextNode('New post'));
+
+  const formWrap = h('div', { cls: 'd-none' });
+  newPostBtn.addEventListener('click', () => {
+    if (formWrap.classList.contains('d-none')) {
+      formWrap.replaceChildren(buildCreatePostForm(series, imgMap, () => formWrap.classList.add('d-none')));
+      formWrap.classList.remove('d-none');
+    } else {
+      formWrap.classList.add('d-none');
+    }
+  });
+
+  const postList = h('div', { cls: 'd-flex flex-column gap-2' });
+  const activePosts = (series.posts || []).filter(p => !p.deleted_at);
+  if (!activePosts.length) {
+    postList.appendChild(h('p', { cls: 'text-muted small mb-0', text: 'No posts yet.' }));
+  } else {
+    activePosts.forEach(p => postList.appendChild(buildPostRow(p, imgMap, series)));
+  }
+
+  return h('div', { cls: 'card mb-3' },
+    h('div', { cls: 'card-header d-flex align-items-center justify-content-between py-2' }, headerLabel, newPostBtn),
+    h('div', { cls: 'card-body p-2' }, formWrap, postList));
+}
+
+function buildPostRow(post, imgMap, series) {
+  const platIcon = icon((POST_PLATFORM_ICON[post.platform] || 'bi bi-send') + ' me-1');
+  const statusBadgeEl = h('span', { cls: 'badge ' + (POST_STATUS_COLOR[post.status] || 'bg-secondary') + ' ms-1', text: post.status });
+  const titleEl = h('span', { cls: 'small text-truncate flex-grow-1', text: post.title || '(no title)', style: 'max-width:180px' });
+
+  const timeEl = post.posted_at
+    ? h('span', { cls: 'text-muted small', text: formatDate(post.posted_at) })
+    : post.scheduled_at
+      ? h('span', { cls: 'text-purple small' }, icon('bi bi-clock me-1'), document.createTextNode(formatDate(post.scheduled_at)))
+      : null;
+
+  const thumbs = h('div', { cls: 'd-flex gap-1 flex-wrap' });
+  (post.image_ids || []).slice(0, 3).forEach(id => {
+    if (imgMap[id]) {
+      const img = document.createElement('img');
+      img.setAttribute('src', imgMap[id]);
+      img.style.cssText = 'width:28px;height:24px;object-fit:cover;border-radius:2px';
+      thumbs.appendChild(img);
+    }
+  });
+
+  const actions = h('div', { cls: 'd-flex gap-1 flex-shrink-0' });
+
+  if (post.status !== 'posted') {
+    const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now' });
+    postNowBtn.appendChild(icon('bi bi-send'));
+    postNowBtn.addEventListener('click', () => postNow(post.id));
+    actions.appendChild(postNowBtn);
+  }
+
+  if (post.status === 'draft' || post.status === 'failed') {
+    const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Schedule' });
+    schedBtn.appendChild(icon('bi bi-calendar-plus'));
+    schedBtn.addEventListener('click', () => {
+      const pickerId = 'sched-picker-' + post.id;
+      const existing = document.getElementById(pickerId);
+      if (existing) { existing.remove(); return; }
+      const dtInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm', style: 'width:200px' });
+      // Pre-fill with current scheduled_at or +1h from now
+      const base = post.scheduled_at
+        ? new Date(post.scheduled_at.endsWith('Z') ? post.scheduled_at : post.scheduled_at + 'Z')
+        : new Date(Date.now() + 3600000);
+      dtInput.value = base.toISOString().slice(0, 16);
+      const okBtn = h('button', { cls: 'btn btn-sm btn-primary', text: 'Schedule' });
+      okBtn.addEventListener('click', async () => {
+        if (!dtInput.value) return;
+        await schedulePost(post.id, new Date(dtInput.value).toISOString());
+        picker.remove();
+      });
+      const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', text: 'Cancel' });
+      cancelBtn.addEventListener('click', () => picker.remove());
+      const picker = h('div', { id: pickerId, cls: 'border rounded p-2 mb-1 bg-body-tertiary d-flex align-items-center gap-2 flex-wrap' },
+        dtInput, okBtn, cancelBtn);
+      rowWrap.after(picker);
+    });
+    actions.appendChild(schedBtn);
+  }
+
+  if (post.status === 'scheduled') {
+    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning', title: 'Cancel schedule' });
+    cancelBtn.appendChild(icon('bi bi-x-circle'));
+    cancelBtn.addEventListener('click', () => cancelPostSchedule(post.id));
+    actions.appendChild(cancelBtn);
+  }
+
+  if (post.status !== 'posted') {
+    const editBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Edit post' });
+    editBtn.appendChild(icon('bi bi-pencil'));
+    editBtn.addEventListener('click', () => {
+      const existing = document.getElementById('edit-form-' + post.id);
+      if (existing) { existing.remove(); return; }
+      const form = buildEditPostForm(post, imgMap, series, () => {
+        const el = document.getElementById('edit-form-' + post.id);
+        if (el) el.remove();
+      });
+      form.id = 'edit-form-' + post.id;
+      rowWrap.after(form);
+    });
+    actions.appendChild(editBtn);
+
+    const delBtn = h('button', { cls: 'btn btn-sm btn-outline-danger', title: 'Delete post' });
+    delBtn.appendChild(icon('bi bi-trash'));
+    delBtn.addEventListener('click', () => deletePost(post.id));
+    actions.appendChild(delBtn);
+  }
+
+  const info = h('div', { cls: 'd-flex align-items-center gap-1 flex-grow-1 overflow-hidden' },
+    platIcon, titleEl, statusBadgeEl, timeEl ? timeEl : null);
+
+  const rowWrap = h('div', { cls: 'p-1 border rounded d-flex align-items-center gap-2', 'data-post-row': post.id },
+    thumbs, info, actions);
+  return rowWrap;
+}
+
+function buildEditPostForm(post, imgMap, series, onClose) {
+  const allImages = series.images.filter(i => !i.deleted_at);
+  const { grid: imgGrid, selected: _sel } = _buildImageSelector(allImages, post.image_ids || [], imgMap);
+
+  const isTelegram = post.platform === 'telegram';
+
+  // Shared description/tags inputs (placed in language-matched block)
+  const descInput = h('textarea', { cls: 'form-control form-control-sm mb-1', rows: '3', placeholder: 'Description' });
+  descInput.value = post.description || '';
+  const tagsInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', placeholder: 'Tags' });
+  tagsInput.value = (post.tags || []).join(' ');
+
+  // EN block
+  const titleInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', placeholder: 'Title (EN)' });
+  titleInput.value = post.title || '';
+  const collLineInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', placeholder: '◈ Collection line (leave blank to hide)' });
+  collLineInput.value = post.collection_line || '';
+  const enBlockChildren = [
+    h('div', { cls: 'small fw-semibold mb-1 text-secondary', text: 'EN' }),
+    titleInput,
+  ];
+  if (!isTelegram) { enBlockChildren.push(descInput, tagsInput); }
+  enBlockChildren.push(collLineInput);
+  const enBlock = h('div', { cls: 'border rounded p-2 mb-2' }, ...enBlockChildren);
+
+  // RU block
+  const titleRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', placeholder: 'Title (RU)' });
+  titleRuInput.value = post.title_ru || '';
+  const collLineRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', placeholder: '◈ Collection line RU (leave blank to hide)' });
+  collLineRuInput.value = post.collection_line_ru || '';
+  const ruBlockChildren = [
+    h('div', { cls: 'small fw-semibold mb-1 text-secondary', text: 'RU' }),
+    titleRuInput,
+  ];
+  if (isTelegram) { ruBlockChildren.push(descInput, tagsInput); }
+  ruBlockChildren.push(collLineRuInput);
+  const ruBlock = h('div', { cls: 'border rounded p-2 mb-2' }, ...ruBlockChildren);
+
+  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
+  saveBtn.appendChild(icon('bi bi-floppy me-1'));
+  saveBtn.appendChild(document.createTextNode('Save'));
+  saveBtn.addEventListener('click', async () => {
+    if (!_sel.size) { showToast('Select at least one image', 'danger'); return; }
+    const imageIds = allImages.filter(i => _sel.has(i.id)).map(i => i.id);
+    try {
+      saveBtn.disabled = true;
+      await apiFetch('PATCH', '/api/posts/' + post.id, {
+        title: titleInput.value.trim(),
+        title_ru: titleRuInput.value.trim(),
+        description: descInput.value,
+        tags: tagsInput.value.split(/\s+/).filter(Boolean),
+        collection_line: collLineInput.value.trim() || null,
+        collection_line_ru: collLineRuInput.value.trim() || null,
+        image_ids: imageIds,
+      });
+      showToast('Post updated', 'success');
+      onClose();
+      await loadSeriesDetail(series.id);
+    } catch (e) { showToast(e.message, 'danger'); saveBtn.disabled = false; }
+  });
+
+  const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', text: 'Cancel', onclick: onClose });
+
+  return h('div', { cls: 'border rounded p-2 mb-1 bg-body-tertiary' },
+    h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Images' }), imgGrid,
+    enBlock, ruBlock,
+    h('div', null, saveBtn, cancelBtn));
+}
+
+function buildCreatePostForm(series, imgMap, onClose) {
+  const allImages = series.images.filter(i => !i.deleted_at);
+  // Seed from current strip selection; fall back to all images if nothing selected
+  const initialSel = _selectedImages.size > 0
+    ? allImages.filter(i => _selectedImages.has(i.id)).map(i => i.id)
+    : allImages.map(i => i.id);
+  const { grid: imgGrid, selected: _selectedPostImages } = _buildImageSelector(allImages, initialSel, imgMap);
+
+  // Platform checkboxes
+  const tgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_tg' });
+  tgCheck.checked = true;
+  const igCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_ig' });
+  igCheck.checked = true;
+  const fbCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_fb' });
+  fbCheck.checked = true;
+
+  const platformRow = h('div', { cls: 'd-flex gap-3 mb-2 align-items-center' },
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, tgCheck, document.createTextNode(' Telegram')),
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' Instagram')),
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, fbCheck, document.createTextNode(' Facebook')));
+
+  // EN content fields
+  const titleInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_title', placeholder: 'Title (EN)' });
+  titleInput.value = series.title || '';
+  const descOtherInput = h('textarea', { cls: 'form-control form-control-sm mb-1', id: 'pf_desc_other', rows: '3', placeholder: 'Description (Instagram & FB)' });
+  descOtherInput.value = series.description_en || '';
+  const tagsOtherInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_tags_other', placeholder: 'Tags (Instagram & FB)' });
+  tagsOtherInput.value = (series.tags_instagram || []).join(' ');
+  const collLineInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_coll_line', placeholder: '◈ Collection line (leave blank to hide)' });
+  if (series.collection) {
+    const num = (series.collection_number || '').trim();
+    collLineInput.value = num ? `◈ ${series.collection.name} #${num}` : `◈ ${series.collection.name}`;
+  }
+
+  // RU content fields
+  const titleRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_title_ru', placeholder: 'Title (RU)' });
+  titleRuInput.value = series.title || '';
+  const descTgInput = h('textarea', { cls: 'form-control form-control-sm mb-1', id: 'pf_desc_tg', rows: '3', placeholder: 'Description (Telegram)' });
+  descTgInput.value = series.description_ru || '';
+  const tagsTgInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_tags_tg', placeholder: 'Tags (Telegram)' });
+  tagsTgInput.value = (series.tags_telegram || []).join(' ');
+  const collLineRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_coll_line_ru', placeholder: '◈ Collection line RU (leave blank to hide)' });
+  if (series.collection) {
+    const num = (series.collection_number || '').trim();
+    const nameRu = series.collection.name_ru || series.collection.name;
+    collLineRuInput.value = num ? `◈ ${nameRu} #${num}` : `◈ ${nameRu}`;
+  }
+
+  const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2', id: 'pf_sched' });
+
+  // Save button
+  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
+  saveBtn.appendChild(icon('bi bi-send me-1'));
+  saveBtn.appendChild(document.createTextNode('Save post(s)'));
+  saveBtn.addEventListener('click', async () => {
+    const platforms = [];
+    if (tgCheck.checked) platforms.push('telegram');
+    if (igCheck.checked) platforms.push('instagram');
+    if (fbCheck.checked) platforms.push('facebook');
+    if (!platforms.length) { showToast('Select at least one platform', 'danger'); return; }
+    if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return; }
+    const imageIds = allImages.filter(i => _selectedPostImages.has(i.id)).map(i => i.id);
+    const schedVal = schedInput.value ? new Date(schedInput.value).toISOString() : null;
+    try {
+      saveBtn.disabled = true;
+      await apiFetch('POST', '/api/series/' + series.id + '/posts', {
+        platforms,
+        title: titleInput.value.trim(),
+        title_ru: titleRuInput.value.trim(),
+        description_telegram: descTgInput.value,
+        description_other: descOtherInput.value,
+        tags_telegram: tagsTgInput.value.split(/\s+/).filter(Boolean),
+        tags_other: tagsOtherInput.value.split(/\s+/).filter(Boolean),
+        collection_line: collLineInput.value.trim() || null,
+        collection_line_ru: collLineRuInput.value.trim() || null,
+        image_ids: imageIds,
+        scheduled_at: schedVal,
+      });
+      showToast(platforms.length + ' post(s) created', 'success');
+      onClose();
+      await loadSeriesDetail(series.id);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      saveBtn.disabled = false;
+    }
+  });
+
+  const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', text: 'Cancel', onclick: onClose });
+
+  const enBlock = h('div', { cls: 'border rounded p-2 mb-2' },
+    h('div', { cls: 'small fw-semibold mb-1 text-secondary', text: 'EN' }),
+    titleInput, descOtherInput, tagsOtherInput, collLineInput);
+
+  const ruBlock = h('div', { cls: 'border rounded p-2 mb-2' },
+    h('div', { cls: 'small fw-semibold mb-1 text-secondary', text: 'RU' }),
+    titleRuInput, descTgInput, tagsTgInput, collLineRuInput);
+
+  return h('div', { cls: 'border rounded p-2 mb-2 bg-body-tertiary' },
+    h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Select images' }), imgGrid,
+    h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Platforms' }), platformRow,
+    enBlock, ruBlock,
+    h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule (optional)' }),
+    schedInput,
+    h('div', null, saveBtn, cancelBtn));
 }
 
 // ── Draft restore ─────────────────────────────────────────────────────────────

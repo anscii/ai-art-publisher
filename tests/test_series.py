@@ -109,15 +109,15 @@ def test_save_queue_sets_queued_and_resets_pending(client):
     img_a = _register_image(client, sid, "a.jpg")
     img_b = _register_image(client, sid, "b.jpg")
     img_c = _register_image(client, sid, "c.jpg")
-    # mark img_c as posted — should be untouched
-    client.patch(f"/api/images/{img_c}/status", json={"status": "posted"})
+    # mark img_c as skip — should be untouched by save_queue
+    client.patch(f"/api/images/{img_c}/status", json={"status": "skip"})
 
     resp = client.put(f"/api/series/{sid}/queue", json={"image_ids": [img_a]})
     assert resp.status_code == 200
     images = {i["id"]: i for i in resp.json()["images"]}
     assert images[img_a]["status"] == "queued"
     assert images[img_b]["status"] == "pending"
-    assert images[img_c]["status"] == "posted"
+    assert images[img_c]["status"] == "skip"
 
 
 def test_save_queue_clears_previous_queue(client):

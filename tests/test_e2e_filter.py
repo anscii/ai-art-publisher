@@ -15,7 +15,7 @@ def test_filter_dropdown_has_all_statuses(page, live_server):
     page.goto(live_server)
     page.locator("#filterBtn").click()
     page.locator("#statusFilterMenu").wait_for(state="visible", timeout=5000)
-    expected = {"new", "draft", "approved", "scheduled", "partial_posted", "posted", "skip"}
+    expected = {"new", "draft", "approved", "posted", "skip"}
     values = {
         el.get_attribute("value")
         for el in page.locator("#statusFilterMenu input[type=checkbox]").all()

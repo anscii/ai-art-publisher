@@ -11,9 +11,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_config
 from app.database import init_db
+from app.routers import collections as collections_router
 from app.routers import generate as generate_router
 from app.routers import images as images_router
-from app.routers import posting as posting_router
+from app.routers import posts as posts_router
 from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
 from app.routers import settings as settings_router
@@ -100,11 +101,12 @@ def robots():
 
 
 app.include_router(settings_router.router)
+app.include_router(collections_router.router)
 app.include_router(series_router.router)
 app.include_router(images_router.router)
 app.include_router(generate_router.router)
 app.include_router(generate_router.variants_router)
-app.include_router(posting_router.router)
+app.include_router(posts_router.router)
 app.include_router(scheduling_router.router)
 app.include_router(trash_router.router)
 

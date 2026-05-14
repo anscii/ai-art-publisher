@@ -47,7 +47,9 @@ const App = {
   total: 0,
   page: 1,
   limit: 15,
-  activeStatuses: new Set(['new', 'draft', 'approved', 'scheduled', 'partial_posted']),
+  activeStatuses: new Set(['new', 'draft', 'approved']),
+  collections: [],
+  activeCollection: null,
   currentSeriesId: null,
   currentSeries: null,
   unsortedSeriesId: null,
@@ -112,10 +114,9 @@ const STATUS_COLOR = {
   posted: 'bg-success', skip: 'bg-secondary',
 };
 
-function statusBadge(status, needsReview) {
+function statusBadge(status) {
   const frag = document.createDocumentFragment();
   frag.appendChild(h('span', { cls: 'badge ' + (STATUS_COLOR[status] || 'bg-secondary'), text: status }));
-  if (needsReview) frag.appendChild(h('span', { cls: 'badge bg-danger ms-1', text: '⚠' }));
   return frag;
 }
 
@@ -130,11 +131,12 @@ async function loadSeries(reset) {
     const statuses = [...App.activeStatuses].join(',') || 'new';
     const q = new URLSearchParams({ page: App.page, limit: App.limit, status: statuses });
     if (App.search) q.set('search', App.search);
+    if (App.activeCollection) q.set('collection_id', App.activeCollection);
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
     const container = document.getElementById('seriesItems');
-    const visible = data.items.filter(s => s.title !== 'Unsorted' && s.id !== App.unsortedSeriesId);
+    const visible = data.items.filter(s => (s.name || s.title) !== 'Unsorted' && s.id !== App.unsortedSeriesId);
     visible.forEach(s => container.appendChild(buildSeriesItem(s)));
     document.getElementById('loadMoreBtn').classList.toggle('d-none', App.series.length >= App.total);
     if (reset && !App.currentSeriesId && visible.length > 0) {
@@ -157,7 +159,7 @@ async function loadMoreSeries() {
 }
 
 function buildSeriesItem(s) {
-  const name = s.title || s.original_folder_name || s.id.slice(0, 8);
+  const name = s.name || s.title || s.original_folder_name || s.id.slice(0, 8);
   let cover;
   if (s.cover_url) {
     cover = document.createElement('img');
@@ -176,16 +178,14 @@ function buildSeriesItem(s) {
 
   const nameEl = h('div', { cls: 'text-truncate', style: 'font-size:13px;font-weight:500', text: name });
   const badgesRow = h('div', { cls: 'd-flex gap-1 align-items-center flex-wrap' });
-  badgesRow.appendChild(statusBadge(s.status, s.needs_review));
+  badgesRow.appendChild(statusBadge(s.status));
+  if (s.collection_name) {
+    const cn = s.collection_name.length > 20 ? s.collection_name.slice(0, 19) + '…' : s.collection_name;
+    const tooltip = s.collection_name_ru ? s.collection_name + ' / ' + s.collection_name_ru : s.collection_name;
+    badgesRow.appendChild(h('span', { cls: 'badge bg-purple', style: 'font-size:10px', text: cn, title: tooltip }));
+  }
   badgesRow.appendChild(h('span', { cls: 'text-muted', style: 'font-size:11px', text: s.image_count + ' img' }));
   const info = h('div', { cls: 'flex-grow-1 overflow-hidden' }, nameEl, badgesRow);
-
-  if (s.scheduled_at) {
-    const sched = h('div', { cls: 'text-purple', style: 'font-size:11px' });
-    sched.appendChild(icon('bi bi-clock me-1'));
-    sched.appendChild(document.createTextNode(formatDate(s.scheduled_at)));
-    info.appendChild(sched);
-  }
 
   return h('div', {
     cls: 'series-item d-flex align-items-start gap-2 p-2 border-bottom' +
@@ -204,6 +204,8 @@ function updateSeriesItem(s) {
     ...s,
     cover_url: s.images?.find(i => !i.deleted_at)?.public_url ?? null,
     image_count: s.images?.filter(i => !i.deleted_at).length ?? 0,
+    collection_name: s.collection?.name ?? null,
+    collection_name_ru: s.collection?.name_ru ?? null,
   };
   old.replaceWith(buildSeriesItem(item));
 }
@@ -240,7 +242,7 @@ async function selectUnsorted() {
 
 async function createSeries() {
   try {
-    const s = await apiFetch('POST', '/api/series', { title: '' });
+    const s = await apiFetch('POST', '/api/series', { name: '', title: '' });
     document.getElementById('seriesItems').prepend(buildSeriesItem(s));
     App.series.unshift(s);
     await selectSeries(s.id);
@@ -268,24 +270,25 @@ function onSearchChange(val) {
 
 // ── View switching ────────────────────────────────────────────────────────────
 function showView(view) {
-  const sidebar = document.getElementById('seriesSidebar');
-  const editor  = document.getElementById('editorPanel');
-  const queue   = document.getElementById('queuePanel');
-  const trash   = document.getElementById('trashPanel');
-  const back    = document.getElementById('backBtnRow');
-  const mobile  = window.innerWidth < 992;
+  const sidebar     = document.getElementById('seriesSidebar');
+  const editor      = document.getElementById('editorPanel');
+  const queue       = document.getElementById('queuePanel');
+  const trash       = document.getElementById('trashPanel');
+  const collections = document.getElementById('collectionsPanel');
+  const back        = document.getElementById('backBtnRow');
+  const mobile      = window.innerWidth < 992;
+  const panels      = [editor, queue, trash, collections];
 
   if (!mobile) {
     sidebar.classList.remove('d-none');
     back.classList.add('d-none');
-    editor.classList.toggle('d-none', view === 'queue' || view === 'trash');
+    editor.classList.toggle('d-none', view !== 'editor' && view !== 'list');
     queue.classList.toggle('d-none',  view !== 'queue');
     trash.classList.toggle('d-none',  view !== 'trash');
+    if (collections) collections.classList.toggle('d-none', view !== 'collections');
   } else if (view === 'list') {
     sidebar.classList.remove('d-none');
-    editor.classList.add('d-none');
-    queue.classList.add('d-none');
-    trash.classList.add('d-none');
+    panels.forEach(p => p?.classList.add('d-none'));
     back.classList.add('d-none');
   } else {
     sidebar.classList.add('d-none');
@@ -293,9 +296,16 @@ function showView(view) {
     editor.classList.toggle('d-none', view !== 'editor');
     queue.classList.toggle('d-none',  view !== 'queue');
     trash.classList.toggle('d-none',  view !== 'trash');
+    if (collections) collections.classList.toggle('d-none', view !== 'collections');
   }
   if (view === 'queue') refreshQueue();
   if (view === 'trash') refreshTrash();
+  if (view === 'collections') refreshCollections();
+  if (view !== 'editor' && view !== 'list') {
+    App.activeCollection = null;
+    const wrap = document.getElementById('collectionFilterWrap');
+    _populateCollectionFilter();
+  }
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
@@ -310,37 +320,172 @@ async function refreshQueue() {
     }
     const tbody = document.createElement('tbody');
     items.forEach(item => {
-      const targetsCell = document.createElement('td');
-      item.targets.forEach(t => targetsCell.appendChild(h('span', { cls: 'badge bg-secondary me-1', text: t })));
+      const platformCell = h('td', null, h('span', { cls: 'badge bg-secondary', text: item.platform }));
       const edit   = h('button', { cls: 'btn btn-xs btn-outline-secondary me-1', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
-      const cancel = h('button', { cls: 'btn btn-xs btn-outline-danger',          text: 'Cancel', onclick: () => cancelScheduleItem(item.series_id) });
+      const cancel = h('button', { cls: 'btn btn-xs btn-outline-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });
       tbody.appendChild(h('tr', null,
-        h('td', { text: item.title || item.original_folder_name || item.series_id.slice(0, 8) }),
+        h('td', { text: item.series_name || item.series_id.slice(0, 8) }),
+        h('td', { text: item.title }),
         h('td', { text: formatDate(item.scheduled_at) }),
-        targetsCell,
+        platformCell,
         h('td', null, edit, cancel)));
     });
     el.replaceChildren(h('div', { cls: 'table-responsive' },
       h('table', { cls: 'table table-sm table-hover align-middle' },
         h('thead', null, h('tr', null,
-          h('th', { text: 'Series' }), h('th', { text: 'Datetime (UTC)' }),
-          h('th', { text: 'Platforms' }), h('th'))),
+          h('th', { text: 'Series' }), h('th', { text: 'Title' }),
+          h('th', { text: 'Datetime (UTC)' }), h('th', { text: 'Platform' }), h('th'))),
         tbody)));
   } catch (e) {
     el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
   }
 }
 
-async function cancelScheduleItem(seriesId) {
+async function cancelPostScheduleItem(postId) {
   showConfirm('Cancel this scheduled post?', async () => {
     try {
-      await apiFetch('DELETE', '/api/series/' + seriesId + '/schedule');
+      await apiFetch('DELETE', '/api/posts/' + postId + '/schedule');
       showToast('Schedule cancelled', 'success');
       await refreshQueue();
-      const s = await apiFetch('GET', '/api/series/' + seriesId);
-      updateSeriesItem(s);
     } catch (e) { showToast(e.message, 'danger'); }
   });
+}
+
+// ── Collections ───────────────────────────────────────────────────────────────
+async function refreshCollections() {
+  const el = document.getElementById('collectionsContent');
+  if (!el) return;
+  el.replaceChildren(h('div', { cls: 'text-center' }, h('div', { cls: 'spinner-border spinner-border-sm' })));
+  try {
+    App.collections = await apiFetch('GET', '/api/collections');
+    _populateCollectionFilter();
+    if (!App.collections.length) {
+      el.replaceChildren(h('p', { cls: 'text-muted', text: 'No collections yet.' }));
+      return;
+    }
+    const list = h('div', { cls: 'd-flex flex-column gap-2' });
+    App.collections.forEach(c => list.appendChild(_buildCollectionItem(c)));
+    el.replaceChildren(list);
+  } catch (e) {
+    el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
+  }
+}
+
+function _populateCollectionFilter() {
+  const btn  = document.getElementById('collectionFilterBtn');
+  const menu = document.getElementById('collectionFilterMenu');
+  if (!btn || !menu) return;
+
+  menu.replaceChildren();
+
+  const allLink = h('a', { cls: 'dropdown-item small' + (App.activeCollection ? '' : ' active'), href: '#', text: 'All collections' });
+  allLink.addEventListener('click', e => {
+    e.preventDefault();
+    onCollectionFilterChange('');
+    btn.textContent = 'All collections';
+    menu.classList.remove('show');
+  });
+  menu.appendChild(h('li', null, allLink));
+
+  (App.collections || []).forEach(c => {
+    const link = h('a', { cls: 'dropdown-item small py-1' + (App.activeCollection === c.id ? ' active' : ''), href: '#', style: 'line-height:1.3' });
+    link.appendChild(document.createTextNode(c.name));
+    if (c.name_ru) link.appendChild(h('span', { cls: 'text-muted d-block', style: 'font-size:11px', text: c.name_ru }));
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      onCollectionFilterChange(c.id);
+      btn.textContent = c.name;
+      menu.classList.remove('show');
+    });
+    menu.appendChild(h('li', null, link));
+  });
+
+  // Update button label to reflect current active collection
+  const active = (App.collections || []).find(c => c.id === App.activeCollection);
+  btn.textContent = active ? active.name : 'All collections';
+}
+
+function onCollectionFilterChange(val) {
+  App.activeCollection = val || null;
+  loadSeries(true);
+}
+
+function _buildCollectionItem(c) {
+  const countParts = [];
+  if (c.series_total > 0) {
+    const byStatus = c.series_by_status || {};
+    const statusParts = Object.entries(byStatus)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([s, n]) => n + ' ' + s);
+    countParts.push(c.series_total + ' series' + (statusParts.length ? ': ' + statusParts.join(' · ') : ''));
+  } else {
+    countParts.push('0 series');
+  }
+
+  const nameEl = h('span', { cls: 'fw-medium', text: c.name });
+  const nameRuEl = c.name_ru ? h('span', { cls: 'text-muted small ms-1', text: '/ ' + c.name_ru }) : null;
+  const countEl = h('span', { cls: 'text-muted small ms-2', text: countParts[0] });
+
+  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection' });
+  filterBtn.appendChild(icon('bi bi-funnel'));
+  filterBtn.addEventListener('click', () => {
+    onCollectionFilterChange(c.id);
+    const wrap = document.getElementById('collectionFilterWrap');
+    _populateCollectionFilter();
+  });
+
+  const editBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
+  editBtn.appendChild(icon('bi bi-pencil'));
+  editBtn.addEventListener('click', () => {
+    const nameInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (EN)', style: 'width:160px' });
+    nameInput.value = c.name;
+    const nameRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (RU)', style: 'width:160px' });
+    nameRuInput.value = c.name_ru || '';
+    const saveBtn = h('button', { cls: 'btn btn-xs btn-primary ms-1', text: 'Save' });
+    saveBtn.addEventListener('click', async () => {
+      try {
+        await apiFetch('PATCH', '/api/collections/' + c.id, {
+          name: nameInput.value.trim(),
+          name_ru: nameRuInput.value.trim() || null,
+        });
+        showToast('Saved', 'success');
+        await refreshCollections();
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    nameEl.replaceWith(h('span', { cls: 'd-flex gap-1 align-items-center' }, nameInput, nameRuInput, saveBtn));
+  });
+
+  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  delBtn.appendChild(icon('bi bi-trash'));
+  delBtn.addEventListener('click', () => showConfirm('Delete collection "' + c.name + '"? Series will be unassigned.', async () => {
+    try {
+      await apiFetch('DELETE', '/api/collections/' + c.id);
+      showToast('Deleted', 'success');
+      if (App.activeCollection === c.id) { App.activeCollection = null; loadSeries(true); }
+      await refreshCollections();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }));
+
+  return h('div', { cls: 'card' },
+    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-2' },
+      nameEl, nameRuEl, countEl,
+      h('div', { cls: 'ms-auto d-flex gap-1' }, filterBtn, editBtn, delBtn)));
+}
+
+async function createCollection() {
+  const input = document.getElementById('newCollectionName');
+  const inputRu = document.getElementById('newCollectionNameRu');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) { showToast('Enter a collection name', 'danger'); return; }
+  const name_ru = inputRu?.value.trim() || null;
+  try {
+    await apiFetch('POST', '/api/collections', { name, name_ru });
+    input.value = '';
+    if (inputRu) inputRu.value = '';
+    showToast('Collection created', 'success');
+    await refreshCollections();
+  } catch (e) { showToast(e.message, 'danger'); }
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────────
@@ -466,6 +611,7 @@ function getDraftEdits() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
+  apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
   document.getElementById('limitSel').value = String(App.limit);
   loadSeries(true);
   initLightbox();
@@ -488,6 +634,22 @@ document.addEventListener('DOMContentLoaded', () => {
     filterMenu.classList.remove('show');
     filterBtn.setAttribute('aria-expanded', 'false');
   });
+
+  const collFilterBtn  = document.getElementById('collectionFilterBtn');
+  const collFilterMenu = document.getElementById('collectionFilterMenu');
+  collFilterBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = collFilterMenu.classList.contains('show');
+    if (!open) {
+      const r = collFilterBtn.getBoundingClientRect();
+      collFilterMenu.style.position = 'fixed';
+      collFilterMenu.style.top  = r.bottom + 'px';
+      collFilterMenu.style.left = r.left + 'px';
+      collFilterMenu.style.right = 'auto';
+    }
+    collFilterMenu.classList.toggle('show');
+  });
+  document.addEventListener('click', () => collFilterMenu.classList.remove('show'));
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();
