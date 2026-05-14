@@ -108,7 +108,7 @@ class Post(Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     external_post_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    error_message: Mapped[str] = mapped_column(String, default="")
+    error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

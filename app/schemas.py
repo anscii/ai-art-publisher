@@ -144,7 +144,7 @@ class PostResponse(BaseModel):
     scheduled_at: datetime | None
     posted_at: datetime | None
     external_post_id: str | None
-    error_message: str
+    error_message: str | None
     created_at: datetime
     image_ids: list[str]
 
