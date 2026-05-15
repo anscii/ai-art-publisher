@@ -642,6 +642,11 @@ function buildDescriptionsCard(series) {
   saveBtn.appendChild(document.createTextNode('Save'));
   saveBtn.addEventListener('click', () => saveDescription(series.id));
 
+  const resetBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary ms-2' });
+  resetBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
+  resetBtn.appendChild(document.createTextNode('Reset'));
+  resetBtn.addEventListener('click', resetToSaved);
+
   const mkField = (lbl, ctrl) => h('div', { cls: 'col-12 col-lg-6' },
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
@@ -652,7 +657,7 @@ function buildDescriptionsCard(series) {
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram & FB Page tags', tagsIg),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
-    h('div', { cls: 'col-12' }, saveBtn));
+    h('div', { cls: 'col-12' }, saveBtn, resetBtn));
 
   const headerLabel = h('span', { cls: 'small fw-medium' });
   headerLabel.appendChild(icon('bi bi-card-text me-1'));
@@ -661,6 +666,22 @@ function buildDescriptionsCard(series) {
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header py-2' }, headerLabel),
     h('div', { cls: 'card-body p-2' }, variantBtns, form));
+}
+
+function resetToSaved() {
+  const s = App.currentSeries;
+  if (!s) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('f_pub_title',    s.title);
+  set('f_pub_title_ru', s.title_ru);
+  set('f_desc_en',      s.description_en);
+  set('f_desc_ru',      s.description_ru);
+  set('f_tags_ig',      (s.tags_instagram || []).join(' '));
+  set('f_tags_tg',      (s.tags_telegram  || []).join(' '));
+  document.querySelectorAll('[data-variant-idx]').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-outline-secondary');
+  });
 }
 
 function applyVariant(idx) {
