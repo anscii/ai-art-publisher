@@ -116,6 +116,17 @@ class SaveQueueBody(BaseModel):
 # ── AI Variants ───────────────────────────────────────────────────────────────
 
 
+class AIProviderModelStat(BaseModel):
+    provider: str
+    model: str
+    count: int
+
+
+class AIStatsResponse(BaseModel):
+    generated: list[AIProviderModelStat]
+    chosen: list[AIProviderModelStat]
+
+
 class AIVariantResponse(BaseModel):
     id: str
     series_id: str
@@ -214,6 +225,7 @@ class SeriesUpdate(BaseModel):
     status: str | None = None
     collection_id: str | None = None
     collection_number: str | None = None
+    chosen_variant_id: str | None = None
 
 
 class CollectionRef(BaseModel):

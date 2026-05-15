@@ -15,6 +15,49 @@ async function loadSettings() {
       if (el) buildProviderModelSelect(el, p, { selectedValue: s[p + '_default_model'] || '' });
     });
   } catch (e) { showToast('Failed to load settings: ' + e.message, 'danger'); }
+  try {
+    const stats = await apiFetch('GET', '/api/stats/ai');
+    _renderAIStats(stats);
+  } catch (_) {}
+}
+
+function _renderAIStats(stats) {
+  const section = document.getElementById('ai-stats-section');
+  if (!section) return;
+
+  function buildTable(rows) {
+    if (!rows.length) return h('p', { cls: 'text-muted small mb-0', text: 'No data yet' });
+    const thead = h('thead', {},
+      h('tr', {},
+        h('th', { cls: 'text-muted fw-normal small', text: 'Provider' }),
+        h('th', { cls: 'text-muted fw-normal small', text: 'Model' }),
+        h('th', { cls: 'text-muted fw-normal small text-end', text: 'Count' }),
+      )
+    );
+    const tbody = h('tbody');
+    rows.forEach(r => {
+      tbody.appendChild(h('tr', {},
+        h('td', { cls: 'small', text: r.provider }),
+        h('td', { cls: 'small text-secondary text-truncate', style: 'max-width:160px', text: r.model }),
+        h('td', { cls: 'small text-end', text: String(r.count) }),
+      ));
+    });
+    return h('table', { cls: 'table table-sm table-dark mb-0' }, thead, tbody);
+  }
+
+  section.replaceChildren(
+    h('h6', { cls: 'text-muted small mt-3' }, document.createTextNode('AI Variant Usage')),
+    h('div', { cls: 'row g-3' },
+      h('div', { cls: 'col-6' },
+        h('p', { cls: 'small mb-1 text-secondary', text: 'Generated (Generate clicks)' }),
+        buildTable(stats.generated),
+      ),
+      h('div', { cls: 'col-6' },
+        h('p', { cls: 'small mb-1 text-secondary', text: 'Chosen (applied & saved)' }),
+        buildTable(stats.chosen),
+      ),
+    ),
+  );
 }
 
 async function saveSettings() {

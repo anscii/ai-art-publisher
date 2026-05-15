@@ -119,6 +119,8 @@ def delete_variant(variant_id: str, db: Session = Depends(get_db)):
     if not v:
         raise HTTPException(status_code=404, detail="Variant not found")
     series = v.series
+    if series.chosen_variant_id == variant_id:
+        series.chosen_variant_id = None
     db.delete(v)
     db.commit()
     return series_to_detail(series, db)

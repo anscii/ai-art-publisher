@@ -11,6 +11,7 @@ function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setT
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
   _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
+  App.activeVariantId = null;
 
   const titleInput = h('input', {
     type: 'text', cls: 'form-control form-control-sm fw-semibold',
@@ -695,6 +696,7 @@ function applyVariant(idx) {
   if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
   if (v.title_ru) { const t = document.getElementById('f_pub_title_ru'); if (t) t.value = v.title_ru; }
   const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
+  App.activeVariantId = v.id;
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
     btn.classList.toggle('btn-outline-secondary', i !== idx);
@@ -705,7 +707,7 @@ async function saveDescription(seriesId) {
   const tagsIg = (document.getElementById('f_tags_ig')?.value || '').split(/\s+/).filter(Boolean);
   const tagsTg = (document.getElementById('f_tags_tg')?.value || '').split(/\s+/).filter(Boolean);
   try {
-    const updated = await apiFetch('PUT', '/api/series/' + seriesId, {
+    const body = {
       name:           document.getElementById('editorTitle')?.value?.trim() || '',
       title:          document.getElementById('f_pub_title')?.value?.trim() || '',
       title_ru:       document.getElementById('f_pub_title_ru')?.value?.trim() || '',
@@ -713,7 +715,9 @@ async function saveDescription(seriesId) {
       description_ru: document.getElementById('f_desc_ru')?.value || '',
       tags_instagram: tagsIg,
       tags_telegram:  tagsTg,
-    });
+    };
+    if (App.activeVariantId) body.chosen_variant_id = App.activeVariantId;
+    const updated = await apiFetch('PUT', '/api/series/' + seriesId, body);
     App.currentSeries = updated;
     updateSeriesItem(updated);
     const t = document.getElementById('editorTitle');
