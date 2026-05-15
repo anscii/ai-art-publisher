@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ai.base import AIVariantData, fix_llm_tag, fix_llm_text
+from app.services.ai.base import AIVariantData, extract_json, fix_llm_tag, fix_llm_text
 
 
 @pytest.mark.parametrize(
@@ -295,6 +295,33 @@ def test_generate_selected_image_ids_capped_at_3(client):
         )
     assert resp.status_code == 200
     assert len(captured["imgs"]) == 3
+
+
+def test_extract_json_repairs_missing_hashtag_quotes():
+    import json
+
+    broken = '[{"tags": ["#Good", #Bad", #AlsoBad"]}]'
+    data = json.loads(extract_json(broken))
+    assert data[0]["tags"] == ["#Good", "#Bad", "#AlsoBad"]
+
+
+def test_extract_json_repairs_first_item_missing_quote():
+    import json
+
+    broken = '[{"tags": [#OnlyOne"]}]'
+    assert json.loads(extract_json(broken))[0]["tags"] == ["#OnlyOne"]
+
+
+def test_extract_json_leaves_valid_json_unchanged():
+    valid = '[{"tags": ["#Good", "#AlsoGood"]}]'
+    assert extract_json(valid) == valid
+
+
+def test_extract_json_repairs_cyrillic_hashtags():
+    import json
+
+    broken = '["#Венера", #Биогород"]'
+    assert json.loads(extract_json(broken)) == ["#Венера", "#Биогород"]
 
 
 def test_generate_fallback_to_order_index_without_selected_ids(client):

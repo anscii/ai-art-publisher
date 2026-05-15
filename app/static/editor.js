@@ -612,8 +612,7 @@ function buildDescriptionsCard(series) {
         onclick: () => applyVariant(i),
       });
       btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
-      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:10px', text: v.provider }));
-      if (v.cost_usd > 0) btn.appendChild(h('span', { cls: 'opacity-50 ms-1', style: 'font-size:10px', text: '$' + v.cost_usd.toFixed(4) }));
+      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: v.model }));
       const delBtn = h('button', {
         cls: 'btn btn-xs btn-outline-danger px-1',
         title: 'Delete variant',
@@ -726,7 +725,7 @@ function buildGenerateCard(seriesId) {
   const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
   const provSel = document.createElement('select');
   provSel.className = 'form-select form-select-sm'; provSel.id = 'genProvider'; provSel.style.width = '120px';
-  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google']].forEach(([val, lbl]) => {
+  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek']].forEach(([val, lbl]) => {
     const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
   });
   const modelSel = document.createElement('select');

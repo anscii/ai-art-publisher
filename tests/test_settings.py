@@ -37,6 +37,26 @@ def test_per_provider_model_defaults(client):
     assert data["google_default_model"] == "gemini-2.5-flash"
 
 
+def test_deepseek_fields_present_in_settings(client):
+    data = client.get("/api/settings").json()
+    assert "deepseek_api_key" in data
+    assert "deepseek_default_model" in data
+    assert data["deepseek_api_key"] == ""
+    assert data["deepseek_default_model"] == ""
+
+
+def test_deepseek_api_key_masked(client):
+    client.put("/api/settings", json={"deepseek_api_key": "sk-deepseek-key"})
+    data = client.get("/api/settings").json()
+    assert data["deepseek_api_key"] == "****"
+
+
+def test_deepseek_default_model_update(client):
+    client.put("/api/settings", json={"deepseek_default_model": "deepseek-v4-flash"})
+    data = client.get("/api/settings").json()
+    assert data["deepseek_default_model"] == "deepseek-v4-flash"
+
+
 def test_partial_update_preserves_other_fields(client):
     client.put("/api/settings", json={"telegram_channel_id": "@mychannel"})
     client.put("/api/settings", json={"default_provider": "google"})
