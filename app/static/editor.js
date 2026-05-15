@@ -634,6 +634,8 @@ function buildDescriptionsCard(series) {
 
   const pubTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title', placeholder: 'Publication title (pre-fills new posts)' });
   pubTitle.value = series.title || '';
+  const pubTitleRu = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title_ru', placeholder: 'Publication title RU (pre-fills Telegram posts)' });
+  pubTitleRu.value = series.title_ru || '';
 
   const saveBtn = h('button', { cls: 'btn btn-sm btn-primary' });
   saveBtn.appendChild(icon('bi bi-floppy me-1'));
@@ -644,7 +646,8 @@ function buildDescriptionsCard(series) {
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
   const form = h('div', { cls: 'row g-2' },
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title (pre-fills posts)' }), pubTitle),
+    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title EN (pre-fills posts)' }), pubTitle),
+    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title RU (pre-fills Telegram posts)' }), pubTitleRu),
     mkField('Description EN (Instagram & FB Page)', descEn),
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram & FB Page tags', tagsIg),
@@ -669,6 +672,7 @@ function applyVariant(idx) {
   set('f_tags_ig', (v.tags_instagram || []).join(' '));
   set('f_tags_tg', (v.tags_telegram  || []).join(' '));
   if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
+  if (v.title_ru) { const t = document.getElementById('f_pub_title_ru'); if (t) t.value = v.title_ru; }
   const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
@@ -683,6 +687,7 @@ async function saveDescription(seriesId) {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, {
       name:           document.getElementById('editorTitle')?.value?.trim() || '',
       title:          document.getElementById('f_pub_title')?.value?.trim() || '',
+      title_ru:       document.getElementById('f_pub_title_ru')?.value?.trim() || '',
       description_en: document.getElementById('f_desc_en')?.value || '',
       description_ru: document.getElementById('f_desc_ru')?.value || '',
       tags_instagram: tagsIg,
@@ -1289,7 +1294,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
 
   // RU content fields
   const titleRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_title_ru', placeholder: 'Title (RU)' });
-  titleRuInput.value = series.title || '';
+  titleRuInput.value = series.title_ru || series.title || '';
   const descTgInput = h('textarea', { cls: 'form-control form-control-sm mb-1', id: 'pf_desc_tg', rows: '3', placeholder: 'Description (Telegram)' });
   descTgInput.value = series.description_ru || '';
   const tagsTgInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_tags_tg', placeholder: 'Tags (Telegram)' });

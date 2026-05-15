@@ -100,6 +100,7 @@ def generate_descriptions(
             provider=provider_name,
             model=model,
             title=vd.title,
+            title_ru=vd.title_ru,
             description_en=vd.description_en,
             description_ru=vd.description_ru,
             tags_instagram=json.dumps(vd.tags_instagram),

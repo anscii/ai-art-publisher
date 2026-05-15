@@ -35,7 +35,8 @@ WHAT TO AVOID:
 - Prose that performs depth without containing any
 
 Generate 3 variants differing radically in approach, tone, and implied genre — not just topic:
-- title: 3-6 words, specific and strange, not generic
+- title: 3-6 words, specific and strange, not generic (English)
+- title_ru: 3-6 words in Russian — not a translation, a parallel take with its own texture
 - description_en: 2-4 sentences for Instagram. A fragment of a world, not a caption for an image.
 - description_ru: for Telegram, friends who also read a lot. Conversational but sharp. Different angle from the English if possible — not a translation, a parallel take.
 - tags_instagram: up to 5 English hashtags (array of strings with #)
@@ -99,6 +100,7 @@ def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
 @dataclass
 class AIVariantData:
     title: str
+    title_ru: str
     description_en: str
     description_ru: str
     tags_instagram: list[str] = field(default_factory=list)
@@ -109,6 +111,7 @@ class AIVariantData:
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
+        self.title_ru = fix_llm_text(self.title_ru)
         self.description_en = fix_llm_text(self.description_en)
         self.description_ru = fix_llm_text(self.description_ru)
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]

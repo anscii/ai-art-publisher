@@ -122,6 +122,7 @@ class AIVariantResponse(BaseModel):
     provider: str
     model: str
     title: str
+    title_ru: str = ""
     description_en: str
     description_ru: str
     tags_instagram: list[str]
@@ -205,6 +206,7 @@ class SeriesCreate(BaseModel):
 class SeriesUpdate(BaseModel):
     name: str | None = None
     title: str | None = None
+    title_ru: str | None = None
     description_en: str | None = None
     description_ru: str | None = None
     tags_instagram: list[str] | None = None
@@ -247,6 +249,7 @@ class SeriesDetail(BaseModel):
     original_folder_name: str | None
     name: str
     title: str
+    title_ru: str = ""
     description_en: str
     description_ru: str
     tags_instagram: list[str]
