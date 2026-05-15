@@ -115,12 +115,6 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
     elif post.platform == "instagram":
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
-        if result.get("ok") and settings.facebook_page_id:
-            fb = _do_facebook(post, settings)
-            if not fb.get("ok") and not fb.get("skipped"):
-                logger.warning(
-                    "Facebook cross-post failed for post=%s: %s", post.id, fb.get("description")
-                )
     elif post.platform == "facebook":
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")

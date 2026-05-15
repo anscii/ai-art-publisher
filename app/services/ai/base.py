@@ -1,6 +1,9 @@
+import json
+import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Any
 
 SYSTEM_PROMPT = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
 
@@ -32,7 +35,8 @@ WHAT TO AVOID:
 - Prose that performs depth without containing any
 
 Generate 3 variants differing radically in approach, tone, and implied genre — not just topic:
-- title: 3-6 words, specific and strange, not generic
+- title: 3-6 words, specific and strange, not generic (English)
+- title_ru: 3-6 words in Russian — not a translation, a parallel take with its own texture
 - description_en: 2-4 sentences for Instagram. A fragment of a world, not a caption for an image.
 - description_ru: for Telegram, friends who also read a lot. Conversational but sharp. Different angle from the English if possible — not a translation, a parallel take.
 - tags_instagram: up to 5 English hashtags (array of strings with #)
@@ -41,6 +45,7 @@ Generate 3 variants differing radically in approach, tone, and implied genre —
 Respond ONLY with valid JSON array of 3 objects. No markdown, no preamble."""
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+_logger = logging.getLogger(__name__)
 
 
 def build_user_text(images_b64: list[str], hint: str | None) -> str:
@@ -67,12 +72,35 @@ def extract_json(text: str) -> str:
     """Strip markdown code fences that models sometimes add despite instructions."""
     text = text.strip()
     m = _FENCE_RE.search(text)
-    return m.group(1).strip() if m else text
+    text = m.group(1).strip() if m else text
+    # DeepSeek sometimes emits unquoted hashtags: , #Tag" → , "#Tag"
+    if "#" in text:
+        text = re.sub(
+            r'([,\[]\s*)#([^",\[\]\n]+)"',
+            lambda match: match.group(1) + '"#' + match.group(2) + '"',
+            text,
+        )
+    return text
+
+
+def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
+    try:
+        return json.loads(extract_json(text))  # type: ignore[no-any-return]
+    except Exception as exc:
+        _logger.warning(
+            "json parse failed | provider=%s | model=%s | error=%s | text=%s",
+            provider,
+            model,
+            exc,
+            text,
+        )
+        raise
 
 
 @dataclass
 class AIVariantData:
     title: str
+    title_ru: str
     description_en: str
     description_ru: str
     tags_instagram: list[str] = field(default_factory=list)
@@ -83,6 +111,7 @@ class AIVariantData:
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
+        self.title_ru = fix_llm_text(self.title_ru)
         self.description_en = fix_llm_text(self.description_en)
         self.description_ru = fix_llm_text(self.description_ru)
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]

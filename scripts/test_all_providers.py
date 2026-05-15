@@ -242,7 +242,7 @@ def main() -> None:
                     f"${variants[0].cost_usd:.4f}" if variants and variants[0].cost_usd else ""
                 )
                 if cost_str:
-                    print(f"        cost: {cost_str}", end=" ")
+                    print(f" cost: {cost_str}", end=" ")
                 for v in variants:
                     rows.append(
                         {

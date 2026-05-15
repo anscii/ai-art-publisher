@@ -8,6 +8,7 @@ class FakeAIProvider(AIProvider):
         return [
             AIVariantData(
                 title=f"Fake Title {i + 1}",
+                title_ru=f"Фейковый заголовок {i + 1}",
                 description_en=f"Fake English description {i + 1}.",
                 description_ru=f"Фейковое описание {i + 1}.",
                 tags_instagram=["#fake", "#test"],

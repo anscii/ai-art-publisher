@@ -36,6 +36,10 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
         from app.services.ai.google import GoogleProvider
 
         return GoogleProvider(api_key)
+    elif provider_name == "deepseek":
+        from app.services.ai.deepseek import DeepSeekProvider
+
+        return DeepSeekProvider(api_key)
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
@@ -44,6 +48,7 @@ def _get_api_key(settings, provider: str) -> str:
         "anthropic": settings.anthropic_api_key,
         "openai": settings.openai_api_key,
         "google": settings.google_api_key,
+        "deepseek": settings.deepseek_api_key,
     }.get(provider, "")
 
 
@@ -95,6 +100,7 @@ def generate_descriptions(
             provider=provider_name,
             model=model,
             title=vd.title,
+            title_ru=vd.title_ru,
             description_en=vd.description_en,
             description_ru=vd.description_ru,
             tags_instagram=json.dumps(vd.tags_instagram),
@@ -113,6 +119,8 @@ def delete_variant(variant_id: str, db: Session = Depends(get_db)):
     if not v:
         raise HTTPException(status_code=404, detail="Variant not found")
     series = v.series
+    if series.chosen_variant_id == variant_id:
+        series.chosen_variant_id = None
     db.delete(v)
     db.commit()
     return series_to_detail(series, db)

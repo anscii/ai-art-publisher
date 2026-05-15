@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ai.base import AIVariantData, fix_llm_tag, fix_llm_text
+from app.services.ai.base import AIVariantData, extract_json, fix_llm_tag, fix_llm_text
 
 
 @pytest.mark.parametrize(
@@ -36,12 +36,14 @@ def test_fix_llm_tag(inp, expected):
 def test_ai_variant_data_normalises_on_construction():
     vd = AIVariantData(
         title="The End—A Beginning",
+        title_ru="Конец—Начало",
         description_en="Something—wicked.",
         description_ru="Нечто—страшное.",
         tags_instagram=["#dark-fantasy", "#space opera"],
         tags_telegram=["#тёмное фэнтези"],
     )
     assert vd.title == "The End — A Beginning"
+    assert vd.title_ru == "Конец — Начало"
     assert vd.description_en == "Something — wicked."
     assert vd.description_ru == "Нечто — страшное."
     assert vd.tags_instagram == ["#dark_fantasy", "#space_opera", "#aiart"]
@@ -51,6 +53,7 @@ def test_ai_variant_data_normalises_on_construction():
 def test_aiart_tag_not_duplicated():
     vd = AIVariantData(
         title="T",
+        title_ru="Т",
         description_en="E",
         description_ru="R",
         tags_instagram=["#aiart", "#dark-fantasy"],
@@ -62,6 +65,7 @@ def test_aiart_tag_not_duplicated():
 _FAKE = [
     AIVariantData(
         title="Dragon Forest",
+        title_ru="Лес драконов",
         description_en="A mystical forest...",
         description_ru="Мистический лес...",
         tags_instagram=["#art", "#dragon"],
@@ -117,6 +121,7 @@ def test_generate_creates_variants(client):
     assert resp.status_code == 200
     assert len(resp.json()) == 3
     assert resp.json()[0]["title"] == "Dragon Forest"
+    assert resp.json()[0]["title_ru"] == "Лес драконов"
 
 
 def test_generate_appends_not_replaces(client):
@@ -295,6 +300,33 @@ def test_generate_selected_image_ids_capped_at_3(client):
         )
     assert resp.status_code == 200
     assert len(captured["imgs"]) == 3
+
+
+def test_extract_json_repairs_missing_hashtag_quotes():
+    import json
+
+    broken = '[{"tags": ["#Good", #Bad", #AlsoBad"]}]'
+    data = json.loads(extract_json(broken))
+    assert data[0]["tags"] == ["#Good", "#Bad", "#AlsoBad"]
+
+
+def test_extract_json_repairs_first_item_missing_quote():
+    import json
+
+    broken = '[{"tags": [#OnlyOne"]}]'
+    assert json.loads(extract_json(broken))[0]["tags"] == ["#OnlyOne"]
+
+
+def test_extract_json_leaves_valid_json_unchanged():
+    valid = '[{"tags": ["#Good", "#AlsoGood"]}]'
+    assert extract_json(valid) == valid
+
+
+def test_extract_json_repairs_cyrillic_hashtags():
+    import json
+
+    broken = '["#Венера", #Биогород"]'
+    assert json.loads(extract_json(broken)) == ["#Венера", "#Биогород"]
 
 
 def test_generate_fallback_to_order_index_without_selected_ids(client):

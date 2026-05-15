@@ -11,10 +11,12 @@ class SettingsResponse(BaseModel):
     anthropic_api_key: str
     openai_api_key: str
     google_api_key: str
+    deepseek_api_key: str
     default_provider: str
     anthropic_default_model: str
     openai_default_model: str
     google_default_model: str
+    deepseek_default_model: str
     telegram_bot_token: str
     telegram_channel_id: str
     instagram_access_token: str
@@ -32,10 +34,12 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     google_api_key: str | None = None
+    deepseek_api_key: str | None = None
     default_provider: str | None = None
     anthropic_default_model: str | None = None
     openai_default_model: str | None = None
     google_default_model: str | None = None
+    deepseek_default_model: str | None = None
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
     instagram_access_token: str | None = None
@@ -112,12 +116,24 @@ class SaveQueueBody(BaseModel):
 # ── AI Variants ───────────────────────────────────────────────────────────────
 
 
+class AIProviderModelStat(BaseModel):
+    provider: str
+    model: str
+    count: int
+
+
+class AIStatsResponse(BaseModel):
+    generated: list[AIProviderModelStat]
+    chosen: list[AIProviderModelStat]
+
+
 class AIVariantResponse(BaseModel):
     id: str
     series_id: str
     provider: str
     model: str
     title: str
+    title_ru: str = ""
     description_en: str
     description_ru: str
     tags_instagram: list[str]
@@ -201,6 +217,7 @@ class SeriesCreate(BaseModel):
 class SeriesUpdate(BaseModel):
     name: str | None = None
     title: str | None = None
+    title_ru: str | None = None
     description_en: str | None = None
     description_ru: str | None = None
     tags_instagram: list[str] | None = None
@@ -208,6 +225,7 @@ class SeriesUpdate(BaseModel):
     status: str | None = None
     collection_id: str | None = None
     collection_number: str | None = None
+    chosen_variant_id: str | None = None
 
 
 class CollectionRef(BaseModel):
@@ -243,6 +261,7 @@ class SeriesDetail(BaseModel):
     original_folder_name: str | None
     name: str
     title: str
+    title_ru: str = ""
     description_en: str
     description_ru: str
     tags_instagram: list[str]

@@ -1,17 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AppSettings
-from app.schemas import SettingsUpdate
+from app.models import AIVariant, AppSettings, Series
+from app.schemas import AIProviderModelStat, AIStatsResponse, SettingsUpdate
 from app.services.ai.catalogue import PROVIDER_MODELS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 _SECRET_FIELDS = {
     "anthropic_api_key",
     "openai_api_key",
     "google_api_key",
+    "deepseek_api_key",
     "telegram_bot_token",
     "instagram_access_token",
     "facebook_page_access_token",
@@ -70,6 +73,7 @@ def test_connection(service: str, db: Session = Depends(get_db)):
         "anthropic": lambda: _test_anthropic(s.anthropic_api_key),
         "openai": lambda: _test_openai(s.openai_api_key),
         "google": lambda: _test_google(s.google_api_key),
+        "deepseek": lambda: _test_deepseek(s.deepseek_api_key),
         "r2": lambda: _test_r2(s),
     }
     if service not in handlers:
@@ -146,16 +150,23 @@ def _test_anthropic(key: str) -> dict:
         return {"ok": False, "message": str(e)}
 
 
-def _test_openai(key: str) -> dict:
+def _test_openai_compatible(key: str, base_url: str | None = None) -> dict:
     if not key:
         return {"ok": False, "message": "API key not configured"}
     try:
         import openai
 
-        openai.OpenAI(api_key=key).models.list()
+        if base_url:
+            openai.OpenAI(api_key=key, base_url=base_url).models.list()
+        else:
+            openai.OpenAI(api_key=key).models.list()
         return {"ok": True, "message": "Connected"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+def _test_openai(key: str) -> dict:
+    return _test_openai_compatible(key)
 
 
 def _test_google(key: str) -> dict:
@@ -169,6 +180,37 @@ def _test_google(key: str) -> dict:
         return {"ok": True, "message": "Connected"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+def _test_deepseek(key: str) -> dict:
+    return _test_openai_compatible(key, base_url="https://api.deepseek.com")
+
+
+@stats_router.get("/ai", response_model=AIStatsResponse)
+def get_ai_stats(db: Session = Depends(get_db)):
+    generated = (
+        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        .group_by(AIVariant.provider, AIVariant.model)
+        .order_by(func.count().desc())
+        .all()
+    )
+    chosen = (
+        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        .join(Series, Series.chosen_variant_id == AIVariant.id)
+        .group_by(AIVariant.provider, AIVariant.model)
+        .order_by(func.count().desc())
+        .all()
+    )
+    return AIStatsResponse(
+        generated=[
+            AIProviderModelStat(provider=provider, model=model, count=count)
+            for provider, model, count in generated
+        ],
+        chosen=[
+            AIProviderModelStat(provider=provider, model=model, count=count)
+            for provider, model, count in chosen
+        ],
+    )
 
 
 def _test_r2(s: AppSettings) -> dict:
