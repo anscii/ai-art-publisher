@@ -98,6 +98,7 @@ def robots():
 
 
 app.include_router(settings_router.router)
+app.include_router(settings_router.stats_router)
 app.include_router(collections_router.router)
 app.include_router(series_router.router)
 app.include_router(images_router.router)

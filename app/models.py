@@ -41,6 +41,7 @@ class Series(Base):
     )
     collection_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     collection_number: Mapped[str | None] = mapped_column(String, nullable=True)
+    chosen_variant_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

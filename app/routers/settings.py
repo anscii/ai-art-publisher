@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AppSettings
-from app.schemas import SettingsUpdate
+from app.models import AIVariant, AppSettings, Series
+from app.schemas import AIProviderModelStat, AIStatsResponse, SettingsUpdate
 from app.services.ai.catalogue import PROVIDER_MODELS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 _SECRET_FIELDS = {
     "anthropic_api_key",
@@ -182,6 +184,33 @@ def _test_google(key: str) -> dict:
 
 def _test_deepseek(key: str) -> dict:
     return _test_openai_compatible(key, base_url="https://api.deepseek.com")
+
+
+@stats_router.get("/ai", response_model=AIStatsResponse)
+def get_ai_stats(db: Session = Depends(get_db)):
+    generated = (
+        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        .group_by(AIVariant.provider, AIVariant.model)
+        .order_by(func.count().desc())
+        .all()
+    )
+    chosen = (
+        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        .join(Series, Series.chosen_variant_id == AIVariant.id)
+        .group_by(AIVariant.provider, AIVariant.model)
+        .order_by(func.count().desc())
+        .all()
+    )
+    return AIStatsResponse(
+        generated=[
+            AIProviderModelStat(provider=provider, model=model, count=count)
+            for provider, model, count in generated
+        ],
+        chosen=[
+            AIProviderModelStat(provider=provider, model=model, count=count)
+            for provider, model, count in chosen
+        ],
+    )
 
 
 def _test_r2(s: AppSettings) -> dict:
