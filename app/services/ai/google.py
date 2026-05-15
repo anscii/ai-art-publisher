@@ -49,7 +49,7 @@ class GoogleProvider(AIProvider):
         )
         logger.debug("google response | model=%s | text=%s", model, resp.text)
         raw = parse_ai_response(resp.text, "google", model)
-        variants = [AIVariantData(**v) for v in raw]
+        variants = [AIVariantData.from_llm_dict(v) for v in raw]
         u = resp.usage_metadata
         attach_usage(
             variants,

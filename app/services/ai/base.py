@@ -34,12 +34,58 @@ WHAT TO AVOID:
 - Moral lessons and uplifting endings
 - Prose that performs depth without containing any
 
-Generate 3 variants differing radically in approach, tone, and implied genre — not just topic:
+DISCOVERY / ARCHIVE LAYER:
+
+Additionally generate a semantic metadata layer intended for:
+- Instagram discoverability
+- Pinterest SEO
+- archive-like world classification
+
+This layer should NOT sound like marketing copy, influencer language,
+or generic SEO spam.
+
+Instead, it should feel like:
+- archivist taxonomy
+- aesthetic classification
+- genre indexing
+- future library metadata
+- forbidden catalog systems
+- research tags from an impossible institution
+
+Good examples:
+- dream archaeology
+- fungal megastructures
+- posthuman pilgrimage routes
+- unstable cartography
+- cosmic bureaucracy
+- bioluminescent ruins
+- ritual astronomy
+- abandoned orbital gardens
+
+Avoid generic phrases like:
+- amazing fantasy art
+- beautiful sci-fi world
+- stunning digital artwork
+- epic AI art
+
+Generate 3 variants differing radically in approach, tone, and implied genre — not just topic.
+Each variant must be a JSON object with these exact keys:
+
 - title: 3-6 words, specific and strange, not generic (English)
-- title_ru: 3-6 words in Russian — not a translation, a parallel take with its own texture
-- description_en: 2-4 sentences for Instagram. A fragment of a world, not a caption for an image.
-- description_ru: for Telegram, friends who also read a lot. Conversational but sharp. Different angle from the English if possible — not a translation, a parallel take.
-- tags_instagram: up to 5 English hashtags (array of strings with #)
+- title_ru: 3-6 words in Russian — not a translation, a parallel take
+- description_en: 2-4 sentences for Instagram. A fragment of a world.
+- description_ru: for Telegram, friends who read a lot. Conversational but sharp.
+- instagram:
+    seo: short atmospheric semantic phrase layer, 3-8 fragments separated by •
+    tags: up to 5 English hashtags (array of strings with #) mixing discoverability + strange in-world taxonomy
+- pinterest:
+    title: concrete searchable visual title, 5-12 words
+    description: 1-2 sentences optimized for Pinterest search while preserving atmosphere
+    board: one best-fit board/category (string)
+- archive_classification:
+    world_keywords: 3-8 worldbuilding concepts (array of strings)
+    visual_keywords: 3-8 visual/aesthetic descriptors (array of strings)
+    mood_keywords: 3-8 emotional or atmospheric descriptors (array of strings)
 - tags_telegram: up to 3 Russian hashtags (array of strings with #)
 
 Respond ONLY with valid JSON array of 3 objects. No markdown, no preamble."""
@@ -54,7 +100,7 @@ def build_user_text(images_b64: list[str], hint: str | None) -> str:
         if hint:
             text += f" Additional context: {hint}"
     else:
-        text = f"Generate descriptions for this artwork series. Artwork description: {hint}"
+        text = f"Generate narrative fragments and archive metadata for this artwork series.\n\nArtwork description: {hint}"
     return text
 
 
@@ -108,6 +154,11 @@ class AIVariantData:
     cost_usd: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
+    instagram_seo: str = ""
+    pinterest_title: str = ""
+    pinterest_description: str = ""
+    pinterest_board: str = ""
+    archive_metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
@@ -118,6 +169,29 @@ class AIVariantData:
         if "#aiart" not in self.tags_instagram:
             self.tags_instagram.append("#aiart")
         self.tags_telegram = [fix_llm_tag(t) for t in self.tags_telegram]
+
+    @classmethod
+    def from_llm_dict(cls, d: dict) -> "AIVariantData":
+        ig = d.get("instagram") or {}
+        pin = d.get("pinterest") or {}
+        arch = d.get("archive_classification") or {}
+        return cls(
+            title=d.get("title", ""),
+            title_ru=d.get("title_ru", ""),
+            description_en=d.get("description_en", ""),
+            description_ru=d.get("description_ru", ""),
+            tags_instagram=ig.get("tags") or [],
+            tags_telegram=d.get("tags_telegram") or [],
+            instagram_seo=ig.get("seo", ""),
+            pinterest_title=pin.get("title", ""),
+            pinterest_description=pin.get("description", ""),
+            pinterest_board=pin.get("board", ""),
+            archive_metadata={
+                "world_keywords": arch.get("world_keywords") or [],
+                "visual_keywords": arch.get("visual_keywords") or [],
+                "mood_keywords": arch.get("mood_keywords") or [],
+            },
+        )
 
 
 def attach_usage(

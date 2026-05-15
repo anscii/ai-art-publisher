@@ -55,6 +55,11 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
         hint=v.hint,
         cost_usd=v.cost_usd,
         generated_at=v.generated_at,
+        instagram_seo=v.instagram_seo,
+        pinterest_title=v.pinterest_title,
+        pinterest_description=v.pinterest_description,
+        pinterest_board=v.pinterest_board,
+        archive_metadata=json.loads(v.archive_metadata) if v.archive_metadata else None,
     )
 
 

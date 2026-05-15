@@ -638,6 +638,21 @@ function buildDescriptionsCard(series) {
   const pubTitleRu = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title_ru', placeholder: 'Publication title RU (pre-fills Telegram posts)' });
   pubTitleRu.value = series.title_ru || '';
 
+  const igSeo = h('textarea', { cls: 'form-control form-control-sm', id: 'f_instagram_seo', rows: '2' });
+  igSeo.value = '';
+  const pinTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_title' });
+  pinTitle.value = '';
+  const pinDesc = h('textarea', { cls: 'form-control form-control-sm', id: 'f_pin_desc', rows: '2' });
+  pinDesc.value = '';
+  const pinBoard = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_board' });
+  pinBoard.value = '';
+  const archWorld = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_world', placeholder: 'comma-separated' });
+  archWorld.value = '';
+  const archVisual = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_visual', placeholder: 'comma-separated' });
+  archVisual.value = '';
+  const archMood = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_mood', placeholder: 'comma-separated' });
+  archMood.value = '';
+
   const saveBtn = h('button', { cls: 'btn btn-sm btn-primary' });
   saveBtn.appendChild(icon('bi bi-floppy me-1'));
   saveBtn.appendChild(document.createTextNode('Save'));
@@ -660,13 +675,29 @@ function buildDescriptionsCard(series) {
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
     h('div', { cls: 'col-12' }, saveBtn, resetBtn));
 
+  const semDetails = document.createElement('details');
+  semDetails.className = 'mt-2';
+  const semSummary = document.createElement('summary');
+  semSummary.className = 'small text-muted';
+  semSummary.textContent = 'Semantic Layer';
+  semDetails.appendChild(semSummary);
+  const semGrid = h('div', { cls: 'row g-2 mt-1' },
+    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Instagram discovery' }), igSeo),
+    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest title' }), pinTitle),
+    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }), pinBoard),
+    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
+    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: world keywords' }), archWorld),
+    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: visual keywords' }), archVisual),
+    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));
+  semDetails.appendChild(semGrid);
+
   const headerLabel = h('span', { cls: 'small fw-medium' });
   headerLabel.appendChild(icon('bi bi-card-text me-1'));
   headerLabel.appendChild(document.createTextNode('Descriptions'));
 
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header py-2' }, headerLabel),
-    h('div', { cls: 'card-body p-2' }, variantBtns, form));
+    h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
 }
 
 function resetToSaved() {
@@ -679,6 +710,14 @@ function resetToSaved() {
   set('f_desc_ru',      s.description_ru);
   set('f_tags_ig',      (s.tags_instagram || []).join(' '));
   set('f_tags_tg',      (s.tags_telegram  || []).join(' '));
+  set('f_instagram_seo', '');
+  set('f_pin_title', '');
+  set('f_pin_desc', '');
+  set('f_pin_board', '');
+  set('f_arch_world', '');
+  set('f_arch_visual', '');
+  set('f_arch_mood', '');
+  App.activeVariantId = null;
   document.querySelectorAll('[data-variant-idx]').forEach(btn => {
     btn.classList.remove('btn-primary');
     btn.classList.add('btn-outline-secondary');
@@ -696,6 +735,14 @@ function applyVariant(idx) {
   if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
   if (v.title_ru) { const t = document.getElementById('f_pub_title_ru'); if (t) t.value = v.title_ru; }
   const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
+  set('f_instagram_seo', v.instagram_seo || '');
+  set('f_pin_title', v.pinterest_title || '');
+  set('f_pin_desc', v.pinterest_description || '');
+  set('f_pin_board', v.pinterest_board || '');
+  const arch = v.archive_metadata || {};
+  set('f_arch_world', (arch.world_keywords || []).join(', '));
+  set('f_arch_visual', (arch.visual_keywords || []).join(', '));
+  set('f_arch_mood', (arch.mood_keywords || []).join(', '));
   App.activeVariantId = v.id;
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
@@ -724,6 +771,20 @@ async function saveDescription(seriesId) {
     if (t) t.value = updated.name || updated.title || '';
     localStorage.removeItem('draft_' + seriesId);
     showToast('Saved', 'success');
+    if (App.activeVariantId) {
+      const splitTrim = s => s.split(',').map(x => x.trim()).filter(Boolean);
+      await apiFetch('PATCH', '/api/ai_variants/' + App.activeVariantId, {
+        instagram_seo: document.getElementById('f_instagram_seo')?.value || '',
+        pinterest_title: document.getElementById('f_pin_title')?.value || '',
+        pinterest_description: document.getElementById('f_pin_desc')?.value || '',
+        pinterest_board: document.getElementById('f_pin_board')?.value || '',
+        archive_metadata: {
+          world_keywords: splitTrim(document.getElementById('f_arch_world')?.value || ''),
+          visual_keywords: splitTrim(document.getElementById('f_arch_visual')?.value || ''),
+          mood_keywords: splitTrim(document.getElementById('f_arch_mood')?.value || ''),
+        },
+      });
+    }
   } catch (e) { showToast(e.message, 'danger'); }
 }
 

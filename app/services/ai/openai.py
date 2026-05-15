@@ -56,7 +56,7 @@ class OpenAIProvider(AIProvider):
         assert text is not None
         logger.debug("openai response | model=%s | text=%s", model, text)
         raw = parse_ai_response(text, "openai", model)
-        variants = [AIVariantData(**v) for v in raw]
+        variants = [AIVariantData.from_llm_dict(v) for v in raw]
         assert resp.usage is not None
         attach_usage(
             variants,

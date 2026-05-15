@@ -348,3 +348,93 @@ def test_generate_fallback_to_order_index_without_selected_ids(client):
         resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
     assert resp.status_code == 200
     assert len(captured["imgs"]) == 2
+
+
+# ── Semantic metadata ─────────────────────────────────────────────────────────
+
+_FAKE_SEMANTIC = [
+    AIVariantData(
+        title="Dragon Forest",
+        title_ru="Лес драконов",
+        description_en="A mystical forest...",
+        description_ru="Мистический лес...",
+        tags_instagram=["#art", "#dragon"],
+        tags_telegram=["#арт"],
+        instagram_seo="dream archaeology • test ruins",
+        pinterest_title="Fantasy Dragon Forest Art",
+        pinterest_description="Dreamlike fantasy art.",
+        pinterest_board="Dark Fantasy Art",
+        archive_metadata={
+            "world_keywords": ["dragons", "forests"],
+            "visual_keywords": ["dark", "mystical"],
+            "mood_keywords": ["melancholy"],
+        },
+    )
+] * 3
+
+
+def test_generate_response_includes_semantic_fields(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_SEMANTIC)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "dragons"})
+    assert resp.status_code == 200
+    v = resp.json()[0]
+    assert v["instagram_seo"] == "dream archaeology • test ruins"
+    assert v["pinterest_title"] == "Fantasy Dragon Forest Art"
+    assert v["pinterest_board"] == "Dark Fantasy Art"
+    assert v["archive_metadata"] == {
+        "world_keywords": ["dragons", "forests"],
+        "visual_keywords": ["dark", "mystical"],
+        "mood_keywords": ["melancholy"],
+    }
+
+
+def test_patch_variant_semantic_fields(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        variants = client.post(f"/api/series/{sid}/generate", json={"hint": "test"}).json()
+    vid = variants[0]["id"]
+    resp = client.patch(
+        f"/api/ai_variants/{vid}",
+        json={
+            "instagram_seo": "updated seo • value",
+            "pinterest_title": "Updated Pinterest Title",
+            "pinterest_board": "Updated Board",
+        },
+    )
+    assert resp.status_code == 200
+    # response is the full SeriesDetail
+    updated_variant = next(v for v in resp.json()["ai_variants"] if v["id"] == vid)
+    assert updated_variant["instagram_seo"] == "updated seo • value"
+    assert updated_variant["pinterest_title"] == "Updated Pinterest Title"
+    assert updated_variant["pinterest_board"] == "Updated Board"
+
+
+def test_patch_variant_partial_update_preserves_other_fields(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_SEMANTIC)
+        mp.return_value = p
+        variants = client.post(f"/api/series/{sid}/generate", json={"hint": "test"}).json()
+    vid = variants[0]["id"]
+    # patch only instagram_seo — other fields should remain
+    client.patch(f"/api/ai_variants/{vid}", json={"instagram_seo": "only this changed"})
+    resp = client.get(f"/api/series/{sid}")
+    updated_variant = next(v for v in resp.json()["ai_variants"] if v["id"] == vid)
+    assert updated_variant["instagram_seo"] == "only this changed"
+    assert updated_variant["pinterest_title"] == "Fantasy Dragon Forest Art"
+
+
+def test_patch_variant_not_found(client):
+    resp = client.patch("/api/ai_variants/nonexistent", json={"instagram_seo": "x"})
+    assert resp.status_code == 404

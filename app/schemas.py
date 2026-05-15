@@ -127,6 +127,14 @@ class AIStatsResponse(BaseModel):
     chosen: list[AIProviderModelStat]
 
 
+class AIVariantSemanticUpdate(BaseModel):
+    instagram_seo: str | None = None
+    pinterest_title: str | None = None
+    pinterest_description: str | None = None
+    pinterest_board: str | None = None
+    archive_metadata: dict | None = None
+
+
 class AIVariantResponse(BaseModel):
     id: str
     series_id: str
@@ -141,6 +149,11 @@ class AIVariantResponse(BaseModel):
     hint: str | None = None
     cost_usd: float = 0.0
     generated_at: datetime
+    instagram_seo: str | None = None
+    pinterest_title: str | None = None
+    pinterest_description: str | None = None
+    pinterest_board: str | None = None
+    archive_metadata: dict | None = None
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -163,6 +176,7 @@ class PostResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     image_ids: list[str]
+    seo: str | None = None
 
 
 class PostCreate(BaseModel):
