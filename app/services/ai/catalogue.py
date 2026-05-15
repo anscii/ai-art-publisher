@@ -3,10 +3,10 @@ PROVIDER_MODEL_PRICING: dict[str, tuple[float, float]] = {
     "claude-opus-4-7": (5.00, 25.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-haiku-4-5-20251001": (1.00, 5.00),
+    "deepseek-v4-flash": (0.14, 0.28),
+    "gpt-5.5": (5.00, 30.00),
     "gpt-5.4": (2.50, 15.00),
     "gpt-5.4-mini": (0.75, 4.50),
-    "gpt-4o": (2.50, 10.00),
-    "gpt-4o-mini": (0.15, 0.60),
     "gemini-2.5-flash": (0.30, 2.50),
     "gemini-2.5-flash-lite": (0.10, 0.40),
     "gemini-3.1-flash-lite": (0.25, 1.50),
@@ -26,11 +26,13 @@ PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
         {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6 — balanced"},
         {"id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5 — fast"},
     ],
+    "deepseek": [
+        {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash — fast"},
+    ],
     "openai": [
-        {"id": "gpt-5.4", "label": "GPT-5.4 — most capable"},
+        {"id": "gpt-5.5", "label": "GPT-5.5 — most capable"},
+        {"id": "gpt-5.4", "label": "GPT-5.4 — capable"},
         {"id": "gpt-5.4-mini", "label": "GPT-5.4 mini — balanced"},
-        {"id": "gpt-4o", "label": "GPT-4o — capable"},
-        {"id": "gpt-4o-mini", "label": "GPT-4o mini — fast/cheap"},
     ],
     "google": [
         {"id": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite — fast"},
@@ -45,4 +47,5 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-6",
     "openai": "gpt-5.4-mini",
     "google": "gemini-2.5-flash",
+    "deepseek": "deepseek-v4-flash",
 }

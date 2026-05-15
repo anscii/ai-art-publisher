@@ -1,6 +1,6 @@
 import base64
 import io
-import json
+import logging
 from typing import Any
 
 import google.generativeai as genai
@@ -11,9 +11,11 @@ from app.services.ai.base import (
     AIVariantData,
     attach_usage,
     build_user_text,
-    extract_json,
+    parse_ai_response,
 )
 from app.services.ai.catalogue import calc_cost
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleProvider(AIProvider):
@@ -32,8 +34,21 @@ class GoogleProvider(AIProvider):
         parts.append(build_user_text(images_b64, hint))
 
         m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
-        resp = m.generate_content(parts)
-        raw = json.loads(extract_json(resp.text))
+        logger.debug(
+            "google request | model=%s | parts(count)=%d | text=%s",
+            model,
+            len(parts),
+            parts[-1] if parts else "",
+        )
+        resp = m.generate_content(
+            parts,
+            generation_config={
+                "temperature": 1.0,
+                "top_p": 0.95,
+            },
+        )
+        logger.debug("google response | model=%s | text=%s", model, resp.text)
+        raw = parse_ai_response(resp.text, "google", model)
         variants = [AIVariantData(**v) for v in raw]
         u = resp.usage_metadata
         attach_usage(

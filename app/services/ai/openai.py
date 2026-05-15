@@ -1,4 +1,4 @@
-import json
+import logging
 from typing import Any
 
 import openai as _openai
@@ -9,21 +9,26 @@ from app.services.ai.base import (
     AIVariantData,
     attach_usage,
     build_user_text,
-    extract_json,
+    parse_ai_response,
 )
 from app.services.ai.catalogue import calc_cost
 
-_MAX_COMPLETION_TOKEN_MODELS = frozenset({"gpt-5.4", "gpt-5.4-mini"})
+logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider(AIProvider):
     def __init__(self, api_key: str):
         self._client = _openai.OpenAI(api_key=api_key)
 
+    def _call_api(self, model: str, messages: list[Any]) -> Any:
+        return self._client.chat.completions.create(
+            model=model, messages=messages, max_completion_tokens=2048, temperature=1.0
+        )
+
     def generate_variants(
         self, images_b64: list[str], model: str, hint: str | None = None
     ) -> list[AIVariantData]:
-        content = []
+        content: list[Any] = []
         for b64 in images_b64[:4]:
             content.append(
                 {
@@ -38,17 +43,19 @@ class OpenAIProvider(AIProvider):
             {"role": "user", "content": content},
         ]
 
-        if model in _MAX_COMPLETION_TOKEN_MODELS:
-            resp = self._client.chat.completions.create(
-                model=model, messages=messages, max_completion_tokens=2048
+        if logger.isEnabledFor(logging.DEBUG):
+            import json
+
+            logger.debug(
+                "openai request | model=%s | messages=%s",
+                model,
+                json.dumps(messages, ensure_ascii=False),
             )
-        else:
-            resp = self._client.chat.completions.create(
-                model=model, messages=messages, max_tokens=2048
-            )
+        resp = self._call_api(model, messages)
         text = resp.choices[0].message.content
         assert text is not None
-        raw = json.loads(extract_json(text))
+        logger.debug("openai response | model=%s | text=%s", model, text)
+        raw = parse_ai_response(text, "openai", model)
         variants = [AIVariantData(**v) for v in raw]
         assert resp.usage is not None
         attach_usage(

@@ -36,6 +36,10 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
         from app.services.ai.google import GoogleProvider
 
         return GoogleProvider(api_key)
+    elif provider_name == "deepseek":
+        from app.services.ai.deepseek import DeepSeekProvider
+
+        return DeepSeekProvider(api_key)
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
@@ -44,6 +48,7 @@ def _get_api_key(settings, provider: str) -> str:
         "anthropic": settings.anthropic_api_key,
         "openai": settings.openai_api_key,
         "google": settings.google_api_key,
+        "deepseek": settings.deepseek_api_key,
     }.get(provider, "")
 
 

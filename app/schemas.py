@@ -11,10 +11,12 @@ class SettingsResponse(BaseModel):
     anthropic_api_key: str
     openai_api_key: str
     google_api_key: str
+    deepseek_api_key: str
     default_provider: str
     anthropic_default_model: str
     openai_default_model: str
     google_default_model: str
+    deepseek_default_model: str
     telegram_bot_token: str
     telegram_channel_id: str
     instagram_access_token: str
@@ -32,10 +34,12 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     google_api_key: str | None = None
+    deepseek_api_key: str | None = None
     default_provider: str | None = None
     anthropic_default_model: str | None = None
     openai_default_model: str | None = None
     google_default_model: str | None = None
+    deepseek_default_model: str | None = None
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
     instagram_access_token: str | None = None
