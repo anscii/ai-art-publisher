@@ -1,5 +1,6 @@
 """Tests for immediate posting via /api/posts/{id}/post."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -42,7 +43,10 @@ def _setup(client, platform="telegram"):
     return sid, posts[0]["id"]
 
 
-def _mock_settings(token="TOKEN", channel="@ch", base="https://pub.r2.dev", fb=False):
+PT_BASE = "https://api.pinterest.com/v5"
+
+
+def _mock_settings(token="TOKEN", channel="@ch", base="https://pub.r2.dev", fb=False, pinterest=False):
     s = MagicMock()
     s.telegram_bot_token = token
     s.telegram_channel_id = channel
@@ -51,6 +55,9 @@ def _mock_settings(token="TOKEN", channel="@ch", base="https://pub.r2.dev", fb=F
     s.instagram_user_id = "IG_USER"
     s.facebook_page_id = "FB_PAGE_ID" if fb else None
     s.facebook_page_access_token = "FB_PAGE_TOKEN" if fb else None
+    s.pinterest_access_token = "PT_TOKEN" if pinterest else None
+    s.pinterest_default_board_id = "999888777" if pinterest else None
+    s.pinterest_board_map = '{"Fantasy Art": "111222333"}' if pinterest else None
     return s
 
 
@@ -240,3 +247,173 @@ def test_post_facebook_direct(client):
     post = client.get(f"/api/posts/{pid}").json()
     assert post["status"] == "posted"
     assert post["external_post_id"] == "ph1"
+
+
+# ── Pinterest service unit tests ──────────────────────────────────────────────
+
+
+@respx.mock
+def test_pinterest_service_post_pins_single():
+    from app.services.pinterest import PinterestService
+
+    svc = PinterestService("TOKEN")
+    respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "p1"}))
+    result = svc.post_pins("board_123", ["https://pub.r2.dev/img.jpg"], "Title", "Desc")
+    assert result == {"ok": True, "pin_ids": ["p1"]}
+
+
+@respx.mock
+def test_pinterest_service_post_pins_fail_fast():
+    from app.services.pinterest import PinterestService
+
+    svc = PinterestService("TOKEN")
+    respx.post(f"{PT_BASE}/pins").mock(
+        side_effect=[
+            httpx.Response(200, json={"id": "p1"}),
+            httpx.Response(400, json={"message": "Invalid image"}),
+        ]
+    )
+    result = svc.post_pins("board_123", ["url1", "url2", "url3"], "T", "D")
+    assert result["ok"] is False
+    assert len(respx.calls) == 2
+
+
+@respx.mock
+def test_pinterest_service_create_board_success():
+    from app.services.pinterest import PinterestService
+
+    svc = PinterestService("TOKEN")
+    respx.post(f"{PT_BASE}/boards").mock(
+        return_value=httpx.Response(200, json={"id": "b1", "name": "Fantasy"})
+    )
+    result = svc.create_board("Fantasy")
+    assert result == {"ok": True, "board_id": "b1"}
+
+
+@respx.mock
+def test_pinterest_service_create_board_api_error():
+    from app.services.pinterest import PinterestService
+
+    svc = PinterestService("TOKEN")
+    respx.post(f"{PT_BASE}/boards").mock(
+        return_value=httpx.Response(400, json={"message": "Board name taken"})
+    )
+    result = svc.create_board("Fantasy")
+    assert result["ok"] is False
+    assert "Board name taken" in result["description"]
+
+
+# ── Pinterest router integration tests ───────────────────────────────────────
+
+
+@respx.mock
+def test_post_pinterest_success(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+        respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
+@respx.mock
+def test_post_pinterest_marks_post_posted(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+        respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
+        client.post(f"/api/posts/{pid}/post")
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["status"] == "posted"
+    assert post["posted_at"] is not None
+    assert post["external_post_id"] == "pin_001"
+
+
+@respx.mock
+def test_post_pinterest_skipped_when_no_token(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=False)):
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["status"] == "posted"
+
+
+@respx.mock
+def test_post_pinterest_api_error_sets_failed(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+        respx.post(f"{PT_BASE}/pins").mock(
+            return_value=httpx.Response(400, json={"message": "Invalid board"})
+        )
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is False
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["status"] == "failed"
+
+
+@respx.mock
+def test_post_pinterest_creates_board_when_not_in_map(client, db):
+    """Board name from chosen variant is not in the map → auto-create board, persist, post."""
+    from app.models import AIVariant, Series
+
+    sid, pid = _setup(client, "pinterest")
+    s = db.get(Series, sid)
+    v = AIVariant(
+        series_id=sid,
+        provider="fake",
+        model="fake",
+        title="Test",
+        title_ru="",
+        description_en="Test",
+        description_ru="Test",
+        tags_instagram="[]",
+        tags_telegram="[]",
+        pinterest_board="New Art Board",
+        pinterest_title="Pin Title",
+        pinterest_description="Pin Desc",
+    )
+    db.add(v)
+    db.flush()
+    s.chosen_variant_id = v.id
+    db.commit()
+
+    settings = _mock_settings(pinterest=True)
+    settings.pinterest_board_map = "{}"
+    settings.pinterest_default_board_id = None
+
+    respx.post(f"{PT_BASE}/boards").mock(return_value=httpx.Response(200, json={"id": "new_456"}))
+    respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
+
+    with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    board_map = json.loads(settings.pinterest_board_map)
+    assert board_map.get("New Art Board") == "new_456"
+
+
+@respx.mock
+def test_post_pinterest_uses_default_when_no_board_name(client):
+    """No board name from variant, but default_board_id is set → posts to default."""
+    _, pid = _setup(client, "pinterest")
+    settings = _mock_settings(pinterest=True)
+    settings.pinterest_board_map = "{}"
+
+    respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
+
+    with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+
+
+@respx.mock
+def test_post_pinterest_fails_when_no_board_resolved(client):
+    """Empty map, no default, no board name → explicit error."""
+    _, pid = _setup(client, "pinterest")
+    settings = _mock_settings(pinterest=True)
+    settings.pinterest_board_map = "{}"
+    settings.pinterest_default_board_id = None
+
+    with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is False
+    assert "No board resolved" in resp.json()["message"]

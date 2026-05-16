@@ -754,6 +754,17 @@ function buildDescriptionsCard(series) {
   const mkField = (lbl, ctrl) => h('div', { cls: 'col-12 col-lg-6' },
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
+  const boardChips = h('div', { cls: 'mt-1 d-flex flex-wrap gap-1' });
+  apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
+    (data.boards || []).forEach(name => {
+      const chip = h('button', { type: 'button', cls: 'btn btn-outline-secondary btn-sm py-0 px-2' });
+      chip.style.fontSize = '0.7rem';
+      chip.appendChild(document.createTextNode(name));
+      chip.addEventListener('click', () => { pinBoard.value = name; });
+      boardChips.appendChild(chip);
+    });
+  }).catch(() => {});
+
   const form = h('div', { cls: 'row g-2' },
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title EN (pre-fills posts)' }), pubTitle),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title RU (pre-fills Telegram posts)' }), pubTitleRu),
@@ -761,6 +772,13 @@ function buildDescriptionsCard(series) {
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram & FB Page tags', tagsIg),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
+    mkField('Pinterest title', pinTitle),
+    h('div', { cls: 'col-12 col-lg-6' },
+      h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }),
+      pinBoard,
+      boardChips,
+    ),
+    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
     h('div', { cls: 'col-12' }, saveBtn, resetBtn));
 
   form.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
@@ -773,9 +791,6 @@ function buildDescriptionsCard(series) {
   semDetails.appendChild(semSummary);
   const semGrid = h('div', { cls: 'row g-2 mt-1' },
     h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Instagram discovery' }), igSeo),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest title' }), pinTitle),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }), pinBoard),
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: world keywords' }), archWorld),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: visual keywords' }), archVisual),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));

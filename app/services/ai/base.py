@@ -81,7 +81,7 @@ Each variant must be a JSON object with these exact keys:
 - pinterest:
     title: concrete searchable visual title, 5-12 words
     description: 1-2 sentences optimized for Pinterest search while preserving atmosphere
-    board: one best-fit board/category (string)
+    board: board name — prefer an existing board name if provided in the user message; suggest a creative new name only if none of the existing ones fit
 - archive_classification:
     world_keywords: 3-8 worldbuilding concepts (array of strings)
     visual_keywords: 3-8 visual/aesthetic descriptors (array of strings)

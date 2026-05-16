@@ -13,13 +13,14 @@ from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
 from app.services.facebook import FacebookService
 from app.services.instagram import InstagramService
+from app.services.pinterest import PinterestService
 from app.services.telegram import TelegramService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["posts"])
 
-VALID_PLATFORMS = {"telegram", "instagram", "facebook"}
+VALID_PLATFORMS = {"telegram", "instagram", "facebook", "pinterest"}
 
 
 def post_to_resp(p: Post) -> PostResponse:
@@ -107,19 +108,58 @@ def _do_facebook(post: Post, settings) -> dict:
     return svc.post(urls, caption)
 
 
+def _do_pinterest(post: Post, settings, db: Session) -> dict:
+    if not settings.pinterest_access_token:
+        return {"ok": True, "skipped": True}
+    urls = _image_urls(post, settings.r2_public_base_url)
+    variant = None
+    if post.series and post.series.chosen_variant_id:
+        variant = next(
+            (v for v in post.series.ai_variants if v.id == post.series.chosen_variant_id),
+            None,
+        )
+    title = (variant.pinterest_title if variant else None) or post.title or ""
+    description = (variant.pinterest_description if variant else None) or post.description or ""
+    board_name = (variant.pinterest_board if variant else None) or ""
+    try:
+        board_map = json.loads(settings.pinterest_board_map) if settings.pinterest_board_map else {}
+    except (json.JSONDecodeError, TypeError):
+        board_map = {}
+    if get_config().fake_posting:
+        return _response_fake_posting(post=post, images_num=len(urls), caption=title)
+    svc = PinterestService(settings.pinterest_access_token)
+    board_id = board_map.get(board_name, "") or ""
+    if not board_id and board_name:
+        create_result = svc.create_board(board_name)
+        if not create_result.get("ok"):
+            return create_result
+        board_id = create_result["board_id"]
+        new_map = {**board_map, board_name: board_id}
+        settings.pinterest_board_map = json.dumps(new_map)
+        db.commit()
+    if not board_id:
+        board_id = settings.pinterest_default_board_id or ""
+    if not board_id:
+        return {
+            "ok": False,
+            "description": "No board resolved — add a Default Board ID in Settings or ensure the chosen variant has a Pinterest board name",
+        }
+    return svc.post_pins(board_id, urls, title, description)
+
+
 def _auto_mark_images_posted(series: Series, db: Session) -> None:
-    """Mark images as posted when they appear in both a posted Telegram and posted Instagram post."""
+    """Mark images as posted when they appear in both a posted Telegram and a posted visual post."""
     telegram_ids: set[str] = set()
-    instagram_ids: set[str] = set()
+    visual_ids: set[str] = set()
     for p in series.posts:
         if p.status != "posted" or p.deleted_at is not None:
             continue
         ids = {pi.image_id for pi in p.post_images}
         if p.platform == "telegram":
             telegram_ids.update(ids)
-        elif p.platform == "instagram":
-            instagram_ids.update(ids)
-    both = telegram_ids & instagram_ids
+        elif p.platform in ("instagram", "pinterest"):
+            visual_ids.update(ids)
+    both = telegram_ids & visual_ids
     if not both:
         return
     for img in series.images:
@@ -149,6 +189,9 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
     elif post.platform == "facebook":
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")
+    elif post.platform == "pinterest":
+        result = _do_pinterest(post, settings, db)
+        external_id = ",".join(result.get("pin_ids") or []) or None
     else:
         return PostResult(success=False, message=f"Unknown platform: {post.platform}")
 

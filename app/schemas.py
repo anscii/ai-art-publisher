@@ -46,6 +46,8 @@ class SettingsUpdate(BaseModel):
     instagram_user_id: str | None = None
     facebook_page_id: str | None = None
     facebook_page_access_token: str | None = None
+    pinterest_access_token: str | None = None
+    pinterest_default_board_id: str | None = None
     r2_endpoint: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
