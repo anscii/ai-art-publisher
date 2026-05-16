@@ -44,7 +44,7 @@ class AnthropicProvider(AIProvider):
             )
         resp = self._client.messages.create(
             model=model,
-            max_tokens=2048,
+            max_tokens=4096,
             system=SYSTEM_PROMPT,
             messages=messages,
         )
@@ -52,7 +52,7 @@ class AnthropicProvider(AIProvider):
         assert isinstance(block, _anthropic.types.TextBlock)
         logger.debug("anthropic response | model=%s | text=%s", model, block.text)
         raw = parse_ai_response(block.text, "anthropic", model)
-        variants = [AIVariantData(**v) for v in raw]
+        variants = [AIVariantData.from_llm_dict(v) for v in raw]
         attach_usage(
             variants,
             resp.usage.input_tokens,

@@ -117,6 +117,7 @@ class Post(Base):
     collection_line: Mapped[str | None] = mapped_column(String, nullable=True)
     collection_line_ru: Mapped[str | None] = mapped_column(String, nullable=True)
     title_ru: Mapped[str | None] = mapped_column(String, nullable=True)
+    seo: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="posts")
     post_images: Mapped[list["PostImage"]] = relationship(
@@ -141,6 +142,11 @@ class AIVariant(Base):
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
     hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instagram_seo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pinterest_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pinterest_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pinterest_board: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archive_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

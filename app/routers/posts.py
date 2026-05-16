@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_config
 from app.database import get_db
-from app.models import Post, PostImage, Series
+from app.models import AIVariant, Post, PostImage, Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
 from app.services.facebook import FacebookService
@@ -41,6 +41,7 @@ def post_to_resp(p: Post) -> PostResponse:
         error_message=p.error_message,
         created_at=p.created_at,
         image_ids=[pi.image_id for pi in ordered],
+        seo=p.seo,
     )
 
 
@@ -57,21 +58,31 @@ def _build_caption(post: Post) -> str:
     if post.platform == "telegram":
         title = post.title_ru or post.title
         coll_line = post.collection_line_ru or post.collection_line
+        parts = [title, coll_line, post.description, tags]
     else:
         title = post.title
         coll_line = post.collection_line
-    parts = [part for part in [title, coll_line, post.description, tags] if part]
-    return "\n\n".join(parts)
+        archive_footer = f"—\nFiled under:\n{post.seo}" if post.seo else None
+        parts = [title, coll_line, post.description, archive_footer, tags]
+    return "\n\n".join(p for p in parts if p)
+
+
+def _response_fake_posting(post: Post, images_num: int, caption: str) -> dict:
+    logger.info(
+        "[FAKE] %s | post=%s | %d images | caption: \n%s",
+        post.platform,
+        post.id,
+        images_num,
+        caption,
+    )
+    return {"ok": True, "fake": True}
 
 
 def _do_telegram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Telegram | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = TelegramService(settings.telegram_bot_token, settings.telegram_channel_id)
     return svc.post_media_group(urls, caption)
 
@@ -80,13 +91,7 @@ def _do_instagram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Instagram | post=%s | %d images | caption: %s",
-            post.id,
-            len(urls),
-            caption[:120],
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
     return svc.post(urls, caption)
 
@@ -97,10 +102,7 @@ def _do_facebook(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Facebook | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     return svc.post(urls, caption)
 
@@ -143,7 +145,7 @@ def _compute_collection_line(series: Series, lang: str = "en") -> str | None:
         return None
     num = (series.collection_number or "").strip()
     name = (coll.name_ru or coll.name) if lang == "ru" else coll.name
-    return f"◈ {name} #{num}" if num else f"◈ {name}"
+    return f"◈ {name} — {num}" if num else f"◈ {name}"
 
 
 def _create_post_images(post: Post, image_ids: list[str], db: Session) -> None:
@@ -182,6 +184,8 @@ def create_posts(
     if bad:
         raise HTTPException(status_code=400, detail=f"Images not in series: {bad}")
 
+    chosen_variant = db.get(AIVariant, s.chosen_variant_id) if s.chosen_variant_id else None
+
     created = []
     for platform in body.platforms:
         if platform == "telegram":
@@ -190,6 +194,10 @@ def create_posts(
         else:
             description = body.description_other
             tags = json.dumps(body.tags_other)
+
+        post_seo = (
+            chosen_variant.instagram_seo if chosen_variant and platform != "telegram" else None
+        )
 
         p = Post(
             series_id=series_id,
@@ -207,6 +215,7 @@ def create_posts(
             status="draft",
             scheduled_at=body.scheduled_at.replace(tzinfo=None) if body.scheduled_at else None,
             created_at=datetime.now(UTC),
+            seo=post_seo,
         )
         if body.scheduled_at:
             p.status = "scheduled"
