@@ -104,8 +104,22 @@ function buildImagesCard(series) {
       .forEach(img => strip.appendChild(buildThumb(img, series.id)));
   }
 
+  const selAllBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Select all' });
+  selAllBtn.appendChild(icon('bi bi-check2-all'));
+  selAllBtn.addEventListener('click', () => _selectAll(series.id));
+
+  const invertBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Invert selection' });
+  invertBtn.appendChild(icon('bi bi-arrow-left-right'));
+  invertBtn.addEventListener('click', () => _invertSelection(series.id));
+
+  const deselBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Deselect all' });
+  deselBtn.appendChild(icon('bi bi-x-circle'));
+  deselBtn.addEventListener('click', () => _deselectAll(series.id));
+
   return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex justify-content-between align-items-center py-2' }, headerLabel, addBtn),
+    h('div', { cls: 'card-header d-flex justify-content-between align-items-center py-2' },
+      headerLabel,
+      h('div', { cls: 'd-flex gap-1 align-items-center' }, selAllBtn, invertBtn, deselBtn, addBtn)),
     h('div', { cls: 'card-body p-2' }, strip, buildActionBar(series.id)));
 }
 
@@ -201,7 +215,6 @@ function _selectIcon(imgId, status) {
 }
 
 function _toggleSelection(imgId, imgStatus, seriesId) {
-  if (imgStatus === 'posted') return;
   const isNowSelected = !_selectedImages.has(imgId);
   if (isNowSelected) _selectedImages.add(imgId); else _selectedImages.delete(imgId);
   const btn = document.querySelector('[data-select-btn="' + imgId + '"]');
@@ -229,6 +242,39 @@ function _resortStrip() {
     .map((el, i) => ({ el, g: _g(el), i }))
     .sort((a, b) => a.g - b.g || a.i - b.i)
     .forEach(({ el }) => strip.appendChild(el));
+}
+
+function _syncSelectionUI(seriesId) {
+  const strip = document.getElementById('imageStrip');
+  if (strip) {
+    strip.querySelectorAll('[data-image-id]').forEach(thumb => {
+      const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus || 'pending';
+      thumb.classList.toggle('thumb-selected', _selectedImages.has(id));
+      const btn = thumb.querySelector('[data-select-btn]');
+      if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
+    });
+  }
+  _resortStrip();
+  _refreshImagesHeader((App.currentSeries?.images ?? []).length);
+  _refreshActionBar(seriesId);
+}
+
+function _selectAll(seriesId) {
+  (App.currentSeries?.images ?? []).forEach(img => { if (!img.deleted_at) _selectedImages.add(img.id); });
+  _syncSelectionUI(seriesId);
+}
+
+function _deselectAll(seriesId) {
+  _selectedImages.clear();
+  _syncSelectionUI(seriesId);
+}
+
+function _invertSelection(seriesId) {
+  (App.currentSeries?.images ?? []).forEach(img => {
+    if (img.deleted_at) return;
+    if (_selectedImages.has(img.id)) _selectedImages.delete(img.id); else _selectedImages.add(img.id);
+  });
+  _syncSelectionUI(seriesId);
 }
 
 // ── Move to picker ────────────────────────────────────────────────────────────
@@ -376,8 +422,10 @@ function buildActionBar(seriesId) {
 
   // Skip / Unskip — shown based on what's selected
   const statusMap = new Map((App.currentSeries?.images ?? []).map(i => [i.id, i.status]));
-  const toSkip   = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
-  const toUnskip = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
+  const toSkip        = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toUnskip      = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
+  const toMarkPosted  = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toUnmarkPosted = [..._selectedImages].filter(id => statusMap.get(id) === 'posted');
 
   const _mkStatusAction = (label, iconCls, ids, newStatus) => {
     const btn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
@@ -394,8 +442,10 @@ function buildActionBar(seriesId) {
     return btn;
   };
 
-  if (toSkip.length > 0)   bar.appendChild(_mkStatusAction('Skip',   'bi bi-eye-slash', toSkip,   'skip'));
-  if (toUnskip.length > 0) bar.appendChild(_mkStatusAction('Unskip', 'bi bi-eye',       toUnskip, 'pending'));
+  if (toSkip.length > 0)        bar.appendChild(_mkStatusAction('Skip',          'bi bi-eye-slash',          toSkip,        'skip'));
+  if (toUnskip.length > 0)     bar.appendChild(_mkStatusAction('Unskip',         'bi bi-eye',               toUnskip,      'pending'));
+  if (toMarkPosted.length > 0) bar.appendChild(_mkStatusAction('Mark posted',    'bi bi-check-circle-fill', toMarkPosted,  'posted'));
+  if (toUnmarkPosted.length > 0) bar.appendChild(_mkStatusAction('Unmark posted','bi bi-circle',            toUnmarkPosted,'pending'));
 
   // Delete selected
   const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
@@ -941,12 +991,12 @@ async function generateDescriptions(seriesId) {
 function buildActionsCard(series) {
   const statusSel = document.createElement('select');
   statusSel.className = 'form-select form-select-sm'; statusSel.id = 'statusSelect'; statusSel.style.width = '140px';
-  ['new', 'draft', 'approved', 'skip'].forEach(s => {
+  ['new', 'draft', 'approved', 'posted', 'skip'].forEach(s => {
     const o = document.createElement('option'); o.value = s; o.textContent = s;
     if (s === series.status) o.selected = true;
     statusSel.appendChild(o);
   });
-  if (!['new', 'draft', 'approved', 'skip'].includes(series.status)) {
+  if (!['new', 'draft', 'approved', 'posted', 'skip'].includes(series.status)) {
     const o = document.createElement('option'); o.value = series.status; o.textContent = series.status; o.selected = true;
     statusSel.appendChild(o);
   }
