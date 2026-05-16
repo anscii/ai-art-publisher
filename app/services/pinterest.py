@@ -22,7 +22,7 @@ class PinterestService:
             resp = client.post(
                 f"{BASE}/boards",
                 headers={"Authorization": f"Bearer {self._token}"},
-                json={"name": name, "privacy": "PUBLIC"},
+                json={"name": name, "privacy": "SECRET"},
             )
             d = resp.json()
             if "id" not in d:

@@ -142,6 +142,8 @@ def _do_pinterest(post: Post, settings, db: Session) -> dict:
         board_id = create_result["board_id"]
         new_map = {**board_map, board_name: board_id}
         settings.pinterest_board_map = json.dumps(new_map)
+        # Commit board_map before posting — if post_pins fails the board still
+        # exists in Pinterest so the next attempt will find it in the map.
         db.commit()
     if not board_id:
         board_id = settings.pinterest_default_board_id or ""
