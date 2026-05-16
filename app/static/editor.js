@@ -4,6 +4,7 @@ let _selectedImages = new Set();
 // Single document-level listener for closing the collection picker panel.
 // Stored here so it is added once and never accumulates.
 let _activeCollPickerHide = null;
+let _pinterestBoardsCache = null;
 document.addEventListener('click', () => { if (_activeCollPickerHide) _activeCollPickerHide(); });
 
 function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
@@ -754,6 +755,24 @@ function buildDescriptionsCard(series) {
   const mkField = (lbl, ctrl) => h('div', { cls: 'col-12 col-lg-6' },
     h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
 
+  const boardChips = h('div', { cls: 'mt-1 d-flex flex-wrap gap-1' });
+  const _fillBoardChips = boards => {
+    boards.forEach(name => {
+      const chip = h('button', { type: 'button', cls: 'btn btn-outline-secondary btn-sm py-0 px-2', style: 'font-size:0.7rem' });
+      chip.appendChild(document.createTextNode(name));
+      chip.addEventListener('click', () => { pinBoard.value = name; });
+      boardChips.appendChild(chip);
+    });
+  };
+  if (_pinterestBoardsCache) {
+    _fillBoardChips(_pinterestBoardsCache);
+  } else {
+    apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
+      _pinterestBoardsCache = data.boards || [];
+      _fillBoardChips(_pinterestBoardsCache);
+    }).catch(() => {});
+  }
+
   const form = h('div', { cls: 'row g-2' },
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title EN (pre-fills posts)' }), pubTitle),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title RU (pre-fills Telegram posts)' }), pubTitleRu),
@@ -761,6 +780,13 @@ function buildDescriptionsCard(series) {
     mkField('Description RU (Telegram)', descRu),
     mkField('Instagram & FB Page tags', tagsIg),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
+    mkField('Pinterest title', pinTitle),
+    h('div', { cls: 'col-12 col-lg-6' },
+      h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }),
+      pinBoard,
+      boardChips,
+    ),
+    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
     h('div', { cls: 'col-12' }, saveBtn, resetBtn));
 
   form.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
@@ -773,9 +799,6 @@ function buildDescriptionsCard(series) {
   semDetails.appendChild(semSummary);
   const semGrid = h('div', { cls: 'row g-2 mt-1' },
     h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Instagram discovery' }), igSeo),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest title' }), pinTitle),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }), pinBoard),
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: world keywords' }), archWorld),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: visual keywords' }), archVisual),
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));
@@ -1243,7 +1266,7 @@ function _buildImageSelector(allImages, initialSelected, imgMap) {
 }
 
 // ── Posts card ────────────────────────────────────────────────────────────────
-const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook' };
+const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook', pinterest: 'bi bi-pinterest' };
 const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', posted: 'bg-success', failed: 'bg-danger' };
 
 function buildPostsCard(series) {
@@ -1460,13 +1483,13 @@ function buildCreatePostForm(series, imgMap, onClose) {
   tgCheck.checked = true;
   const igCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_ig' });
   igCheck.checked = true;
-  const fbCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_fb' });
-  fbCheck.checked = true;
+  const ptCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_pt' });
+  ptCheck.checked = false;
 
   const platformRow = h('div', { cls: 'd-flex gap-3 mb-2 align-items-center' },
     h('label', { cls: 'd-flex align-items-center gap-1 small' }, tgCheck, document.createTextNode(' Telegram')),
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' Instagram')),
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, fbCheck, document.createTextNode(' Facebook')));
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' Instagram & FB')),
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, ptCheck, document.createTextNode(' Pinterest')));
 
   // EN content fields
   const titleInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_title', placeholder: 'Title (EN)' });
@@ -1505,7 +1528,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     const platforms = [];
     if (tgCheck.checked) platforms.push('telegram');
     if (igCheck.checked) platforms.push('instagram');
-    if (fbCheck.checked) platforms.push('facebook');
+    if (ptCheck.checked) platforms.push('pinterest');
     if (!platforms.length) { showToast('Select at least one platform', 'danger'); return; }
     if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return; }
     const imageIds = allImages.filter(i => _selectedPostImages.has(i.id)).map(i => i.id);

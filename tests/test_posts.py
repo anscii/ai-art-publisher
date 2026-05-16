@@ -537,3 +537,32 @@ def test_auto_mark_series_skips_skip_images(client):
 
     detail = client.get(f"/api/series/{sid}").json()
     assert detail["status"] == "posted"
+
+
+def test_auto_mark_image_posted_telegram_plus_pinterest(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings(pinterest=True)
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        pt_pid = _create_platform_post(client, sid, [img_id], "pinterest")
+        _fake_execute(client, tg_pid, settings)
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] != "posted"
+
+        _fake_execute(client, pt_pid, settings)
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] == "posted"
+
+
+def test_create_pinterest_post_valid_platform(client):
+    sid, img_id = _series_with_image(client)
+    posts = _make_posts(client, sid, img_id, ["pinterest"])
+    assert len(posts) == 1
+    assert posts[0]["platform"] == "pinterest"

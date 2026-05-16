@@ -91,8 +91,24 @@ def generate_descriptions(
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 
+    board_context = ""
+    if settings.pinterest_board_map:
+        try:
+            _bm = json.loads(settings.pinterest_board_map)
+            if _bm:
+                names = ", ".join(_bm.keys())
+                board_context = (
+                    f"\n\nExisting Pinterest boards: {names}. "
+                    "For the pinterest.board field, prefer one of these names; "
+                    "suggest a new board name only if none fit this artwork."
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    augmented_hint = (body.hint or "") + board_context if board_context else body.hint
+
     provider = get_provider(provider_name, api_key)
-    variants_data = provider.generate_variants(images_b64, model, body.hint)
+    variants_data = provider.generate_variants(images_b64, model, augmented_hint)
 
     for vd in variants_data:
         v = AIVariant(
