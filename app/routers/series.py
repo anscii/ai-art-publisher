@@ -78,6 +78,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         CollectionRef(
             id=s.collection.id,
             name=s.collection.name,
+            name_ru=s.collection.name_ru,
             collection_index=s.collection_index,
             collection_number=s.collection_number,
         )

@@ -245,6 +245,7 @@ class SeriesUpdate(BaseModel):
 class CollectionRef(BaseModel):
     id: str
     name: str
+    name_ru: str | None = None
     collection_index: int | None = None
     collection_number: str | None = None
 
