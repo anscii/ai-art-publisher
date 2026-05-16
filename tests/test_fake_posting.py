@@ -46,7 +46,7 @@ def test_fake_telegram_logs(client, caplog):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             with caplog.at_level(logging.INFO, logger="app.routers.posts"):
                 client.post(f"/api/posts/{pid}/post")
-    assert any("[FAKE]" in r.message and "Telegram" in r.message for r in caplog.records)
+    assert any("[FAKE]" in r.message and "telegram" in r.message for r in caplog.records)
 
 
 # ── Instagram ─────────────────────────────────────────────────────────────────

@@ -67,14 +67,22 @@ def _build_caption(post: Post) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
+def _response_fake_posting(post: Post, images_num: int, caption: str) -> dict:
+    logger.info(
+        "[FAKE] %s | post=%s | %d images | caption: \n%s",
+        post.platform,
+        post.id,
+        images_num,
+        caption,
+    )
+    return {"ok": True, "fake": True}
+
+
 def _do_telegram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Telegram | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = TelegramService(settings.telegram_bot_token, settings.telegram_channel_id)
     return svc.post_media_group(urls, caption)
 
@@ -83,13 +91,7 @@ def _do_instagram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Instagram | post=%s | %d images | caption: %s",
-            post.id,
-            len(urls),
-            caption[:120],
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
     return svc.post(urls, caption)
 
@@ -100,10 +102,7 @@ def _do_facebook(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Facebook | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     return svc.post(urls, caption)
 
