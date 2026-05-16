@@ -440,6 +440,27 @@ def test_patch_variant_not_found(client):
     assert resp.status_code == 404
 
 
+def test_series_detail_chosen_variant_includes_hint(client):
+    """Chosen variant hint must be in series detail so the frontend can
+    pre-fill the generate hint field on load without requiring a re-click."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        variants = client.post(
+            f"/api/series/{sid}/generate", json={"hint": "a ghost in a clockwork city"}
+        ).json()
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["chosen_variant_id"] == vid
+    chosen = next(v for v in detail["ai_variants"] if v["id"] == vid)
+    assert chosen["hint"] == "a ghost in a clockwork city"
+
+
 def test_series_detail_returns_semantic_fields_on_chosen_variant(client):
     """Series detail exposes semantic fields on the chosen variant so the
     frontend can pre-fill the Semantic Layer section on load."""
