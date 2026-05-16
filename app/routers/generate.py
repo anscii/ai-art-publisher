@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import AIVariant, Series
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
-from app.schemas import GenerateRequest
+from app.schemas import AIVariantSemanticUpdate, GenerateRequest
 from app.services.ai.base import AIProvider
 from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
@@ -91,8 +91,24 @@ def generate_descriptions(
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 
+    board_context = ""
+    if settings.pinterest_board_map:
+        try:
+            _bm = json.loads(settings.pinterest_board_map)
+            if _bm:
+                names = ", ".join(_bm.keys())
+                board_context = (
+                    f"\n\nExisting Pinterest boards: {names}. "
+                    "For the pinterest.board field, prefer one of these names; "
+                    "suggest a new board name only if none fit this artwork."
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    augmented_hint = (body.hint or "") + board_context if board_context else body.hint
+
     provider = get_provider(provider_name, api_key)
-    variants_data = provider.generate_variants(images_b64, model, body.hint)
+    variants_data = provider.generate_variants(images_b64, model, augmented_hint)
 
     for vd in variants_data:
         v = AIVariant(
@@ -107,6 +123,11 @@ def generate_descriptions(
             tags_telegram=json.dumps(vd.tags_telegram),
             hint=body.hint,
             cost_usd=vd.cost_usd,
+            instagram_seo=vd.instagram_seo or None,
+            pinterest_title=vd.pinterest_title or None,
+            pinterest_description=vd.pinterest_description or None,
+            pinterest_board=vd.pinterest_board or None,
+            archive_metadata=json.dumps(vd.archive_metadata) if vd.archive_metadata else None,
         )
         db.add(v)
     db.commit()
@@ -124,3 +145,26 @@ def delete_variant(variant_id: str, db: Session = Depends(get_db)):
     db.delete(v)
     db.commit()
     return series_to_detail(series, db)
+
+
+@variants_router.patch("/{variant_id}")
+def update_variant_semantic(
+    variant_id: str,
+    body: AIVariantSemanticUpdate,
+    db: Session = Depends(get_db),
+):
+    v = db.get(AIVariant, variant_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="AIVariant not found")
+    if body.instagram_seo is not None:
+        v.instagram_seo = body.instagram_seo or None
+    if body.pinterest_title is not None:
+        v.pinterest_title = body.pinterest_title or None
+    if body.pinterest_description is not None:
+        v.pinterest_description = body.pinterest_description or None
+    if body.pinterest_board is not None:
+        v.pinterest_board = body.pinterest_board or None
+    if body.archive_metadata is not None:
+        v.archive_metadata = json.dumps(body.archive_metadata) if body.archive_metadata else None
+    db.commit()
+    return series_to_detail(v.series, db)

@@ -180,3 +180,21 @@ def test_collection_name_ru_clear(client):
     cid = client.post("/api/collections", json={"name": "X", "name_ru": "Икс"}).json()["id"]
     resp = client.patch(f"/api/collections/{cid}", json={"name": "X", "name_ru": None})
     assert resp.json()["name_ru"] is None
+
+
+def test_series_detail_collection_ref_includes_name_ru(client):
+    cid = client.post(
+        "/api/collections", json={"name": "Dark Saga", "name_ru": "Тёмная Сага"}
+    ).json()["id"]
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(f"/api/series/{sid}", json={"collection_id": cid})
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["collection"]["name_ru"] == "Тёмная Сага"
+
+
+def test_series_detail_collection_ref_name_ru_none_when_not_set(client):
+    cid = client.post("/api/collections", json={"name": "Dark Saga"}).json()["id"]
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(f"/api/series/{sid}", json={"collection_id": cid})
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["collection"]["name_ru"] is None

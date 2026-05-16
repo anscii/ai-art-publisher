@@ -8,18 +8,19 @@ from sqlalchemy.orm import Session
 
 from app.config import get_config
 from app.database import get_db
-from app.models import Post, PostImage, Series
+from app.models import AIVariant, Post, PostImage, Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
 from app.services.facebook import FacebookService
 from app.services.instagram import InstagramService
+from app.services.pinterest import PinterestService
 from app.services.telegram import TelegramService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["posts"])
 
-VALID_PLATFORMS = {"telegram", "instagram", "facebook"}
+VALID_PLATFORMS = {"telegram", "instagram", "facebook", "pinterest"}
 
 
 def post_to_resp(p: Post) -> PostResponse:
@@ -41,6 +42,7 @@ def post_to_resp(p: Post) -> PostResponse:
         error_message=p.error_message,
         created_at=p.created_at,
         image_ids=[pi.image_id for pi in ordered],
+        seo=p.seo,
     )
 
 
@@ -57,21 +59,35 @@ def _build_caption(post: Post) -> str:
     if post.platform == "telegram":
         title = post.title_ru or post.title
         coll_line = post.collection_line_ru or post.collection_line
+        parts = [title, coll_line, post.description, tags]
     else:
         title = post.title
         coll_line = post.collection_line
-    parts = [part for part in [title, coll_line, post.description, tags] if part]
-    return "\n\n".join(parts)
+        archive_footer = f"—\nFiled under:\n{post.seo}" if post.seo else None
+        parts = [title, coll_line, post.description, archive_footer, tags]
+    return "\n\n".join(p for p in parts if p)
+
+
+def _response_fake_posting(
+    post: Post, images_num: int, caption: str, platform: str | None = None
+) -> dict:
+    if not platform:
+        platform = post.platform
+    logger.info(
+        "[FAKE] %s | post=%s | %d images | caption: \n%s",
+        platform,
+        post.id,
+        images_num,
+        caption,
+    )
+    return {"ok": True, "fake": True}
 
 
 def _do_telegram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Telegram | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = TelegramService(settings.telegram_bot_token, settings.telegram_channel_id)
     return svc.post_media_group(urls, caption)
 
@@ -80,13 +96,7 @@ def _do_instagram(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Instagram | post=%s | %d images | caption: %s",
-            post.id,
-            len(urls),
-            caption[:120],
-        )
-        return {"ok": True, "fake": True}
+        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
     svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
     return svc.post(urls, caption)
 
@@ -97,17 +107,88 @@ def _do_facebook(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        logger.info(
-            "[FAKE] Facebook | post=%s | %d images | caption: %s", post.id, len(urls), caption[:120]
+        return _response_fake_posting(
+            post=post, images_num=len(urls), caption=caption, platform="facebook"
         )
-        return {"ok": True, "fake": True}
     svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     return svc.post(urls, caption)
+
+
+def _do_pinterest(post: Post, settings, db: Session) -> dict:
+    if not settings.pinterest_access_token:
+        return {"ok": True, "skipped": True}
+    urls = _image_urls(post, settings.r2_public_base_url)
+    variant = None
+    if post.series and post.series.chosen_variant_id:
+        variant = next(
+            (v for v in post.series.ai_variants if v.id == post.series.chosen_variant_id),
+            None,
+        )
+    title = (variant.pinterest_title if variant else None) or post.title or ""
+    description = (variant.pinterest_description if variant else None) or post.description or ""
+    board_name = (variant.pinterest_board if variant else None) or ""
+    try:
+        board_map = json.loads(settings.pinterest_board_map) if settings.pinterest_board_map else {}
+    except (json.JSONDecodeError, TypeError):
+        board_map = {}
+    if get_config().fake_posting:
+        return _response_fake_posting(post=post, images_num=len(urls), caption=title)
+    svc = PinterestService(settings.pinterest_access_token)
+    board_id = board_map.get(board_name, "") or ""
+    if not board_id and board_name:
+        create_result = svc.create_board(board_name)
+        if not create_result.get("ok"):
+            return create_result
+        board_id = create_result["board_id"]
+        new_map = {**board_map, board_name: board_id}
+        settings.pinterest_board_map = json.dumps(new_map)
+        # Commit board_map before posting — if post_pins fails the board still
+        # exists in Pinterest so the next attempt will find it in the map.
+        db.commit()
+    if not board_id:
+        board_id = settings.pinterest_default_board_id or ""
+    if not board_id:
+        return {
+            "ok": False,
+            "description": "No board resolved — add a Default Board ID in Settings or ensure the chosen variant has a Pinterest board name",
+        }
+    return svc.post_pins(board_id, urls, title, description)
+
+
+def _auto_mark_images_posted(series: Series, db: Session) -> None:
+    """Mark images as posted when they appear in both a posted Telegram and a posted visual post."""
+    telegram_ids: set[str] = set()
+    visual_ids: set[str] = set()
+    for p in series.posts:
+        if p.status != "posted" or p.deleted_at is not None:
+            continue
+        ids = {pi.image_id for pi in p.post_images}
+        if p.platform == "telegram":
+            telegram_ids.update(ids)
+        elif p.platform in ("instagram", "pinterest"):
+            visual_ids.update(ids)
+    both = telegram_ids & visual_ids
+    if not both:
+        return
+    for img in series.images:
+        if img.id in both and img.deleted_at is None and img.status not in ("skip", "posted"):
+            img.status = "posted"
+
+
+def _maybe_mark_series_posted(series: Series, db: Session) -> None:
+    """Mark series as posted if all non-skip, non-deleted images are posted."""
+    if series.status == "skip":
+        return
+    active = [img for img in series.images if img.deleted_at is None and img.status != "skip"]
+    if active and all(img.status == "posted" for img in active):
+        series.status = "posted"
 
 
 def execute_post(post: Post, db: Session, settings) -> PostResult:
     if post.status == "posted" or post.external_post_id:
         return PostResult(success=False, message="Already posted (duplicate protection)")
+
+    platform = post.platform
 
     if post.platform == "telegram":
         result = _do_telegram(post, settings)
@@ -115,9 +196,25 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
     elif post.platform == "instagram":
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
+        if result.get("ok"):
+            try:
+                fb_result = _do_facebook(post, settings)
+                if fb_result.get("ok") and not fb_result.get("skipped"):
+                    platform = f"{platform} & facebook"
+                elif not fb_result.get("ok") and not fb_result.get("skipped"):
+                    logger.warning(
+                        "Facebook auto-post failed for %s: %s",
+                        post.id,
+                        fb_result.get("description"),
+                    )
+            except Exception as exc:
+                logger.warning("Facebook auto-post exception for %s: %s", post.id, exc)
     elif post.platform == "facebook":
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")
+    elif post.platform == "pinterest":
+        result = _do_pinterest(post, settings, db)
+        external_id = ",".join(result.get("pin_ids") or []) or None
     else:
         return PostResult(success=False, message=f"Unknown platform: {post.platform}")
 
@@ -127,8 +224,11 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         post.external_post_id = external_id
         post.error_message = ""
         db.commit()
+        _auto_mark_images_posted(post.series, db)
+        _maybe_mark_series_posted(post.series, db)
+        db.commit()
         prefix = "[FAKE] " if result.get("fake") else ""
-        return PostResult(success=True, message=f"{prefix}Posted to {post.platform}")
+        return PostResult(success=True, message=f"{prefix}Posted to {platform}")
 
     msg = result.get("description", "Unknown error")
     post.status = "failed"
@@ -143,7 +243,7 @@ def _compute_collection_line(series: Series, lang: str = "en") -> str | None:
         return None
     num = (series.collection_number or "").strip()
     name = (coll.name_ru or coll.name) if lang == "ru" else coll.name
-    return f"◈ {name} #{num}" if num else f"◈ {name}"
+    return f"◈ {name} — {num}" if num else f"◈ {name}"
 
 
 def _create_post_images(post: Post, image_ids: list[str], db: Session) -> None:
@@ -182,6 +282,8 @@ def create_posts(
     if bad:
         raise HTTPException(status_code=400, detail=f"Images not in series: {bad}")
 
+    chosen_variant = db.get(AIVariant, s.chosen_variant_id) if s.chosen_variant_id else None
+
     created = []
     for platform in body.platforms:
         if platform == "telegram":
@@ -190,6 +292,10 @@ def create_posts(
         else:
             description = body.description_other
             tags = json.dumps(body.tags_other)
+
+        post_seo = (
+            chosen_variant.instagram_seo if chosen_variant and platform != "telegram" else None
+        )
 
         p = Post(
             series_id=series_id,
@@ -207,6 +313,7 @@ def create_posts(
             status="draft",
             scheduled_at=body.scheduled_at.replace(tzinfo=None) if body.scheduled_at else None,
             created_at=datetime.now(UTC),
+            seo=post_seo,
         )
         if body.scheduled_at:
             p.status = "scheduled"

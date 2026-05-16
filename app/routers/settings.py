@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,6 +20,7 @@ _SECRET_FIELDS = {
     "telegram_bot_token",
     "instagram_access_token",
     "facebook_page_access_token",
+    "pinterest_access_token",
     "r2_access_key",
     "r2_secret_key",
 }
@@ -70,6 +73,7 @@ def test_connection(service: str, db: Session = Depends(get_db)):
         "facebook_page": lambda: _test_facebook_page(
             s.facebook_page_access_token, s.facebook_page_id
         ),
+        "pinterest": lambda: _test_pinterest(s.pinterest_access_token),
         "anthropic": lambda: _test_anthropic(s.anthropic_api_key),
         "openai": lambda: _test_openai(s.openai_api_key),
         "google": lambda: _test_google(s.google_api_key),
@@ -141,7 +145,7 @@ def _test_anthropic(key: str) -> dict:
         import anthropic
 
         anthropic.Anthropic(api_key=key).messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-4-5",
             max_tokens=1,
             messages=[{"role": "user", "content": "hi"}],
         )
@@ -211,6 +215,38 @@ def get_ai_stats(db: Session = Depends(get_db)):
             for provider, model, count in chosen
         ],
     )
+
+
+def _test_pinterest(token: str | None) -> dict:
+    import httpx
+
+    if not token:
+        return {"ok": False, "message": "Access token not configured"}
+    try:
+        r = httpx.get(
+            "https://api.pinterest.com/v5/boards",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"page_size": 25},
+            timeout=5,
+        )
+        d = r.json()
+        if "items" in d:
+            names = [b["name"] for b in d["items"]]
+            preview = ", ".join(names[:5]) or "(none)"
+            return {"ok": True, "message": f"Connected — boards: {preview}"}
+        return {"ok": False, "message": d.get("message", "Unknown error")}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@router.get("/pinterest/boards")
+def get_pinterest_boards(db: Session = Depends(get_db)):
+    s = get_or_create_settings(db)
+    try:
+        board_map = json.loads(s.pinterest_board_map) if s.pinterest_board_map else {}
+    except (json.JSONDecodeError, TypeError):
+        board_map = {}
+    return {"boards": list(board_map.keys())}
 
 
 def _test_r2(s: AppSettings) -> dict:

@@ -46,7 +46,7 @@ def test_fake_telegram_logs(client, caplog):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             with caplog.at_level(logging.INFO, logger="app.routers.posts"):
                 client.post(f"/api/posts/{pid}/post")
-    assert any("[FAKE]" in r.message and "Telegram" in r.message for r in caplog.records)
+    assert any("[FAKE]" in r.message and "telegram" in r.message for r in caplog.records)
 
 
 # ── Instagram ─────────────────────────────────────────────────────────────────
@@ -65,6 +65,29 @@ def test_fake_instagram_returns_fake_message(client):
 def test_fake_instagram_marks_post_posted(client):
     _, pid = _setup(client, "instagram")
     with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
+            client.post(f"/api/posts/{pid}/post")
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["status"] == "posted"
+    assert post["posted_at"] is not None
+
+
+# ── Pinterest ──────────────────────────────────────────────────────────────────
+
+
+@respx.mock
+def test_fake_pinterest_returns_fake_message(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+        with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
+            resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json() == {"success": True, "message": "[FAKE] Posted to pinterest"}
+
+
+@respx.mock
+def test_fake_pinterest_marks_post_posted(client):
+    _, pid = _setup(client, "pinterest")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             client.post(f"/api/posts/{pid}/post")
     post = client.get(f"/api/posts/{pid}").json()

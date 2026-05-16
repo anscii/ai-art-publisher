@@ -31,9 +31,9 @@ def _create_series_with_post(page, live_server, tmp_path, platform="telegram"):
     # Open "New post" form
     page.get_by_role("button", name="New post").click()
 
-    _plat_ids = {"telegram": "pf_tg", "instagram": "pf_ig", "facebook": "pf_fb"}
+    _plat_ids = {"telegram": "pf_tg", "instagram": "pf_ig", "pinterest": "pf_pt"}
     # Uncheck all platforms, then check only the desired one
-    for plat in ["telegram", "instagram", "facebook"]:
+    for plat in ["telegram", "instagram", "pinterest"]:
         cb = page.locator(f"#{_plat_ids[plat]}")
         if plat == platform:
             if not cb.is_checked():

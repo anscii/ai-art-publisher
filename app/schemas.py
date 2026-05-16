@@ -46,6 +46,9 @@ class SettingsUpdate(BaseModel):
     instagram_user_id: str | None = None
     facebook_page_id: str | None = None
     facebook_page_access_token: str | None = None
+    pinterest_access_token: str | None = None
+    pinterest_default_board_id: str | None = None
+    pinterest_board_map: str | None = None
     r2_endpoint: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
@@ -127,6 +130,14 @@ class AIStatsResponse(BaseModel):
     chosen: list[AIProviderModelStat]
 
 
+class AIVariantSemanticUpdate(BaseModel):
+    instagram_seo: str | None = None
+    pinterest_title: str | None = None
+    pinterest_description: str | None = None
+    pinterest_board: str | None = None
+    archive_metadata: dict | None = None
+
+
 class AIVariantResponse(BaseModel):
     id: str
     series_id: str
@@ -141,6 +152,11 @@ class AIVariantResponse(BaseModel):
     hint: str | None = None
     cost_usd: float = 0.0
     generated_at: datetime
+    instagram_seo: str | None = None
+    pinterest_title: str | None = None
+    pinterest_description: str | None = None
+    pinterest_board: str | None = None
+    archive_metadata: dict | None = None
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -163,6 +179,7 @@ class PostResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     image_ids: list[str]
+    seo: str | None = None
 
 
 class PostCreate(BaseModel):
@@ -231,6 +248,7 @@ class SeriesUpdate(BaseModel):
 class CollectionRef(BaseModel):
     id: str
     name: str
+    name_ru: str | None = None
     collection_index: int | None = None
     collection_number: str | None = None
 
@@ -267,6 +285,7 @@ class SeriesDetail(BaseModel):
     tags_instagram: list[str]
     tags_telegram: list[str]
     status: str
+    chosen_variant_id: str | None
     collection: CollectionRef | None
     collection_index: int | None
     collection_number: str | None

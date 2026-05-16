@@ -55,6 +55,11 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
         hint=v.hint,
         cost_usd=v.cost_usd,
         generated_at=v.generated_at,
+        instagram_seo=v.instagram_seo,
+        pinterest_title=v.pinterest_title,
+        pinterest_description=v.pinterest_description,
+        pinterest_board=v.pinterest_board,
+        archive_metadata=json.loads(v.archive_metadata) if v.archive_metadata else None,
     )
 
 
@@ -73,6 +78,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         CollectionRef(
             id=s.collection.id,
             name=s.collection.name,
+            name_ru=s.collection.name_ru,
             collection_index=s.collection_index,
             collection_number=s.collection_number,
         )
@@ -91,6 +97,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         tags_telegram=json.loads(s.tags_telegram),
         status=s.status,
         collection=collection_ref,
+        chosen_variant_id=s.chosen_variant_id,
         collection_index=s.collection_index,
         collection_number=s.collection_number,
         created_at=s.created_at,

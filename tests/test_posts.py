@@ -191,7 +191,7 @@ def test_collection_line_with_number(client):
     client.put(f"/api/series/{sid}", json={"collection_id": cid})
     client.put(f"/api/series/{sid}", json={"collection_number": "III"})
     posts = _make_posts(client, sid, img_id, ["telegram"])
-    assert posts[0]["collection_line"] == "◈ Dark Saga #III"
+    assert posts[0]["collection_line"] == "◈ Dark Saga — III"
 
 
 def test_collection_line_without_number(client):
@@ -255,8 +255,8 @@ def test_collection_line_ru_uses_name_ru(client):
     client.put(f"/api/series/{sid}", json={"collection_id": cid})
     client.put(f"/api/series/{sid}", json={"collection_number": "III"})
     posts = _make_posts(client, sid, img_id, ["telegram"])
-    assert posts[0]["collection_line"] == "◈ Dark Saga #III"
-    assert posts[0]["collection_line_ru"] == "◈ Тёмная Сага #III"
+    assert posts[0]["collection_line"] == "◈ Dark Saga — III"
+    assert posts[0]["collection_line_ru"] == "◈ Тёмная Сага — III"
 
 
 def test_collection_line_ru_fallback_to_name_when_no_name_ru(client):
@@ -326,3 +326,243 @@ def test_build_caption_telegram_uses_ru_fields(client):
 
     assert "Лесной Рассвет" in captured.get("caption", "")
     assert "Forest Dawn" not in captured.get("caption", "")
+
+
+# ── Semantic metadata / SEO ───────────────────────────────────────────────────
+
+
+def test_build_caption_instagram_includes_seo():
+    """Instagram caption includes Filed under: + seo when seo is set."""
+    import json
+
+    from app.models import Post
+    from app.routers.posts import _build_caption
+
+    post = Post(
+        platform="instagram",
+        title="The Forest",
+        description="A dark forest.",
+        tags=json.dumps(["#art"]),
+        seo="dream archaeology • test ruins",
+        collection_line=None,
+        collection_line_ru=None,
+        title_ru=None,
+    )
+    caption = _build_caption(post)
+    assert "Filed under:" in caption
+    assert "dream archaeology • test ruins" in caption
+    assert "The Forest" in caption
+    assert "A dark forest." in caption
+
+
+def test_build_caption_telegram_excludes_seo():
+    """Telegram caption does NOT include Filed under: even when seo is set."""
+    import json
+
+    from app.models import Post
+    from app.routers.posts import _build_caption
+
+    post = Post(
+        platform="telegram",
+        title="The Forest",
+        title_ru="Лес",
+        description="A dark forest.",
+        tags=json.dumps(["#арт"]),
+        seo="dream archaeology • test ruins",
+        collection_line=None,
+        collection_line_ru=None,
+    )
+    caption = _build_caption(post)
+    assert "Filed under:" not in caption
+    assert "dream archaeology" not in caption
+
+
+def test_create_posts_copies_seo_from_chosen_variant(client):
+    """Instagram post gets seo from chosen variant; Telegram post does not."""
+    from unittest.mock import MagicMock, patch
+
+    from app.services.ai.base import AIVariantData
+
+    sid, img_id = _series_with_image(client)
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+
+    fake_with_seo = [
+        AIVariantData(
+            title="T",
+            title_ru="Т",
+            description_en="E",
+            description_ru="Р",
+            tags_instagram=["#art"],
+            tags_telegram=["#арт"],
+            instagram_seo="cosmic ruins • dream dust",
+        )
+    ] * 3
+
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=fake_with_seo)
+        mp.return_value = p
+        variants = client.post(f"/api/series/{sid}/generate", json={"hint": "test"}).json()
+
+    vid = variants[0]["id"]
+    # set chosen_variant_id
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram", "instagram"],
+            "title": "T",
+            "description_telegram": "Р",
+            "description_other": "E",
+            "image_ids": [img_id],
+        },
+    ).json()
+
+    ig_post = next(p for p in posts if p["platform"] == "instagram")
+    tg_post = next(p for p in posts if p["platform"] == "telegram")
+
+    assert ig_post["seo"] == "cosmic ruins • dream dust"
+    assert tg_post["seo"] is None
+
+
+# ── Auto-mark image / series as posted ───────────────────────────────────────
+
+
+def _create_platform_post(client, sid, img_ids, platform):
+    return client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": [platform],
+            "title": "T",
+            "description_telegram": "Desc",
+            "description_other": "Desc",
+            "image_ids": img_ids,
+        },
+    ).json()[0]["id"]
+
+
+def _fake_execute(client, pid, settings):
+    from unittest.mock import MagicMock, patch
+
+    cfg = MagicMock()
+    cfg.fake_posting = True
+    with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+        with patch("app.routers.posts.get_config", return_value=cfg):
+            return client.post(f"/api/posts/{pid}/post")
+
+
+def test_auto_mark_image_posted_when_both_platforms(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        _fake_execute(client, tg_pid, settings)
+        # Only telegram done — image must not be marked posted yet
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] != "posted"
+
+        ig_pid = _create_platform_post(client, sid, [img_id], "instagram")
+        _fake_execute(client, ig_pid, settings)
+        # Both platforms done — image must be marked posted
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] == "posted"
+
+
+def test_auto_mark_image_not_posted_if_only_telegram(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        _fake_execute(client, tg_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    img = next(i for i in detail["images"] if i["id"] == img_id)
+    assert img["status"] != "posted"
+
+
+def test_auto_mark_series_posted_when_all_images_done(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        ig_pid = _create_platform_post(client, sid, [img_id], "instagram")
+        _fake_execute(client, tg_pid, settings)
+        _fake_execute(client, ig_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["status"] == "posted"
+
+
+def test_auto_mark_series_skips_skip_images(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid = client.post("/api/series", json={"title": "Multi"}).json()["id"]
+    img1 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "images/a.jpg", "original_filename": "a.jpg"},
+    ).json()["id"]
+    img2 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "images/b.jpg", "original_filename": "b.jpg"},
+    ).json()["id"]
+    client.patch(f"/api/images/{img2}/status", json={"status": "skip"})
+
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img1], "telegram")
+        ig_pid = _create_platform_post(client, sid, [img1], "instagram")
+        _fake_execute(client, tg_pid, settings)
+        _fake_execute(client, ig_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["status"] == "posted"
+
+
+def test_auto_mark_image_posted_telegram_plus_pinterest(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings(pinterest=True)
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        pt_pid = _create_platform_post(client, sid, [img_id], "pinterest")
+        _fake_execute(client, tg_pid, settings)
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] != "posted"
+
+        _fake_execute(client, pt_pid, settings)
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] == "posted"
+
+
+def test_create_pinterest_post_valid_platform(client):
+    sid, img_id = _series_with_image(client)
+    posts = _make_posts(client, sid, img_id, ["pinterest"])
+    assert len(posts) == 1
+    assert posts[0]["platform"] == "pinterest"
