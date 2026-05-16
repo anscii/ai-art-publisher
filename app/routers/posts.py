@@ -107,6 +107,35 @@ def _do_facebook(post: Post, settings) -> dict:
     return svc.post(urls, caption)
 
 
+def _auto_mark_images_posted(series: Series, db: Session) -> None:
+    """Mark images as posted when they appear in both a posted Telegram and posted Instagram post."""
+    telegram_ids: set[str] = set()
+    instagram_ids: set[str] = set()
+    for p in series.posts:
+        if p.status != "posted" or p.deleted_at is not None:
+            continue
+        ids = {pi.image_id for pi in p.post_images}
+        if p.platform == "telegram":
+            telegram_ids.update(ids)
+        elif p.platform == "instagram":
+            instagram_ids.update(ids)
+    both = telegram_ids & instagram_ids
+    if not both:
+        return
+    for img in series.images:
+        if img.id in both and img.deleted_at is None and img.status not in ("skip", "posted"):
+            img.status = "posted"
+
+
+def _maybe_mark_series_posted(series: Series, db: Session) -> None:
+    """Mark series as posted if all non-skip, non-deleted images are posted."""
+    if series.status == "skip":
+        return
+    active = [img for img in series.images if img.deleted_at is None and img.status != "skip"]
+    if active and all(img.status == "posted" for img in active):
+        series.status = "posted"
+
+
 def execute_post(post: Post, db: Session, settings) -> PostResult:
     if post.status == "posted" or post.external_post_id:
         return PostResult(success=False, message="Already posted (duplicate protection)")
@@ -128,6 +157,9 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         post.posted_at = datetime.now(UTC)
         post.external_post_id = external_id
         post.error_message = ""
+        db.commit()
+        _auto_mark_images_posted(post.series, db)
+        _maybe_mark_series_posted(post.series, db)
         db.commit()
         prefix = "[FAKE] " if result.get("fake") else ""
         return PostResult(success=True, message=f"{prefix}Posted to {post.platform}")

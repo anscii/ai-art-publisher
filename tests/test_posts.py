@@ -424,3 +424,116 @@ def test_create_posts_copies_seo_from_chosen_variant(client):
 
     assert ig_post["seo"] == "cosmic ruins • dream dust"
     assert tg_post["seo"] is None
+
+
+# ── Auto-mark image / series as posted ───────────────────────────────────────
+
+
+def _create_platform_post(client, sid, img_ids, platform):
+    return client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": [platform],
+            "title": "T",
+            "description_telegram": "Desc",
+            "description_other": "Desc",
+            "image_ids": img_ids,
+        },
+    ).json()[0]["id"]
+
+
+def _fake_execute(client, pid, settings):
+    from unittest.mock import MagicMock, patch
+
+    cfg = MagicMock()
+    cfg.fake_posting = True
+    with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+        with patch("app.routers.posts.get_config", return_value=cfg):
+            return client.post(f"/api/posts/{pid}/post")
+
+
+def test_auto_mark_image_posted_when_both_platforms(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        _fake_execute(client, tg_pid, settings)
+        # Only telegram done — image must not be marked posted yet
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] != "posted"
+
+        ig_pid = _create_platform_post(client, sid, [img_id], "instagram")
+        _fake_execute(client, ig_pid, settings)
+        # Both platforms done — image must be marked posted
+        detail = client.get(f"/api/series/{sid}").json()
+        img = next(i for i in detail["images"] if i["id"] == img_id)
+        assert img["status"] == "posted"
+
+
+def test_auto_mark_image_not_posted_if_only_telegram(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        _fake_execute(client, tg_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    img = next(i for i in detail["images"] if i["id"] == img_id)
+    assert img["status"] != "posted"
+
+
+def test_auto_mark_series_posted_when_all_images_done(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        ig_pid = _create_platform_post(client, sid, [img_id], "instagram")
+        _fake_execute(client, tg_pid, settings)
+        _fake_execute(client, ig_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["status"] == "posted"
+
+
+def test_auto_mark_series_skips_skip_images(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid = client.post("/api/series", json={"title": "Multi"}).json()["id"]
+    img1 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "images/a.jpg", "original_filename": "a.jpg"},
+    ).json()["id"]
+    img2 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "images/b.jpg", "original_filename": "b.jpg"},
+    ).json()["id"]
+    client.patch(f"/api/images/{img2}/status", json={"status": "skip"})
+
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img1], "telegram")
+        ig_pid = _create_platform_post(client, sid, [img1], "instagram")
+        _fake_execute(client, tg_pid, settings)
+        _fake_execute(client, ig_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["status"] == "posted"
