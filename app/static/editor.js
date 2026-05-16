@@ -713,7 +713,7 @@ function buildDescriptionsCard(series) {
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
     h('div', { cls: 'col-12' }, saveBtn, resetBtn));
 
-  form.addEventListener('input', _updateSaveDescBtn);
+  form.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
 
   const semDetails = document.createElement('details');
   semDetails.className = 'mt-2';
@@ -750,18 +750,23 @@ function resetToSaved() {
   set('f_desc_ru',      s.description_ru);
   set('f_tags_ig',      (s.tags_instagram || []).join(' '));
   set('f_tags_tg',      (s.tags_telegram  || []).join(' '));
-  set('f_instagram_seo', '');
-  set('f_pin_title', '');
-  set('f_pin_desc', '');
-  set('f_pin_board', '');
-  set('f_arch_world', '');
-  set('f_arch_visual', '');
-  set('f_arch_mood', '');
-  App.activeVariantId = null;
+  const chosenV = s.chosen_variant_id
+    ? (s.ai_variants || []).find(v => v.id === s.chosen_variant_id)
+    : null;
+  const arch = chosenV?.archive_metadata || {};
+  set('f_instagram_seo', chosenV?.instagram_seo || '');
+  set('f_pin_title',     chosenV?.pinterest_title || '');
+  set('f_pin_desc',      chosenV?.pinterest_description || '');
+  set('f_pin_board',     chosenV?.pinterest_board || '');
+  set('f_arch_world',  (arch.world_keywords  || []).join(', '));
+  set('f_arch_visual', (arch.visual_keywords || []).join(', '));
+  set('f_arch_mood',   (arch.mood_keywords   || []).join(', '));
+  App.activeVariantId = s.chosen_variant_id || null;
   _updateSaveDescBtn();
-  document.querySelectorAll('[data-variant-idx]').forEach(btn => {
-    btn.classList.remove('btn-primary');
-    btn.classList.add('btn-outline-secondary');
+  document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
+    const isChosen = (s.ai_variants || [])[i]?.id === s.chosen_variant_id;
+    btn.classList.toggle('btn-primary', isChosen);
+    btn.classList.toggle('btn-outline-secondary', !isChosen);
   });
 }
 

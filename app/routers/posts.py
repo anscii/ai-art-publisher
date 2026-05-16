@@ -184,6 +184,8 @@ def create_posts(
     if bad:
         raise HTTPException(status_code=400, detail=f"Images not in series: {bad}")
 
+    chosen_variant = db.get(AIVariant, s.chosen_variant_id) if s.chosen_variant_id else None
+
     created = []
     for platform in body.platforms:
         if platform == "telegram":
@@ -193,11 +195,9 @@ def create_posts(
             description = body.description_other
             tags = json.dumps(body.tags_other)
 
-        post_seo = None
-        if platform != "telegram" and s.chosen_variant_id:
-            chosen = db.get(AIVariant, s.chosen_variant_id)
-            if chosen and chosen.instagram_seo:
-                post_seo = chosen.instagram_seo
+        post_seo = (
+            chosen_variant.instagram_seo if chosen_variant and platform != "telegram" else None
+        )
 
         p = Post(
             series_id=series_id,
