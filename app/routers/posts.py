@@ -68,10 +68,14 @@ def _build_caption(post: Post) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def _response_fake_posting(post: Post, images_num: int, caption: str) -> dict:
+def _response_fake_posting(
+    post: Post, images_num: int, caption: str, platform: str | None = None
+) -> dict:
+    if not platform:
+        platform = post.platform
     logger.info(
         "[FAKE] %s | post=%s | %d images | caption: \n%s",
-        post.platform,
+        platform,
         post.id,
         images_num,
         caption,
@@ -103,7 +107,9 @@ def _do_facebook(post: Post, settings) -> dict:
     urls = _image_urls(post, settings.r2_public_base_url)
     caption = _build_caption(post)
     if get_config().fake_posting:
-        return _response_fake_posting(post=post, images_num=len(urls), caption=caption)
+        return _response_fake_posting(
+            post=post, images_num=len(urls), caption=caption, platform="facebook"
+        )
     svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
     return svc.post(urls, caption)
 
@@ -180,12 +186,18 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
     if post.status == "posted" or post.external_post_id:
         return PostResult(success=False, message="Already posted (duplicate protection)")
 
+    platform = post.platform
+
     if post.platform == "telegram":
         result = _do_telegram(post, settings)
         external_id = None
     elif post.platform == "instagram":
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
+        if result.get("ok"):
+            fb_result = _do_facebook(post, settings)
+            if fb_result.get("ok") and not fb_result.get("skipped"):
+                platform = f"{platform} & facebook"
     elif post.platform == "facebook":
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")
@@ -205,7 +217,7 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         _maybe_mark_series_posted(post.series, db)
         db.commit()
         prefix = "[FAKE] " if result.get("fake") else ""
-        return PostResult(success=True, message=f"{prefix}Posted to {post.platform}")
+        return PostResult(success=True, message=f"{prefix}Posted to {platform}")
 
     msg = result.get("description", "Unknown error")
     post.status = "failed"

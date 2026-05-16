@@ -1258,7 +1258,7 @@ function _buildImageSelector(allImages, initialSelected, imgMap) {
 }
 
 // ── Posts card ────────────────────────────────────────────────────────────────
-const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook' };
+const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook', pinterest: 'bi bi-pinterest' };
 const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', posted: 'bg-success', failed: 'bg-danger' };
 
 function buildPostsCard(series) {
@@ -1475,13 +1475,13 @@ function buildCreatePostForm(series, imgMap, onClose) {
   tgCheck.checked = true;
   const igCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_ig' });
   igCheck.checked = true;
-  const fbCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_fb' });
-  fbCheck.checked = true;
+  const ptCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'pf_pt' });
+  ptCheck.checked = false;
 
   const platformRow = h('div', { cls: 'd-flex gap-3 mb-2 align-items-center' },
     h('label', { cls: 'd-flex align-items-center gap-1 small' }, tgCheck, document.createTextNode(' Telegram')),
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' Instagram')),
-    h('label', { cls: 'd-flex align-items-center gap-1 small' }, fbCheck, document.createTextNode(' Facebook')));
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, igCheck, document.createTextNode(' Instagram & FB')),
+    h('label', { cls: 'd-flex align-items-center gap-1 small' }, ptCheck, document.createTextNode(' Pinterest')));
 
   // EN content fields
   const titleInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_title', placeholder: 'Title (EN)' });
@@ -1520,7 +1520,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     const platforms = [];
     if (tgCheck.checked) platforms.push('telegram');
     if (igCheck.checked) platforms.push('instagram');
-    if (fbCheck.checked) platforms.push('facebook');
+    if (ptCheck.checked) platforms.push('pinterest');
     if (!platforms.length) { showToast('Select at least one platform', 'danger'); return; }
     if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return; }
     const imageIds = allImages.filter(i => _selectedPostImages.has(i.id)).map(i => i.id);

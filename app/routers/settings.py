@@ -217,7 +217,7 @@ def get_ai_stats(db: Session = Depends(get_db)):
     )
 
 
-def _test_pinterest(token: str) -> dict:
+def _test_pinterest(token: str | None) -> dict:
     import httpx
 
     if not token:
