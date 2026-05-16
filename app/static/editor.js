@@ -1161,7 +1161,10 @@ function buildPostsCard(series) {
   const formWrap = h('div', { cls: 'd-none' });
   newPostBtn.addEventListener('click', () => {
     if (formWrap.classList.contains('d-none')) {
-      formWrap.replaceChildren(buildCreatePostForm(series, imgMap, () => formWrap.classList.add('d-none')));
+      const cur = App.currentSeries;
+      const curImgMap = {};
+      cur.images.forEach(i => { if (!i.deleted_at) curImgMap[i.id] = i.public_url; });
+      formWrap.replaceChildren(buildCreatePostForm(cur, curImgMap, () => formWrap.classList.add('d-none')));
       formWrap.classList.remove('d-none');
     } else {
       formWrap.classList.add('d-none');
