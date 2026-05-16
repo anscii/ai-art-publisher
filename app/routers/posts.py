@@ -195,9 +195,18 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
         if result.get("ok"):
-            fb_result = _do_facebook(post, settings)
-            if fb_result.get("ok") and not fb_result.get("skipped"):
-                platform = f"{platform} & facebook"
+            try:
+                fb_result = _do_facebook(post, settings)
+                if fb_result.get("ok") and not fb_result.get("skipped"):
+                    platform = f"{platform} & facebook"
+                elif not fb_result.get("ok") and not fb_result.get("skipped"):
+                    logger.warning(
+                        "Facebook auto-post failed for %s: %s",
+                        post.id,
+                        fb_result.get("description"),
+                    )
+            except Exception as exc:
+                logger.warning("Facebook auto-post exception for %s: %s", post.id, exc)
     elif post.platform == "facebook":
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")
