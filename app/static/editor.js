@@ -37,7 +37,7 @@ function _updateSaveStatusBtn() {
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
   _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
-  App.activeVariantId = null;
+  App.activeVariantId = series.chosen_variant_id || null;
 
   const titleInput = h('input', {
     type: 'text', cls: 'form-control form-control-sm fw-semibold',
@@ -636,7 +636,7 @@ function buildDescriptionsCard(series) {
   } else {
     variants.forEach((v, i) => {
       const btn = h('button', {
-        cls: 'btn btn-xs ' + (i === 0 ? 'btn-primary' : 'btn-outline-secondary'),
+        cls: 'btn btn-xs ' + (v.id === series.chosen_variant_id ? 'btn-primary' : 'btn-outline-secondary'),
         'data-variant-idx': String(i),
         onclick: () => applyVariant(i),
       });
@@ -666,20 +666,25 @@ function buildDescriptionsCard(series) {
   const pubTitleRu = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title_ru', placeholder: 'Publication title RU (pre-fills Telegram posts)' });
   pubTitleRu.value = series.title_ru || '';
 
+  const _chosenVariant = series.chosen_variant_id
+    ? (series.ai_variants || []).find(v => v.id === series.chosen_variant_id)
+    : null;
+  const _chosenArch = _chosenVariant?.archive_metadata || {};
+
   const igSeo = h('textarea', { cls: 'form-control form-control-sm', id: 'f_instagram_seo', rows: '2' });
-  igSeo.value = '';
+  igSeo.value = _chosenVariant?.instagram_seo || '';
   const pinTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_title' });
-  pinTitle.value = '';
+  pinTitle.value = _chosenVariant?.pinterest_title || '';
   const pinDesc = h('textarea', { cls: 'form-control form-control-sm', id: 'f_pin_desc', rows: '2' });
-  pinDesc.value = '';
+  pinDesc.value = _chosenVariant?.pinterest_description || '';
   const pinBoard = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_board' });
-  pinBoard.value = '';
+  pinBoard.value = _chosenVariant?.pinterest_board || '';
   const archWorld = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_world', placeholder: 'comma-separated' });
-  archWorld.value = '';
+  archWorld.value = (_chosenArch.world_keywords || []).join(', ');
   const archVisual = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_visual', placeholder: 'comma-separated' });
-  archVisual.value = '';
+  archVisual.value = (_chosenArch.visual_keywords || []).join(', ');
   const archMood = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_mood', placeholder: 'comma-separated' });
-  archMood.value = '';
+  archMood.value = (_chosenArch.mood_keywords || []).join(', ');
 
   const saveBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveDescBtn' });
   saveBtn.appendChild(icon('bi bi-floppy me-1'));
