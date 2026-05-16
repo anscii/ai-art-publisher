@@ -8,6 +8,32 @@ document.addEventListener('click', () => { if (_activeCollPickerHide) _activeCol
 
 function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
+function _updateSaveDescBtn() {
+  const btn = document.getElementById('saveDescBtn');
+  if (!btn || !App.currentSeries) return;
+  const s = App.currentSeries;
+  const dirty =
+    (document.getElementById('editorTitle')?.value?.trim() ?? '') !== (s.name ?? '') ||
+    (document.getElementById('f_pub_title')?.value?.trim() ?? '') !== (s.title ?? '') ||
+    (document.getElementById('f_pub_title_ru')?.value?.trim() ?? '') !== (s.title_ru ?? '') ||
+    (document.getElementById('f_desc_en')?.value ?? '') !== (s.description_en ?? '') ||
+    (document.getElementById('f_desc_ru')?.value ?? '') !== (s.description_ru ?? '') ||
+    (document.getElementById('f_tags_ig')?.value?.trim() ?? '') !== (s.tags_instagram ?? []).join(' ') ||
+    (document.getElementById('f_tags_tg')?.value?.trim() ?? '') !== (s.tags_telegram ?? []).join(' ') ||
+    (App.activeVariantId != null && App.activeVariantId !== (s.chosen_variant_id ?? null));
+  btn.classList.toggle('btn-primary', dirty);
+  btn.classList.toggle('btn-outline-primary', !dirty);
+}
+
+function _updateSaveStatusBtn() {
+  const btn = document.getElementById('saveStatusBtn');
+  const sel = document.getElementById('statusSelect');
+  if (!btn || !sel || !App.currentSeries) return;
+  const dirty = sel.value !== App.currentSeries.status;
+  btn.classList.toggle('btn-primary', dirty);
+  btn.classList.toggle('btn-outline-primary', !dirty);
+}
+
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
   _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
@@ -39,6 +65,8 @@ function renderEditor(series) {
 
   initImageSortable(series.id);
   restoreDraft(series.id);
+  document.getElementById('editorTitle')?.addEventListener('input', _updateSaveDescBtn);
+  _updateSaveDescBtn();
 }
 
 async function saveTitle(seriesId) {
@@ -653,7 +681,7 @@ function buildDescriptionsCard(series) {
   const archMood = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_mood', placeholder: 'comma-separated' });
   archMood.value = '';
 
-  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary' });
+  const saveBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveDescBtn' });
   saveBtn.appendChild(icon('bi bi-floppy me-1'));
   saveBtn.appendChild(document.createTextNode('Save'));
   saveBtn.addEventListener('click', () => saveDescription(series.id));
@@ -674,6 +702,8 @@ function buildDescriptionsCard(series) {
     mkField('Instagram & FB Page tags', tagsIg),
     h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
     h('div', { cls: 'col-12' }, saveBtn, resetBtn));
+
+  form.addEventListener('input', _updateSaveDescBtn);
 
   const semDetails = document.createElement('details');
   semDetails.className = 'mt-2';
@@ -718,6 +748,7 @@ function resetToSaved() {
   set('f_arch_visual', '');
   set('f_arch_mood', '');
   App.activeVariantId = null;
+  _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach(btn => {
     btn.classList.remove('btn-primary');
     btn.classList.add('btn-outline-secondary');
@@ -744,6 +775,7 @@ function applyVariant(idx) {
   set('f_arch_visual', (arch.visual_keywords || []).join(', '));
   set('f_arch_mood', (arch.mood_keywords || []).join(', '));
   App.activeVariantId = v.id;
+  _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('btn-primary', i === idx);
     btn.classList.toggle('btn-outline-secondary', i !== idx);
@@ -771,6 +803,7 @@ async function saveDescription(seriesId) {
     if (t) t.value = updated.name || updated.title || '';
     localStorage.removeItem('draft_' + seriesId);
     showToast('Saved', 'success');
+    _updateSaveDescBtn();
     if (App.activeVariantId) {
       const splitTrim = s => s.split(',').map(x => x.trim()).filter(Boolean);
       await apiFetch('PATCH', '/api/ai_variants/' + App.activeVariantId, {
@@ -902,10 +935,11 @@ function buildActionsCard(series) {
     const o = document.createElement('option'); o.value = series.status; o.textContent = series.status; o.selected = true;
     statusSel.appendChild(o);
   }
-  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary' });
+  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveStatusBtn' });
   saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
   saveStatusBtn.appendChild(document.createTextNode('Save status'));
   saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
+  statusSel.addEventListener('change', _updateSaveStatusBtn);
 
   const headerLabel = h('span', { cls: 'small fw-medium' });
   headerLabel.appendChild(icon('bi bi-gear me-1'));
@@ -930,6 +964,7 @@ async function saveStatus(seriesId) {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, { status });
     App.currentSeries = updated;
     updateSeriesItem(updated);
+    _updateSaveStatusBtn();
     showToast('Status saved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }
