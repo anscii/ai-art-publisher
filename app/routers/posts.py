@@ -146,7 +146,7 @@ def _compute_collection_line(series: Series, lang: str = "en") -> str | None:
         return None
     num = (series.collection_number or "").strip()
     name = (coll.name_ru or coll.name) if lang == "ru" else coll.name
-    return f"◈ {name} #{num}" if num else f"◈ {name}"
+    return f"◈ {name} — {num}" if num else f"◈ {name}"
 
 
 def _create_post_images(post: Post, image_ids: list[str], db: Session) -> None:

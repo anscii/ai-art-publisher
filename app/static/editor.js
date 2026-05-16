@@ -1413,7 +1413,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
   const collLineInput = h('input', { type: 'text', cls: 'form-control form-control-sm mb-1', id: 'pf_coll_line', placeholder: '◈ Collection line (leave blank to hide)' });
   if (series.collection) {
     const num = (series.collection_number || '').trim();
-    collLineInput.value = num ? `◈ ${series.collection.name} #${num}` : `◈ ${series.collection.name}`;
+    collLineInput.value = num ? `◈ ${series.collection.name} — ${num}` : `◈ ${series.collection.name}`;
   }
 
   // RU content fields
@@ -1427,7 +1427,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
   if (series.collection) {
     const num = (series.collection_number || '').trim();
     const nameRu = series.collection.name_ru || series.collection.name;
-    collLineRuInput.value = num ? `◈ ${nameRu} #${num}` : `◈ ${nameRu}`;
+    collLineRuInput.value = num ? `◈ ${nameRu} — ${num}` : `◈ ${nameRu}`;
   }
 
   const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2', id: 'pf_sched' });

@@ -191,7 +191,7 @@ def test_collection_line_with_number(client):
     client.put(f"/api/series/{sid}", json={"collection_id": cid})
     client.put(f"/api/series/{sid}", json={"collection_number": "III"})
     posts = _make_posts(client, sid, img_id, ["telegram"])
-    assert posts[0]["collection_line"] == "◈ Dark Saga #III"
+    assert posts[0]["collection_line"] == "◈ Dark Saga — III"
 
 
 def test_collection_line_without_number(client):
@@ -255,8 +255,8 @@ def test_collection_line_ru_uses_name_ru(client):
     client.put(f"/api/series/{sid}", json={"collection_id": cid})
     client.put(f"/api/series/{sid}", json={"collection_number": "III"})
     posts = _make_posts(client, sid, img_id, ["telegram"])
-    assert posts[0]["collection_line"] == "◈ Dark Saga #III"
-    assert posts[0]["collection_line_ru"] == "◈ Тёмная Сага #III"
+    assert posts[0]["collection_line"] == "◈ Dark Saga — III"
+    assert posts[0]["collection_line_ru"] == "◈ Тёмная Сага — III"
 
 
 def test_collection_line_ru_fallback_to_name_when_no_name_ru(client):
