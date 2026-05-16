@@ -64,6 +64,11 @@ function renderEditor(series) {
   );
 
   initImageSortable(series.id);
+  if (series.chosen_variant_id) {
+    const chosen = (series.ai_variants || []).find(v => v.id === series.chosen_variant_id);
+    const hintEl = document.getElementById('genHint');
+    if (chosen && hintEl) hintEl.value = chosen.hint || '';
+  }
   restoreDraft(series.id);
   document.getElementById('editorTitle')?.addEventListener('input', _updateSaveDescBtn);
   _updateSaveDescBtn();
