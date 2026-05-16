@@ -97,6 +97,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         tags_telegram=json.loads(s.tags_telegram),
         status=s.status,
         collection=collection_ref,
+        chosen_variant_id=s.chosen_variant_id,
         collection_index=s.collection_index,
         collection_number=s.collection_number,
         created_at=s.created_at,

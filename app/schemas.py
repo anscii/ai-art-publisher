@@ -282,6 +282,7 @@ class SeriesDetail(BaseModel):
     tags_instagram: list[str]
     tags_telegram: list[str]
     status: str
+    chosen_variant_id: str | None
     collection: CollectionRef | None
     collection_index: int | None
     collection_number: str | None
