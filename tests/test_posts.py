@@ -1,5 +1,10 @@
 """Tests for Post CRUD and scheduling via /api/series/{id}/posts and /api/posts/{id}."""
 
+import json as _json
+
+from app.models import Post as _Post
+from app.routers.posts import _build_caption
+
 
 def _series_with_image(client, title="Test Series"):
     sid = client.post("/api/series", json={"title": title}).json()["id"]
@@ -566,3 +571,105 @@ def test_create_pinterest_post_valid_platform(client):
     posts = _make_posts(client, sid, img_id, ["pinterest"])
     assert len(posts) == 1
     assert posts[0]["platform"] == "pinterest"
+
+
+# ── _build_caption ────────────────────────────────────────────────────────────
+
+
+def _make_post(**kwargs) -> _Post:
+    defaults = dict(
+        id="test-id",
+        series_id="s-id",
+        platform="telegram",
+        title="Title EN",
+        title_ru=None,
+        description="Body text",
+        tags=_json.dumps([]),
+        collection_line=None,
+        collection_line_ru=None,
+        seo=None,
+        status="draft",
+        external_post_id=None,
+        error_message=None,
+        posted_at=None,
+        scheduled_at=None,
+        deleted_at=None,
+    )
+    defaults.update(kwargs)
+    p = _Post.__new__(_Post)
+    p.__dict__.update(defaults)
+    return p
+
+
+def test_build_caption_telegram_joins_parts():
+    p = _make_post(
+        platform="telegram",
+        title="EN Title",
+        description="Body",
+        tags=_json.dumps(["#tag"]),
+    )
+    assert _build_caption(p) == "EN Title\n\nBody\n\n#tag"
+
+
+def test_build_caption_telegram_prefers_ru_title():
+    p = _make_post(
+        platform="telegram", title="EN", title_ru="RU", description="Body", tags=_json.dumps([])
+    )
+    assert _build_caption(p).startswith("RU")
+
+
+def test_build_caption_telegram_falls_back_to_en_title_when_no_ru():
+    p = _make_post(
+        platform="telegram", title="EN", title_ru=None, description="Body", tags=_json.dumps([])
+    )
+    assert _build_caption(p).startswith("EN")
+
+
+def test_build_caption_telegram_prefers_ru_collection_line():
+    p = _make_post(
+        platform="telegram",
+        title="T",
+        description="D",
+        tags=_json.dumps([]),
+        collection_line="EN coll",
+        collection_line_ru="RU coll",
+    )
+    assert "RU coll" in _build_caption(p)
+    assert "EN coll" not in _build_caption(p)
+
+
+def test_build_caption_instagram_uses_en_title():
+    p = _make_post(
+        platform="instagram", title="EN", title_ru="RU", description="Body", tags=_json.dumps([])
+    )
+    assert _build_caption(p).startswith("EN")
+
+
+def test_build_caption_instagram_includes_seo_footer():
+    p = _make_post(
+        platform="instagram",
+        title="T",
+        description="D",
+        tags=_json.dumps([]),
+        seo="keywords here",
+    )
+    caption = _build_caption(p)
+    assert "—\nFiled under:\nkeywords here" in caption
+
+
+def test_build_caption_telegram_omits_seo_footer():
+    p = _make_post(platform="telegram", title="T", description="D", tags=_json.dumps([]), seo="kw")
+    assert "Filed under" not in _build_caption(p)
+
+
+def test_build_caption_skips_empty_parts():
+    p = _make_post(platform="instagram", title="T", description="D", tags=_json.dumps([]))
+    caption = _build_caption(p)
+    assert "\n\n\n" not in caption
+
+
+def test_build_caption_tags_joined_by_space():
+    p = _make_post(
+        platform="telegram", title="T", description="D", tags=_json.dumps(["#a", "#b", "#c"])
+    )
+    assert _build_caption(p).endswith("#a #b #c")

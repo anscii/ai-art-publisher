@@ -1330,6 +1330,11 @@ function buildPostRow(post, imgMap, series) {
 
   const actions = h('div', { cls: 'd-flex gap-1 flex-shrink-0' });
 
+  const viewBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'View post content' });
+  viewBtn.appendChild(icon('bi bi-eye'));
+  viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
+  actions.appendChild(viewBtn);
+
   if (post.status !== 'posted') {
     const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now' });
     postNowBtn.appendChild(icon('bi bi-send'));
@@ -1396,7 +1401,7 @@ function buildPostRow(post, imgMap, series) {
   const info = h('div', { cls: 'd-flex align-items-center gap-1 flex-grow-1 overflow-hidden' },
     platIcon, titleEl, statusBadgeEl, timeEl ? timeEl : null);
 
-  const rowWrap = h('div', { cls: 'p-1 border rounded d-flex align-items-center gap-2', 'data-post-row': post.id },
+  const rowWrap = h('div', { cls: 'p-1 border rounded d-flex align-items-center gap-2', 'data-post-row': post.id, 'data-post-status': post.status },
     thumbs, info, actions);
   return rowWrap;
 }
@@ -1588,4 +1593,110 @@ function restoreDraft(seriesId) {
       set('f_tags_ig', d.tags_ig); set('f_tags_tg', d.tags_tg);
     }
   } catch (_) {}
+}
+
+function _buildPostCaption(post) {
+  const tags = (post.tags || []).join(' ');
+  let parts;
+  if (post.platform === 'telegram') {
+    const title = post.title_ru || post.title;
+    const collLine = post.collection_line_ru || post.collection_line;
+    parts = [title, collLine, post.description, tags];
+  } else {
+    const archiveFooter = post.seo ? '—\nFiled under:\n' + post.seo : null;
+    parts = [post.title, post.collection_line, post.description, archiveFooter, tags];
+  }
+  return parts.filter(Boolean).join('\n\n');
+}
+
+function showPostContent(post, imgMap, series) {
+  const platIcon = POST_PLATFORM_ICON[post.platform] || 'bi bi-globe';
+  document.getElementById('postViewPlatform').replaceChildren(
+    h('span', { cls: 'd-flex align-items-center gap-1' },
+      icon(platIcon + ' me-1'),
+      h('span', { cls: 'fw-semibold text-capitalize', text: post.platform })
+    )
+  );
+
+  const statusColor = POST_STATUS_COLOR[post.status] || 'bg-secondary';
+  document.getElementById('postViewStatus').replaceChildren(
+    h('span', { cls: 'badge ' + statusColor, text: post.status })
+  );
+
+  const timeEl = document.getElementById('postViewTime');
+  if (post.posted_at) {
+    timeEl.textContent = formatDate(post.posted_at);
+  } else if (post.scheduled_at) {
+    timeEl.textContent = 'Scheduled: ' + formatDate(post.scheduled_at);
+  } else {
+    timeEl.textContent = '';
+  }
+
+  const sections = [];
+
+  // Images — look up full image objects so openLightbox gets public_url + id
+  const postImages = (post.image_ids || [])
+    .map(id => (series.images || []).find(img => img.id === id))
+    .filter(Boolean);
+  if (postImages.length) {
+    sections.push(
+      h('div', { cls: 'd-flex flex-wrap gap-2 mb-3' },
+        ...postImages.map((img, i) =>
+          h('img', {
+            src: img.public_url,
+            style: 'height:120px;width:120px;object-fit:cover;border-radius:6px;cursor:pointer',
+            onclick: () => openLightbox(postImages, i)
+          })
+        )
+      )
+    );
+  }
+
+  // Full assembled caption as it appears on the platform
+  const caption = _buildPostCaption(post);
+  if (caption) {
+    sections.push(
+      h('pre', {
+        style: 'white-space:pre-wrap;font-family:inherit;font-size:.9rem;' +
+               'background:var(--bs-body-bg);border:1px solid var(--bs-border-color);' +
+               'border-radius:6px;padding:.75rem;margin:0',
+        text: caption
+      })
+    );
+  }
+
+  // Platform link (below caption)
+  if (post.external_post_id) {
+    if (post.platform === 'pinterest') {
+      const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
+      sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
+        ...pinIds.map((pid, i) =>
+          h('a', {
+            href: 'https://www.pinterest.com/pin/' + pid + '/',
+            target: '_blank',
+            cls: 'btn btn-sm btn-outline-secondary'
+          }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
+        )
+      ));
+    } else {
+      const hrefs = {
+        instagram: 'https://www.instagram.com/p/' + post.external_post_id + '/',
+        facebook: 'https://www.facebook.com/' + post.external_post_id,
+      };
+      const href = hrefs[post.platform];
+      if (href) {
+        sections.push(h('div', { cls: 'mt-2' },
+          h('a', { href, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
+            icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
+        ));
+      }
+    }
+  }
+
+  if (post.error_message) {
+    sections.push(h('div', { cls: 'alert alert-danger mt-2 py-2 small', text: post.error_message }));
+  }
+
+  document.getElementById('postViewBody').replaceChildren(...sections);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('postViewModal')).show();
 }
