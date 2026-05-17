@@ -1595,6 +1595,20 @@ function restoreDraft(seriesId) {
   } catch (_) {}
 }
 
+function _buildPostCaption(post) {
+  const tags = (post.tags || []).join(' ');
+  let parts;
+  if (post.platform === 'telegram') {
+    const title = post.title_ru || post.title;
+    const collLine = post.collection_line_ru || post.collection_line;
+    parts = [title, collLine, post.description, tags];
+  } else {
+    const archiveFooter = post.seo ? '—\nFiled under:\n' + post.seo : null;
+    parts = [post.title, post.collection_line, post.description, archiveFooter, tags];
+  }
+  return parts.filter(Boolean).join('\n\n');
+}
+
 function showPostContent(post, imgMap, series) {
   const platIcon = POST_PLATFORM_ICON[post.platform] || 'bi bi-globe';
   document.getElementById('postViewPlatform').replaceChildren(
@@ -1630,7 +1644,7 @@ function showPostContent(post, imgMap, series) {
         ...postImages.map((img, i) =>
           h('img', {
             src: img.public_url,
-            style: 'height:100px;width:100px;object-fit:cover;border-radius:6px;cursor:pointer',
+            style: 'height:120px;width:120px;object-fit:cover;border-radius:6px;cursor:pointer',
             onclick: () => openLightbox(postImages, i)
           })
         )
@@ -1638,70 +1652,30 @@ function showPostContent(post, imgMap, series) {
     );
   }
 
-  // Title EN
-  if (post.title) {
-    sections.push(h('div', { cls: 'mb-2' },
-      h('div', { cls: 'text-muted small mb-1', text: 'Title' }),
-      h('div', { cls: 'fw-semibold', text: post.title })
-    ));
-  }
-
-  // Title RU
-  if (post.title_ru) {
-    sections.push(h('div', { cls: 'mb-2' },
-      h('div', { cls: 'text-muted small mb-1', text: 'Title (RU)' }),
-      h('div', { cls: 'fw-semibold', text: post.title_ru })
-    ));
-  }
-
-  // Collection
-  const col = [post.collection_line, post.collection_line_ru].filter(Boolean).join(' / ');
-  if (col) {
-    sections.push(h('div', { cls: 'mb-2' },
-      h('div', { cls: 'text-muted small mb-1', text: 'Collection' }),
-      h('div', { text: col })
-    ));
-  }
-
-  // Caption / Description
-  if (post.description) {
-    sections.push(h('div', { cls: 'mb-2' },
-      h('div', { cls: 'text-muted small mb-1', text: 'Caption' }),
+  // Full assembled caption as it appears on the platform
+  const caption = _buildPostCaption(post);
+  if (caption) {
+    sections.push(
       h('pre', {
         style: 'white-space:pre-wrap;font-family:inherit;font-size:.9rem;' +
                'background:var(--bs-body-bg);border:1px solid var(--bs-border-color);' +
                'border-radius:6px;padding:.75rem;margin:0',
-        text: post.description
+        text: caption
       })
-    ));
+    );
   }
 
-  // Tags
-  if (post.tags && post.tags.length) {
-    sections.push(h('div', { cls: 'mb-2' },
-      h('div', { cls: 'text-muted small mb-1', text: 'Tags' }),
-      h('div', { cls: 'd-flex flex-wrap gap-1' },
-        ...post.tags.map(tag =>
-          h('span', { cls: 'badge bg-secondary fw-normal', text: tag })
-        )
-      )
-    ));
-  }
-
-  // External link / pin IDs
+  // Platform link (below caption)
   if (post.external_post_id) {
     if (post.platform === 'pinterest') {
       const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
-      sections.push(h('div', { cls: 'mb-2' },
-        h('div', { cls: 'text-muted small mb-1', text: 'Pinterest Pins' }),
-        h('div', { cls: 'd-flex flex-wrap gap-2' },
-          ...pinIds.map((pid, i) =>
-            h('a', {
-              href: 'https://www.pinterest.com/pin/' + pid + '/',
-              target: '_blank',
-              cls: 'btn btn-sm btn-outline-danger'
-            }, icon('bi bi-pinterest me-1'), 'Pin ' + (i + 1))
-          )
+      sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
+        ...pinIds.map((pid, i) =>
+          h('a', {
+            href: 'https://www.pinterest.com/pin/' + pid + '/',
+            target: '_blank',
+            cls: 'btn btn-sm btn-outline-secondary'
+          }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
         )
       ));
     } else {
@@ -1711,21 +1685,16 @@ function showPostContent(post, imgMap, series) {
       };
       const href = hrefs[post.platform];
       if (href) {
-        sections.push(h('div', { cls: 'mb-2' },
+        sections.push(h('div', { cls: 'mt-2' },
           h('a', { href, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
-            icon('bi bi-box-arrow-up-right me-1'),
-            'View on ' + post.platform)
+            icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
         ));
-      } else {
-        sections.push(h('div', { cls: 'mb-2 text-muted small',
-          text: 'External ID: ' + post.external_post_id }));
       }
     }
   }
 
-  // Error
   if (post.error_message) {
-    sections.push(h('div', { cls: 'alert alert-danger mb-2 py-2 small', text: post.error_message }));
+    sections.push(h('div', { cls: 'alert alert-danger mt-2 py-2 small', text: post.error_message }));
   }
 
   document.getElementById('postViewBody').replaceChildren(...sections);
