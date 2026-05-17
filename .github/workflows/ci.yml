@@ -26,25 +26,44 @@ jobs:
       - name: Type check
         run: make types
 
-  tests:
+  test-back:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/python-setup
 
-      - name: Install Playwright Chromium for tests
+      - name: Unit tests
+        run: make test-back
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            report.xml
+
+  test-front:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/python-setup
+
+      - name: Install Playwright Chromium
         run: make playwright-install
 
-      - name: Tests
-        run: make test
+      - name: E2E tests
+        run: make test-front
 
   check:
     runs-on: ubuntu-latest
-    needs: [lint, type-check, tests]
+    needs: [lint, type-check, test-back, test-front]
     if: always()
     steps:
       - name: Check all jobs result
         run: |
           test "${{ needs.lint.result }}" = "success"
           test "${{ needs.type-check.result }}" = "success"
-          test "${{ needs.tests.result }}" = "success"
+          test "${{ needs.test-back.result }}" = "success"
+          test "${{ needs.test-front.result }}" = "success"

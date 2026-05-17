@@ -275,9 +275,10 @@ function showView(view) {
   const queue       = document.getElementById('queuePanel');
   const trash       = document.getElementById('trashPanel');
   const collections = document.getElementById('collectionsPanel');
+  const stats       = document.getElementById('statsPanel');
   const back        = document.getElementById('backBtnRow');
   const mobile      = window.innerWidth < 992;
-  const panels      = [editor, queue, trash, collections];
+  const panels      = [editor, queue, trash, collections, stats];
 
   if (!mobile) {
     sidebar.classList.remove('d-none');
@@ -286,6 +287,7 @@ function showView(view) {
     queue.classList.toggle('d-none',  view !== 'queue');
     trash.classList.toggle('d-none',  view !== 'trash');
     if (collections) collections.classList.toggle('d-none', view !== 'collections');
+    if (stats) stats.classList.toggle('d-none', view !== 'stats');
   } else if (view === 'list') {
     sidebar.classList.remove('d-none');
     panels.forEach(p => p?.classList.add('d-none'));
@@ -297,10 +299,12 @@ function showView(view) {
     queue.classList.toggle('d-none',  view !== 'queue');
     trash.classList.toggle('d-none',  view !== 'trash');
     if (collections) collections.classList.toggle('d-none', view !== 'collections');
+    if (stats) stats.classList.toggle('d-none', view !== 'stats');
   }
   if (view === 'queue') refreshQueue();
   if (view === 'trash') refreshTrash();
   if (view === 'collections') refreshCollections();
+  if (view === 'stats') refreshStats();
   if (view !== 'editor' && view !== 'list') {
     App.activeCollection = null;
     const wrap = document.getElementById('collectionFilterWrap');

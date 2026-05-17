@@ -2,6 +2,7 @@ from typing import Any
 
 import openai as _openai
 
+from app.services.ai.base import MAX_OUTPUT_TOKENS
 from app.services.ai.openai import OpenAIProvider
 
 
@@ -11,5 +12,5 @@ class DeepSeekProvider(OpenAIProvider):
 
     def _call_api(self, model: str, messages: list[Any]) -> Any:
         return self._client.chat.completions.create(
-            model=model, messages=messages, max_tokens=2048, temperature=1.0
+            model=model, messages=messages, max_tokens=MAX_OUTPUT_TOKENS, temperature=1.0
         )

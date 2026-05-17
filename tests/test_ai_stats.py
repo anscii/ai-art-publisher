@@ -29,8 +29,9 @@ def test_stats_empty(client):
     r = client.get("/api/stats/ai")
     assert r.status_code == 200
     data = r.json()
-    assert data["generated"] == []
-    assert data["chosen"] == []
+    assert data["rows"] == []
+    assert data["total_generated"] == 0
+    assert data["total_chosen"] == 0
 
 
 def test_stats_generated(client, db):
@@ -41,10 +42,12 @@ def test_stats_generated(client, db):
     db.commit()
 
     data = client.get("/api/stats/ai").json()
-    assert len(data["generated"]) == 2
-    assert data["generated"][0] == {"provider": "anthropic", "model": "claude-opus", "count": 2}
-    assert data["generated"][1] == {"provider": "openai", "model": "gpt-4o", "count": 1}
-    assert data["chosen"] == []
+    assert data["total_generated"] == 3
+    assert data["total_chosen"] == 0
+    rows = {r["model"]: r for r in data["rows"]}
+    assert rows["claude-opus"]["generated"] == 2
+    assert rows["claude-opus"]["chosen"] == 0
+    assert rows["gpt-4o"]["generated"] == 1
 
 
 def test_stats_chosen_via_put(client, db):
@@ -56,7 +59,11 @@ def test_stats_chosen_via_put(client, db):
     assert r.status_code == 200
 
     data = client.get("/api/stats/ai").json()
-    assert data["chosen"] == [{"provider": "anthropic", "model": "claude-opus", "count": 1}]
+    assert data["total_chosen"] == 1
+    row = data["rows"][0]
+    assert row["provider"] == "anthropic"
+    assert row["model"] == "claude-opus"
+    assert row["chosen"] == 1
 
 
 def test_stats_chosen_not_sent_when_null(client, db):
@@ -84,4 +91,5 @@ def test_chosen_nulled_on_variant_delete(client, db):
     assert s.chosen_variant_id is None
 
     data = client.get("/api/stats/ai").json()
-    assert data["chosen"] == []
+    assert data["rows"] == []
+    assert data["total_chosen"] == 0

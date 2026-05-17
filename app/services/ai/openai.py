@@ -4,10 +4,11 @@ from typing import Any
 import openai as _openai
 
 from app.services.ai.base import (
-    SYSTEM_PROMPT,
+    MAX_OUTPUT_TOKENS,
     AIProvider,
     AIVariantData,
     attach_usage,
+    build_system_prompt,
     build_user_text,
     parse_ai_response,
 )
@@ -22,11 +23,11 @@ class OpenAIProvider(AIProvider):
 
     def _call_api(self, model: str, messages: list[Any]) -> Any:
         return self._client.chat.completions.create(
-            model=model, messages=messages, max_completion_tokens=2048, temperature=1.0
+            model=model, messages=messages, max_completion_tokens=MAX_OUTPUT_TOKENS, temperature=1.0
         )
 
     def generate_variants(
-        self, images_b64: list[str], model: str, hint: str | None = None
+        self, images_b64: list[str], model: str, hint: str | None = None, num_variants: int = 3
     ) -> list[AIVariantData]:
         content: list[Any] = []
         for b64 in images_b64[:4]:
@@ -39,7 +40,7 @@ class OpenAIProvider(AIProvider):
         content.append({"type": "text", "text": build_user_text(images_b64, hint)})
 
         messages: list[Any] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": build_system_prompt(num_variants)},
             {"role": "user", "content": content},
         ]
 

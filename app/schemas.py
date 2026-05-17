@@ -122,12 +122,18 @@ class SaveQueueBody(BaseModel):
 class AIProviderModelStat(BaseModel):
     provider: str
     model: str
-    count: int
+    generated: int
+    chosen: int
+    total_cost_usd: float
+    selection_rate: float
+    cost_per_selection: float | None
 
 
 class AIStatsResponse(BaseModel):
-    generated: list[AIProviderModelStat]
-    chosen: list[AIProviderModelStat]
+    rows: list[AIProviderModelStat]
+    total_generated: int
+    total_chosen: int
+    total_cost_usd: float
 
 
 class AIVariantSemanticUpdate(BaseModel):
@@ -157,6 +163,7 @@ class AIVariantResponse(BaseModel):
     pinterest_description: str | None = None
     pinterest_board: str | None = None
     archive_metadata: dict | None = None
+    used_in_posts: bool = False
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -180,6 +187,7 @@ class PostResponse(BaseModel):
     created_at: datetime
     image_ids: list[str]
     seo: str | None = None
+    variant_id: str | None = None
 
 
 class PostCreate(BaseModel):

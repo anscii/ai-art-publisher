@@ -2,7 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ai.base import AIVariantData, extract_json, fix_llm_tag, fix_llm_text
+from app.services.ai.base import (
+    AIVariantData,
+    _ensure_newlines,
+    build_system_prompt,
+    extract_json,
+    fix_llm_tag,
+    fix_llm_text,
+)
 
 
 @pytest.mark.parametrize(
@@ -236,6 +243,63 @@ def test_delete_variant(client):
 def test_delete_variant_not_found(client):
     resp = client.delete("/api/ai_variants/nonexistent-id")
     assert resp.status_code == 404
+
+
+def _make_post(client, sid):
+    return client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram"],
+            "title": "T",
+            "description_telegram": "d",
+            "description_other": "d",
+            "image_ids": [],
+        },
+    )
+
+
+def test_delete_variant_used_in_posts_blocked(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    _make_post(client, sid)
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 409
+
+
+def test_delete_chosen_variant_no_posts_allowed(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 200
+    detail = resp.json()
+    assert detail["chosen_variant_id"] is None
+    assert all(v["id"] != vid for v in detail["ai_variants"])
+
+
+def test_delete_unchosen_variant_with_posts_allowed(client):
+    sid, variants = _make_series_with_variants(client)
+    vid_chosen = variants[0]["id"]
+    vid_other = variants[1]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid_chosen})
+    _make_post(client, sid)
+    resp = client.delete(f"/api/ai_variants/{vid_other}")
+    assert resp.status_code == 200
+    remaining_ids = [v["id"] for v in resp.json()["ai_variants"]]
+    assert vid_other not in remaining_ids
+    assert vid_chosen in remaining_ids
+
+
+def test_used_in_posts_flag_on_variant_response(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    _make_post(client, sid)
+    detail = client.get(f"/api/series/{sid}").json()
+    used_map = {v["id"]: v["used_in_posts"] for v in detail["ai_variants"]}
+    assert used_map[vid] is True
+    assert all(not flag for v_id, flag in used_map.items() if v_id != vid)
 
 
 def _register_images(client, sid, keys):
@@ -486,3 +550,45 @@ def test_series_detail_returns_semantic_fields_on_chosen_variant(client):
         "visual_keywords": ["dark", "mystical"],
         "mood_keywords": ["melancholy"],
     }
+
+
+# ── Newline normalisation ─────────────────────────────────────────────────────
+
+
+def test_ensure_newlines_passthrough_when_already_has_newline():
+    text = "First sentence.\nSecond sentence."
+    assert _ensure_newlines(text) == text
+
+
+def test_ensure_newlines_inserts_between_sentences():
+    text = "First sentence. Second sentence. Third sentence."
+    result = _ensure_newlines(text)
+    assert result == "First sentence.\n\nSecond sentence.\n\nThird sentence."
+
+
+def test_ensure_newlines_single_sentence_unchanged():
+    text = "Only one sentence here."
+    assert _ensure_newlines(text) == text
+
+
+def test_ai_variant_data_force_inserts_newlines_on_flat_description():
+    vd = AIVariantData(
+        title="T",
+        title_ru="Т",
+        description_en="First sentence. Second sentence.",
+        description_ru="Первое предложение. Второе предложение.",
+        tags_instagram=[],
+        tags_telegram=[],
+    )
+    assert "\n" in vd.description_en
+    assert "\n" in vd.description_ru
+
+
+def test_build_system_prompt_num_variants():
+    prompt = build_system_prompt(1)
+    assert "Generate 1 variants" in prompt
+    assert "array of 1 objects" in prompt
+
+    prompt3 = build_system_prompt(3)
+    assert "Generate 3 variants" in prompt3
+    assert "array of 3 objects" in prompt3

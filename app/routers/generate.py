@@ -136,9 +136,31 @@ def generate_descriptions(
 
 @variants_router.delete("/{variant_id}")
 def delete_variant(variant_id: str, db: Session = Depends(get_db)):
+    from sqlalchemy import select as _select
+
+    from app.models import Post
+
     v = db.get(AIVariant, variant_id)
     if not v:
         raise HTTPException(status_code=404, detail="Variant not found")
+
+    used = (
+        db.scalar(
+            _select(Post.id)
+            .where(
+                Post.variant_id == variant_id,
+                Post.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+    if used:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete a variant that has been used in posts",
+        )
+
     series = v.series
     if series.chosen_variant_id == variant_id:
         series.chosen_variant_id = None

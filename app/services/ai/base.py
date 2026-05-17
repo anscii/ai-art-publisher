@@ -5,7 +5,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-SYSTEM_PROMPT = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
+MAX_OUTPUT_TOKENS = 8192
+
+_SYSTEM_PROMPT_TEMPLATE = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
 
 CRAFT PRINCIPLES (drawn from authors the reader loves):
 
@@ -68,13 +70,13 @@ Avoid generic phrases like:
 - stunning digital artwork
 - epic AI art
 
-Generate 3 variants differing radically in approach, tone, and implied genre — not just topic.
+Generate {num_variants} variants differing radically in approach, tone, and implied genre — not just topic.
 Each variant must be a JSON object with these exact keys:
 
 - title: 3-6 words, specific and strange, not generic (English)
 - title_ru: 3-6 words in Russian — not a translation, a parallel take
-- description_en: 2-4 sentences for Instagram. A fragment of a world.
-- description_ru: for Telegram, friends who read a lot. Conversational but sharp.
+- description_en: 2-4 sentences for Instagram. A fragment of a world. Use \n\n between paragraphs — break on meaning and rhythm, not mechanically after every sentence.
+- description_ru: for Telegram, friends who read a lot. Conversational but sharp. Use \n\n between paragraphs — break on meaning and rhythm.
 - instagram:
     seo: short atmospheric semantic phrase layer, 3-8 fragments separated by •
     tags: up to 5 English hashtags (array of strings with #) mixing discoverability + strange in-world taxonomy
@@ -88,7 +90,14 @@ Each variant must be a JSON object with these exact keys:
     mood_keywords: 3-8 emotional or atmospheric descriptors (array of strings)
 - tags_telegram: up to 3 Russian hashtags (array of strings with #)
 
-Respond ONLY with valid JSON array of 3 objects. No markdown, no preamble."""
+Respond ONLY with valid JSON array of {num_variants} objects. No markdown, no preamble."""
+
+
+def build_system_prompt(num_variants: int = 3) -> str:
+    return _SYSTEM_PROMPT_TEMPLATE.format(num_variants=num_variants)
+
+
+SYSTEM_PROMPT = build_system_prompt()
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
 _logger = logging.getLogger(__name__)
@@ -107,6 +116,16 @@ def build_user_text(images_b64: list[str], hint: str | None) -> str:
 def fix_llm_text(text: str) -> str:
     text = re.sub(r"(\w)—", r"\1 —", text)
     text = re.sub(r"—(\w)", r"— \1", text)
+    return text
+
+
+def _ensure_newlines(text: str) -> str:
+    if "\n" in text:
+        return text
+    sentences = re.split(r"(?<=[.!?…])\s+", text.strip())
+    if len(sentences) > 1:
+        _logger.warning("description missing newlines, force-inserting: %r", text[:80])
+        return "\n\n".join(sentences)
     return text
 
 
@@ -163,8 +182,8 @@ class AIVariantData:
     def __post_init__(self):
         self.title = fix_llm_text(self.title)
         self.title_ru = fix_llm_text(self.title_ru)
-        self.description_en = fix_llm_text(self.description_en)
-        self.description_ru = fix_llm_text(self.description_ru)
+        self.description_en = _ensure_newlines(fix_llm_text(self.description_en))
+        self.description_ru = _ensure_newlines(fix_llm_text(self.description_ru))
         self.tags_instagram = [fix_llm_tag(t) for t in self.tags_instagram]
         if "#aiart" not in self.tags_instagram:
             self.tags_instagram.append("#aiart")
@@ -210,4 +229,5 @@ class AIProvider(ABC):
         images_b64: list[str],
         model: str,
         hint: str | None = None,
+        num_variants: int = 3,
     ) -> list[AIVariantData]: ...

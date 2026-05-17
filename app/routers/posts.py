@@ -43,6 +43,7 @@ def post_to_resp(p: Post) -> PostResponse:
         created_at=p.created_at,
         image_ids=[pi.image_id for pi in ordered],
         seo=p.seo,
+        variant_id=p.variant_id,
     )
 
 
@@ -314,6 +315,7 @@ def create_posts(
             scheduled_at=body.scheduled_at.replace(tzinfo=None) if body.scheduled_at else None,
             created_at=datetime.now(UTC),
             seo=post_seo,
+            variant_id=s.chosen_variant_id,
         )
         if body.scheduled_at:
             p.status = "scheduled"
