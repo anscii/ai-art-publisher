@@ -122,12 +122,18 @@ class SaveQueueBody(BaseModel):
 class AIProviderModelStat(BaseModel):
     provider: str
     model: str
-    count: int
+    generated: int
+    chosen: int
+    total_cost_usd: float
+    selection_rate: float
+    cost_per_selection: float | None
 
 
 class AIStatsResponse(BaseModel):
-    generated: list[AIProviderModelStat]
-    chosen: list[AIProviderModelStat]
+    rows: list[AIProviderModelStat]
+    total_generated: int
+    total_chosen: int
+    total_cost_usd: float
 
 
 class AIVariantSemanticUpdate(BaseModel):
