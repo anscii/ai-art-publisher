@@ -14,6 +14,7 @@ jobs:
           BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 120 \
             -X POST \
             -H "X-Backup-Token: $BACKUP_TOKEN" \
             https://ai-art-publisher.fly.dev/internal/backup-db)

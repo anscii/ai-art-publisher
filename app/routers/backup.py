@@ -55,17 +55,19 @@ def trigger_backup(request: Request, db: Session = Depends(get_db)):
 
     with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
         tmp_path = Path(f.name)
+    try:
+        src = sqlite3.connect(str(_db_path()))
+        dst = sqlite3.connect(str(tmp_path))
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        raw = tmp_path.read_bytes()
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
-    src = sqlite3.connect(str(_db_path()))
-    dst = sqlite3.connect(str(tmp_path))
-    src.backup(dst)
-    dst.close()
-    src.close()
-
-    raw = tmp_path.read_bytes()
     compressed = gzip.compress(raw)
-    tmp_path.unlink(missing_ok=True)
-
     _log.info("backup compressed: %d bytes → %d bytes gzip", len(raw), len(compressed))
 
     s3 = _r2_client(settings)
@@ -78,6 +80,7 @@ def trigger_backup(request: Request, db: Session = Depends(get_db)):
     _log.info("backup uploaded: %s (%d bytes)", key, len(compressed))
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=cfg.backup_retention_days)
+    # list_objects_v2 returns up to 1000 objects; sufficient for ~2.7 years of daily backups
     resp = s3.list_objects_v2(Bucket=settings.r2_bucket, Prefix=_BACKUP_PREFIX)
     deleted = 0
     for obj in resp.get("Contents", []):
