@@ -38,3 +38,32 @@ def test_stats_panel_shows_data_after_generation(page, live_server):
     assert page.locator("#statsContent table").is_visible()
     # at least one data row exists
     assert page.locator("#statsContent tbody tr").count() >= 1
+
+
+def test_stats_table_sortable(page, live_server):
+    r = page.request.post(
+        f"{live_server}/api/series",
+        data="{}",
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.ok, r.text()
+    series_id = r.json()["id"]
+    page.request.post(
+        f"{live_server}/api/series/{series_id}/generate",
+        data='{"hint": "sort test"}',
+        headers={"Content-Type": "application/json"},
+    )
+
+    page.goto(live_server)
+    page.get_by_role("button", name="Stats").click()
+    page.locator("#statsContent table").wait_for(state="visible", timeout=5000)
+
+    # click "Provider" header — sort indicator appears
+    page.locator("#statsContent thead th").first.click()
+    header_text = page.locator("#statsContent thead th").first.inner_text()
+    assert "▲" in header_text or "▼" in header_text
+
+    # click again — direction flips
+    page.locator("#statsContent thead th").first.click()
+    header_text2 = page.locator("#statsContent thead th").first.inner_text()
+    assert header_text2 != header_text
