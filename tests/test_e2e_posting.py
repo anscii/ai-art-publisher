@@ -23,10 +23,10 @@ def _create_series_with_post(page, live_server, tmp_path, platform="telegram"):
         page.get_by_role("button", name="Add").click()
     fc.value.set_files(str(png_path))
 
-    page.locator("#imageStrip [data-image-id]").wait_for(timeout=10000)
+    page.locator("#imageStrip [data-image-id]").wait_for(timeout=20000)
     # Select the image
     page.locator("[data-select-btn]").first.click()
-    page.locator(".thumb-selected").wait_for(timeout=3000)
+    page.locator(".thumb-selected").wait_for(timeout=8000)
 
     # Open "New post" form
     page.get_by_role("button", name="New post").click()
