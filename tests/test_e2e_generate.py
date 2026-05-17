@@ -71,6 +71,50 @@ def test_generate_preserves_image_selection(page, live_server, tmp_path):
     assert first_id == second_id
 
 
+def test_variant_delete_button_hidden_when_used_in_post(page, live_server):
+    r = page.request.post(
+        f"{live_server}/api/series",
+        data="{}",
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.ok, r.text()
+    series_id = r.json()["id"]
+
+    r = page.request.post(
+        f"{live_server}/api/series/{series_id}/generate",
+        data='{"hint": "test"}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.ok, r.text()
+    variants = r.json()
+    assert len(variants) >= 2
+    vid = variants[0]["id"]
+
+    r = page.request.put(
+        f"{live_server}/api/series/{series_id}",
+        data=f'{{"chosen_variant_id": "{vid}"}}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.ok, r.text()
+
+    r = page.request.post(
+        f"{live_server}/api/series/{series_id}/posts",
+        data='{"platforms": ["telegram"], "title": "T", "description_telegram": "d", "description_other": "d", "image_ids": []}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.ok, r.text()
+
+    page.goto(live_server)
+    page.wait_for_function("() => typeof selectSeries === 'function'", timeout=10000)
+    page.evaluate(f"selectSeries('{series_id}')")
+    page.locator("[data-variant-idx]").first.wait_for(timeout=5000)
+
+    del_btns = page.locator('button[title="Delete variant"]')
+    first_style = del_btns.nth(0).get_attribute("style") or ""
+    assert "display:none" in first_style or "display: none" in first_style
+    assert del_btns.nth(1).is_visible()
+
+
 def test_reset_to_saved_restores_fields(page, live_server):
     page.goto(live_server)
     page.get_by_role("button", name="New series").click()

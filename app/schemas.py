@@ -157,6 +157,7 @@ class AIVariantResponse(BaseModel):
     pinterest_description: str | None = None
     pinterest_board: str | None = None
     archive_metadata: dict | None = None
+    used_in_posts: bool = False
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -180,6 +181,7 @@ class PostResponse(BaseModel):
     created_at: datetime
     image_ids: list[str]
     seo: str | None = None
+    variant_id: str | None = None
 
 
 class PostCreate(BaseModel):

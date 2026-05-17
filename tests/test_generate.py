@@ -245,6 +245,63 @@ def test_delete_variant_not_found(client):
     assert resp.status_code == 404
 
 
+def _make_post(client, sid):
+    return client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram"],
+            "title": "T",
+            "description_telegram": "d",
+            "description_other": "d",
+            "image_ids": [],
+        },
+    )
+
+
+def test_delete_variant_used_in_posts_blocked(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    _make_post(client, sid)
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 409
+
+
+def test_delete_chosen_variant_no_posts_allowed(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 200
+    detail = resp.json()
+    assert detail["chosen_variant_id"] is None
+    assert all(v["id"] != vid for v in detail["ai_variants"])
+
+
+def test_delete_unchosen_variant_with_posts_allowed(client):
+    sid, variants = _make_series_with_variants(client)
+    vid_chosen = variants[0]["id"]
+    vid_other = variants[1]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid_chosen})
+    _make_post(client, sid)
+    resp = client.delete(f"/api/ai_variants/{vid_other}")
+    assert resp.status_code == 200
+    remaining_ids = [v["id"] for v in resp.json()["ai_variants"]]
+    assert vid_other not in remaining_ids
+    assert vid_chosen in remaining_ids
+
+
+def test_used_in_posts_flag_on_variant_response(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
+    _make_post(client, sid)
+    detail = client.get(f"/api/series/{sid}").json()
+    used_map = {v["id"]: v["used_in_posts"] for v in detail["ai_variants"]}
+    assert used_map[vid] is True
+    assert all(not flag for v_id, flag in used_map.items() if v_id != vid)
+
+
 def _register_images(client, sid, keys):
     ids = []
     for key in keys:

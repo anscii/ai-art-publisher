@@ -702,6 +702,7 @@ function buildDescriptionsCard(series) {
         cls: 'btn btn-xs btn-outline-danger px-1',
         title: 'Delete variant',
         onclick: (e) => { e.stopPropagation(); deleteVariant(v.id); },
+        style: v.used_in_posts ? 'display:none' : '',
       });
       delBtn.appendChild(document.createTextNode('×'));
       variantBtns.appendChild(h('span', { style: 'display:inline-flex;gap:2px;align-items:center' }, btn, delBtn));
