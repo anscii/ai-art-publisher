@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_config
 from app.database import init_db
+from app.routers import backup as backup_router
 from app.routers import collections as collections_router
 from app.routers import generate as generate_router
 from app.routers import images as images_router
@@ -62,7 +63,7 @@ async def basic_auth(request: Request, call_next):
     cfg = get_config()
     if not cfg.auth_username or not cfg.auth_password:
         return await call_next(request)
-    if request.url.path in ("/health", "/internal/run-scheduler"):
+    if request.url.path in ("/health", "/internal/run-scheduler", "/internal/backup-db"):
         return await call_next(request)
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Basic "):
@@ -97,6 +98,7 @@ def robots():
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
+app.include_router(backup_router.router)
 app.include_router(settings_router.router)
 app.include_router(settings_router.stats_router)
 app.include_router(collections_router.router)
