@@ -4,10 +4,11 @@ from typing import Any
 import anthropic as _anthropic
 
 from app.services.ai.base import (
-    SYSTEM_PROMPT,
+    MAX_OUTPUT_TOKENS,
     AIProvider,
     AIVariantData,
     attach_usage,
+    build_system_prompt,
     build_user_text,
     parse_ai_response,
 )
@@ -21,7 +22,7 @@ class AnthropicProvider(AIProvider):
         self._client = _anthropic.Anthropic(api_key=api_key)
 
     def generate_variants(
-        self, images_b64: list[str], model: str, hint: str | None = None
+        self, images_b64: list[str], model: str, hint: str | None = None, num_variants: int = 3
     ) -> list[AIVariantData]:
         content: list[Any] = []
         for b64 in images_b64[:4]:
@@ -44,8 +45,8 @@ class AnthropicProvider(AIProvider):
             )
         resp = self._client.messages.create(
             model=model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=build_system_prompt(num_variants),
             messages=messages,
         )
         block = resp.content[0]

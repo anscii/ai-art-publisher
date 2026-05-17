@@ -4,7 +4,12 @@ PY    := .venv/bin/python
 
 # ── Dev server ────────────────────────────────────────────────────────────────
 run:
-	$(PY) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	$(PY) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload \
+    --reload-dir app \
+    --reload-include "*.js" \
+    --reload-include "*.html" \
+    --reload-include "*.css"
+
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 test:
@@ -42,6 +47,9 @@ types:
 check: lint-fix lint types test
 
 # ── Database migrations ───────────────────────────────────────────────────────
+test-prompt:
+	$(PY) scripts/test_generation.py --hint "$(hint)" $(if $(provider),--provider $(provider),) $(if $(model),--model $(model),) $(if $(variants),--variants $(variants),)
+
 migrate:
 	$(PY) scripts/migrate.py
 
@@ -75,4 +83,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check migrate migrate-new venv install install-dev hooks clean pull-prod-db
+.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check test-prompt migrate migrate-new venv install install-dev hooks clean pull-prod-db

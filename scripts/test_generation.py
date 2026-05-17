@@ -28,6 +28,12 @@ def main() -> None:
         default=None,
         help="Model name (default: provider's catalogue default)",
     )
+    parser.add_argument(
+        "--variants",
+        type=int,
+        default=1,
+        help="Number of variants to generate (default: 1)",
+    )
     args = parser.parse_args()
 
     model = args.model or PROVIDER_DEFAULT_MODELS.get(args.provider, "")
@@ -40,7 +46,9 @@ def main() -> None:
     print(f"Hint: {args.hint}\n")
 
     provider = get_provider(args.provider, api_key)
-    variants = provider.generate_variants(images_b64=[], model=model, hint=args.hint)
+    variants = provider.generate_variants(
+        images_b64=[], model=model, hint=args.hint, num_variants=args.variants
+    )
 
     if variants:
         v0 = variants[0]

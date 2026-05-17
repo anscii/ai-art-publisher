@@ -2,7 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ai.base import AIVariantData, extract_json, fix_llm_tag, fix_llm_text
+from app.services.ai.base import (
+    AIVariantData,
+    _ensure_newlines,
+    build_system_prompt,
+    extract_json,
+    fix_llm_tag,
+    fix_llm_text,
+)
 
 
 @pytest.mark.parametrize(
@@ -486,3 +493,45 @@ def test_series_detail_returns_semantic_fields_on_chosen_variant(client):
         "visual_keywords": ["dark", "mystical"],
         "mood_keywords": ["melancholy"],
     }
+
+
+# ── Newline normalisation ─────────────────────────────────────────────────────
+
+
+def test_ensure_newlines_passthrough_when_already_has_newline():
+    text = "First sentence.\nSecond sentence."
+    assert _ensure_newlines(text) == text
+
+
+def test_ensure_newlines_inserts_between_sentences():
+    text = "First sentence. Second sentence. Third sentence."
+    result = _ensure_newlines(text)
+    assert result == "First sentence.\n\nSecond sentence.\n\nThird sentence."
+
+
+def test_ensure_newlines_single_sentence_unchanged():
+    text = "Only one sentence here."
+    assert _ensure_newlines(text) == text
+
+
+def test_ai_variant_data_force_inserts_newlines_on_flat_description():
+    vd = AIVariantData(
+        title="T",
+        title_ru="Т",
+        description_en="First sentence. Second sentence.",
+        description_ru="Первое предложение. Второе предложение.",
+        tags_instagram=[],
+        tags_telegram=[],
+    )
+    assert "\n" in vd.description_en
+    assert "\n" in vd.description_ru
+
+
+def test_build_system_prompt_num_variants():
+    prompt = build_system_prompt(1)
+    assert "Generate 1 variants" in prompt
+    assert "array of 1 objects" in prompt
+
+    prompt3 = build_system_prompt(3)
+    assert "Generate 3 variants" in prompt3
+    assert "array of 3 objects" in prompt3
