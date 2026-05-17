@@ -63,6 +63,9 @@
     <button class="btn btn-sm btn-outline-secondary" onclick="showView('trash')">
       <i class="bi bi-trash3"></i>
       <span class="d-none d-md-inline ms-1">Trash</span></button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="showView('stats')">
+      <i class="bi bi-bar-chart"></i>
+      <span class="d-none d-md-inline ms-1">Stats</span></button>
     <button class="btn btn-sm btn-outline-secondary"
             data-bs-toggle="modal" data-bs-target="#settingsModal"
             onclick="loadSettings()"><i class="bi bi-gear"></i></button>
@@ -118,6 +121,10 @@
           <i class="bi bi-plus-lg me-1"></i>Create</button>
       </div>
       <div id="collectionsContent"></div>
+    </div>
+    <div id="statsPanel" class="flex-grow-1 overflow-y-auto p-3 d-none">
+      <h5 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Generation Statistics</h5>
+      <div id="statsContent"></div>
     </div>
   </div>
 </div>
@@ -267,7 +274,6 @@
           <span class="input-group-text" style="width:170px">Public Base URL</span>
           <input type="text" class="form-control" id="s_r2_public_base_url">
         </div>
-        <div id="ai-stats-section"></div>
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
@@ -336,5 +342,6 @@
 <script src="/static/editor.js"></script>
 <script src="/static/posting.js"></script>
 <script src="/static/settings.js"></script>
+<script src="/static/stats.js"></script>
 </body>
 </html>

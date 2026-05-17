@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -193,27 +194,49 @@ def _test_deepseek(key: str) -> dict:
 @stats_router.get("/ai", response_model=AIStatsResponse)
 def get_ai_stats(db: Session = Depends(get_db)):
     generated = (
-        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        db.query(
+            AIVariant.provider,
+            AIVariant.model,
+            func.count().label("count"),
+            func.sum(AIVariant.cost_usd).label("total_cost"),
+        )
         .group_by(AIVariant.provider, AIVariant.model)
         .order_by(func.count().desc())
         .all()
     )
-    chosen = (
+    chosen_raw = (
         db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
         .join(Series, Series.chosen_variant_id == AIVariant.id)
         .group_by(AIVariant.provider, AIVariant.model)
-        .order_by(func.count().desc())
         .all()
     )
+    chosen_map: dict[tuple[str, str], int] = {
+        (r.provider, r.model): cast(int, r.count) for r in chosen_raw
+    }
+
+    rows = []
+    for provider, model, count, total_cost in generated:
+        total_cost = total_cost or 0.0
+        chosen = chosen_map.get((provider, model), 0)
+        selection_rate = round(chosen / count * 100, 1) if count else 0.0
+        cost_per_sel = round(total_cost / chosen, 6) if chosen else None
+        rows.append(
+            AIProviderModelStat(
+                provider=provider,
+                model=model,
+                generated=count,
+                chosen=chosen,
+                total_cost_usd=round(total_cost, 6),
+                selection_rate=selection_rate,
+                cost_per_selection=cost_per_sel,
+            )
+        )
+
     return AIStatsResponse(
-        generated=[
-            AIProviderModelStat(provider=provider, model=model, count=count)
-            for provider, model, count in generated
-        ],
-        chosen=[
-            AIProviderModelStat(provider=provider, model=model, count=count)
-            for provider, model, count in chosen
-        ],
+        rows=rows,
+        total_generated=sum(r.generated for r in rows),
+        total_chosen=sum(r.chosen for r in rows),
+        total_cost_usd=round(sum(r.total_cost_usd for r in rows), 6),
     )
 
 
