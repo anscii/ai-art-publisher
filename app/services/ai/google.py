@@ -6,10 +6,11 @@ from typing import Any
 import google.generativeai as genai
 
 from app.services.ai.base import (
-    SYSTEM_PROMPT,
+    MAX_OUTPUT_TOKENS,
     AIProvider,
     AIVariantData,
     attach_usage,
+    build_system_prompt,
     build_user_text,
     parse_ai_response,
 )
@@ -23,7 +24,7 @@ class GoogleProvider(AIProvider):
         genai.configure(api_key=api_key)
 
     def generate_variants(
-        self, images_b64: list[str], model: str, hint: str | None = None
+        self, images_b64: list[str], model: str, hint: str | None = None, num_variants: int = 3
     ) -> list[AIVariantData]:
         import PIL.Image
 
@@ -33,7 +34,7 @@ class GoogleProvider(AIProvider):
             parts.append(img)
         parts.append(build_user_text(images_b64, hint))
 
-        m = genai.GenerativeModel(model, system_instruction=SYSTEM_PROMPT)
+        m = genai.GenerativeModel(model, system_instruction=build_system_prompt(num_variants))
         logger.debug(
             "google request | model=%s | parts(count)=%d | text=%s",
             model,
@@ -45,6 +46,7 @@ class GoogleProvider(AIProvider):
             generation_config={
                 "temperature": 1.0,
                 "top_p": 0.95,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
             },
         )
         logger.debug("google response | model=%s | text=%s", model, resp.text)
