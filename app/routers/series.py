@@ -40,7 +40,7 @@ def image_to_resp(img: Image, base_url: str) -> ImageResponse:
     )
 
 
-def variant_to_resp(v: AIVariant) -> AIVariantResponse:
+def variant_to_resp(v: AIVariant, used_in_posts: bool = False) -> AIVariantResponse:
     return AIVariantResponse(
         id=v.id,
         series_id=v.series_id,
@@ -60,6 +60,7 @@ def variant_to_resp(v: AIVariant) -> AIVariantResponse:
         pinterest_description=v.pinterest_description,
         pinterest_board=v.pinterest_board,
         archive_metadata=json.loads(v.archive_metadata) if v.archive_metadata else None,
+        used_in_posts=used_in_posts,
     )
 
 
@@ -102,7 +103,12 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         collection_number=s.collection_number,
         created_at=s.created_at,
         images=[image_to_resp(img, base_url) for img in images],
-        ai_variants=[variant_to_resp(v) for v in variants],
+        ai_variants=[
+            variant_to_resp(
+                v, used_in_posts=v.id in {p.variant_id for p in active_posts if p.variant_id}
+            )
+            for v in variants
+        ],
         posts=[post_to_resp(p) for p in active_posts],
     )
 
