@@ -34,7 +34,10 @@ def series_with_post(page, live_server):
     assert r.ok, r.text()
 
     page.goto(live_server)
-    page.locator(f'[data-id="{series_id}"]').click()
+    # Bypass sidebar click (series may not be on page 1 of list).
+    # Wait for app JS to load, then select series directly.
+    page.wait_for_function("() => typeof selectSeries === 'function'", timeout=10000)
+    page.evaluate(f"selectSeries('{series_id}')")
     page.locator("[data-post-row]").wait_for(timeout=5000)
     return series_id
 
