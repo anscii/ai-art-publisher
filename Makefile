@@ -22,7 +22,7 @@ test-front:
 	$(PY) -m pytest -m e2e -v
 
 test-back:
-	$(PY) -m pytest  -m "not e2e" -v
+	$(PY) -m pytest -m "not e2e" -v --cov=app --cov-report=term --cov-report=xml:coverage.xml --junitxml=report.xml
 
 playwright-install:
 	$(PY) -m playwright install chromium
