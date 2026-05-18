@@ -3,8 +3,9 @@
 ## Git Workflow
 
 - Feature branches always target `develop` — use `--base develop` when creating PRs. `master` is production-only.
+- Branch prefix must be `feat/` or `feature/` — never use Linear's auto-suggested branch name (it has a user-specific prefix like `murkycat/`).
 - Always use `origin/<branch>` refs (not local branch names) in `git log`/`git diff` for PR descriptions and release notes — local branches may be stale.
-- Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped.
+- Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped. After running `make format`, re-stage any modified files (`git add`) before committing — ruff modifies files in-place, leaving format changes unstaged.
 
 ## Running tests
 
@@ -100,6 +101,16 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - `showView(view)` — switches between `'editor'`, `'queue'`, `'trash'`, `'list'` (mobile)
 - `refreshTrash()` — fetches `/api/trash` and re-renders the trash panel
 - `renderEditor(series)` — rebuilds the full editor from a SeriesDetail object (can be called safely while lightbox is open)
+
+## Linear Issue Workflow
+
+When working a Linear issue end-to-end:
+1. Fetch issue details, then mark **In Progress** before any code changes
+2. Create a `feat/<slug>` branch, implement, run tests
+3. Create PR to `develop`, post Linear comment with PR link, mark **In Review**
+4. After squash-merge, mark **Done**
+
+Use `/linear-issue` skill to run this workflow.
 
 ## Task Delegation
 

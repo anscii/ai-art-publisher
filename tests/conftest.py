@@ -81,11 +81,18 @@ _TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_eng
 
 
 @pytest.fixture(autouse=True)
-def reset_fake_posting(monkeypatch):
-    """Ensure FAKE_POSTING is always off in tests regardless of the local .env.
-    AppConfig attributes are class-level (set at import time), so we patch the
-    class attribute directly rather than relying on env var re-reads."""
+def reset_config(monkeypatch):
+    """Neutralize all .env leakage for unit tests.
+    AppConfig attrs are class-level (import-time), so patch the class directly.
+    Per-test fixtures that need specific values override after this runs."""
+    monkeypatch.setattr(AppConfig, "auth_username", "")
+    monkeypatch.setattr(AppConfig, "auth_password", "")
+    monkeypatch.setattr(AppConfig, "session_secret", "test-secret-key")
     monkeypatch.setattr(AppConfig, "fake_posting", False)
+    monkeypatch.setattr(AppConfig, "fake_ai", False)
+    monkeypatch.setattr(AppConfig, "local_storage", False)
+    monkeypatch.setattr(AppConfig, "scheduler_secret", "")
+    monkeypatch.setattr(AppConfig, "backup_token", "")
 
 
 @pytest.fixture(autouse=True)
