@@ -1,5 +1,7 @@
 # AI Art Publisher
 
+**[https://ai-art-publisher.fly.dev](https://ai-art-publisher.fly.dev)**
+
 A personal web tool for managing AI-generated image series and publishing them to social media. Built to streamline an actual creative workflow: import images, generate platform-ready captions via LLM, curate and edit, then post or schedule to Telegram, Instagram, Pinterest, and Facebook.
 
 Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible from any device (phone, tablet, laptop) via browser.
