@@ -1,3 +1,4 @@
+import hashlib
 import os
 from functools import lru_cache
 
@@ -17,6 +18,12 @@ class AppConfig:
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     local_storage: bool = os.getenv("LOCAL_STORAGE", "false").lower() in ("1", "true")
     scheduler_secret: str = os.getenv("SCHEDULER_SECRET", "")
+    backup_token: str = os.getenv("BACKUP_TOKEN", "")
+    backup_retention_days: int = int(os.getenv("BACKUP_RETENTION_DAYS", "30"))
+    session_secret: str = (
+        os.getenv("SESSION_SECRET", "")
+        or hashlib.sha256(f"session:{os.getenv('AUTH_PASSWORD', '')}".encode()).hexdigest()
+    )
 
 
 @lru_cache
