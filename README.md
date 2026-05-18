@@ -6,10 +6,20 @@ A personal web tool for managing AI-generated image series and publishing them t
 
 Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible from any device (phone, tablet, laptop) via browser.
 
+## Screenshots
+
+<p>
+  <img src="app/static/landing/screenshots/1_main_series_list.jpg" width="180" alt="Series list">
+  <img src="app/static/landing/screenshots/3_series_view_top.jpg" width="180" alt="Series editor">
+  <img src="app/static/landing/screenshots/4_series_view_texts_and_generation.jpg" width="180" alt="AI generation">
+  <img src="app/static/landing/screenshots/8_posted_post_view.jpg" width="180" alt="Posted result">
+</p>
+
 ---
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Why I Built This](#why-i-built-this)
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
