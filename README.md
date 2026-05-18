@@ -6,10 +6,20 @@ A personal web tool for managing AI-generated image series and publishing them t
 
 Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible from any device (phone, tablet, laptop) via browser.
 
+## Screenshots
+
+<p>
+  <img src="app/static/landing/screenshots/1_main_series_list.jpg" width="180" alt="Series list">
+  <img src="app/static/landing/screenshots/3_series_view_top.jpg" width="180" alt="Series editor">
+  <img src="app/static/landing/screenshots/4_series_view_texts_and_generation.jpg" width="180" alt="AI generation">
+  <img src="app/static/landing/screenshots/8_posted_post_view.jpg" width="180" alt="Posted result">
+</p>
+
 ---
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Why I Built This](#why-i-built-this)
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
@@ -55,7 +65,7 @@ So I built a tool that:
 - **Image status workflow** — `pending → queued → posted / skip`; only queued images are sent in a post
 - **Bulk import** — CLI script uploads existing image folders directly to R2 and registers them via API (resumable)
 - **Settings UI** — manage all API keys and service credentials in-app without redeploying
-- **HTTP Basic Auth** — single-user protection; zero config for local dev
+- **Session cookie auth** — 30-day login via landing page form; Basic Auth header kept as fallback for API/curl; zero config for local dev (auth disabled when env vars unset)
 
 ---
 
@@ -86,7 +96,7 @@ So I built a tool that:
 │                    Browser (any device)              │
 │         Vanilla JS + Bootstrap 5.3 SPA              │
 └───────────────────────┬─────────────────────────────┘
-                        │ HTTP (Basic Auth)
+                        │ HTTP (session cookie / Basic Auth fallback)
                         ▼
 ┌─────────────────────────────────────────────────────┐
 │              Fly.io VM (256 MB, region: ams)        │
@@ -128,11 +138,11 @@ So I built a tool that:
 
 ```
 app/
-  main.py          — FastAPI app, router wiring, Basic Auth middleware, lifespan
+  main.py          — FastAPI app, router wiring, session auth middleware, landing page, lifespan
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations()
   models.py        — Collection, Series, Image, AIVariant, Post, PostImage, AppSettings ORM models
   schemas.py       — Pydantic request/response types
-  config.py        — AppConfig (DATABASE_URL, DATA_DIR, FAKE_POSTING, FAKE_AI, etc.)
+  config.py        — AppConfig (DATABASE_URL, DATA_DIR, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, FAKE_POSTING, FAKE_AI, etc.)
   scheduler.py     — APScheduler background job (hourly, fires due scheduled posts)
   routers/
     series.py      — CRUD + list + delete; canonical serializers series_to_detail/image_to_resp
@@ -262,7 +272,7 @@ make run
 # Open http://localhost:8000
 ```
 
-HTTP Basic Auth is disabled when `AUTH_USERNAME` / `AUTH_PASSWORD` are not set — no login prompt in local dev.
+Auth is disabled when `AUTH_USERNAME` / `AUTH_PASSWORD` are not set — `GET /` goes straight to the app in local dev. In production with auth configured, unauthenticated visitors see the public landing page.
 
 ---
 
@@ -314,6 +324,7 @@ Set `LOCAL_STORAGE=true` to skip R2 entirely and store uploads in `DATA_DIR/uplo
 |---|---|---|
 | `AUTH_USERNAME` | _(unset)_ | Basic Auth username; unset = no auth |
 | `AUTH_PASSWORD` | _(unset)_ | Basic Auth password |
+| `SESSION_SECRET` | _(unset)_ | HMAC key for session cookies; derived from `AUTH_PASSWORD` if unset |
 | `FAKE_POSTING` | `false` | Skip real API calls in posting routes |
 | `FAKE_AI` | `false` | Return stub AI variants without API calls |
 | `SCHEDULER_SECRET` | _(unset)_ | Token for `/internal/scheduler/trigger` endpoint |
