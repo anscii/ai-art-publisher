@@ -1,16 +1,16 @@
-import base64
 import logging
-import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.requests import Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_config
 from app.database import init_db
+from app.routers import auth as auth_router
+from app.routers import backup as backup_router
 from app.routers import collections as collections_router
 from app.routers import generate as generate_router
 from app.routers import images as images_router
@@ -19,6 +19,7 @@ from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
 from app.routers import settings as settings_router
 from app.routers import trash as trash_router
+from app.routers.auth import is_authenticated
 
 
 def _configure_app_logging() -> None:
@@ -56,26 +57,35 @@ if _cfg.local_storage:
     _uploads_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
 
+_LANDING_HTML = (Path(__file__).parent / "templates" / "landing.html").read_text()
+
+_PUBLIC_PATHS = frozenset(
+    {"/health", "/internal/run-scheduler", "/internal/backup-db", "/auth/login", "/auth/logout"}
+)
+
 
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     cfg = get_config()
     if not cfg.auth_username or not cfg.auth_password:
         return await call_next(request)
-    if request.url.path in ("/health", "/internal/run-scheduler"):
+
+    if request.url.path in _PUBLIC_PATHS:
         return await call_next(request)
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Basic "):
-        try:
-            decoded = base64.b64decode(auth[6:]).decode("utf-8")
-            username, _, password = decoded.partition(":")
-            ok = secrets.compare_digest(username, cfg.auth_username) and secrets.compare_digest(
-                password, cfg.auth_password
-            )
-            if ok:
-                return await call_next(request)
-        except Exception:
-            pass
+
+    if request.url.path.startswith("/static/landing/"):
+        return await call_next(request)
+
+    authenticated = is_authenticated(request, cfg)
+
+    if request.url.path == "/" and request.method == "GET":
+        if authenticated:
+            return await call_next(request)
+        return HTMLResponse(_LANDING_HTML)
+
+    if authenticated:
+        return await call_next(request)
+
     return Response(
         content="Unauthorized",
         status_code=401,
@@ -97,6 +107,8 @@ def robots():
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
+app.include_router(auth_router.router)
+app.include_router(backup_router.router)
 app.include_router(settings_router.router)
 app.include_router(settings_router.stats_router)
 app.include_router(collections_router.router)
