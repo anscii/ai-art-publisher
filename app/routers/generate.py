@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import AIVariant, Series
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
-from app.schemas import AIVariantSemanticUpdate, GenerateRequest
+from app.schemas import AIVariantSemanticUpdate, GenerateFullRequest, GenerateRequest
 from app.services.ai.base import AIProvider
 from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
@@ -40,6 +40,10 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
         from app.services.ai.deepseek import DeepSeekProvider
 
         return DeepSeekProvider(api_key)
+    elif provider_name == "openrouter":
+        from app.services.ai.openrouter import OpenRouterProvider
+
+        return OpenRouterProvider(api_key)
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
@@ -49,6 +53,7 @@ def _get_api_key(settings, provider: str) -> str:
         "openai": settings.openai_api_key,
         "google": settings.google_api_key,
         "deepseek": settings.deepseek_api_key,
+        "openrouter": settings.openrouter_api_key,
     }.get(provider, "")
 
 
@@ -108,7 +113,9 @@ def generate_descriptions(
     augmented_hint = (body.hint or "") + board_context if board_context else body.hint
 
     provider = get_provider(provider_name, api_key)
-    variants_data = provider.generate_variants(images_b64, model, augmented_hint)
+    variants_data = provider.generate_variants(
+        images_b64, model, augmented_hint, num_variants=body.num_variants, language=body.language
+    )
 
     for vd in variants_data:
         v = AIVariant(
@@ -132,6 +139,81 @@ def generate_descriptions(
         db.add(v)
     db.commit()
     return series_to_detail(s, db).ai_variants
+
+
+@router.post("/{series_id}/generate-full")
+def generate_full(
+    series_id: str,
+    body: GenerateFullRequest,
+    db: Session = Depends(get_db),
+):
+    s = db.get(Series, series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Series not found")
+    if not body.description.strip():
+        raise HTTPException(status_code=400, detail="description is required")
+
+    settings = get_or_create_settings(db)
+    provider_name = body.provider or settings.default_provider
+    model = (
+        body.model
+        or getattr(settings, f"{provider_name}_default_model", None)
+        or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
+    )
+    from app.config import get_config
+
+    api_key = _get_api_key(settings, provider_name)
+    if not api_key and not get_config().fake_ai:
+        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
+
+    board_context = ""
+    if settings.pinterest_board_map:
+        try:
+            _bm = json.loads(settings.pinterest_board_map)
+            if _bm:
+                names = ", ".join(_bm.keys())
+                board_context = (
+                    f"\n\nExisting Pinterest boards: {names}. "
+                    "For the pinterest.board field, prefer one of these names; "
+                    "suggest a new board name only if none fit this artwork."
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    augmented_hint = (body.hint or "") + board_context if board_context else body.hint
+
+    provider = get_provider(provider_name, api_key)
+    vd = provider.expand_variant(body.description, body.language, model, augmented_hint)
+    if body.language == "en":
+        vd.description_en = body.description
+    else:
+        vd.description_ru = body.description
+
+    if body.variant_id:
+        v = db.get(AIVariant, body.variant_id)
+        if not v or v.series_id != series_id:
+            raise HTTPException(status_code=404, detail="Variant not found")
+    else:
+        v = AIVariant(series_id=series_id, provider=provider_name, model=model, hint=body.hint)
+        db.add(v)
+
+    v.provider = provider_name
+    v.model = model
+    v.title = vd.title
+    v.title_ru = vd.title_ru
+    v.description_en = vd.description_en
+    v.description_ru = vd.description_ru
+    v.tags_instagram = json.dumps(vd.tags_instagram)
+    v.tags_telegram = json.dumps(vd.tags_telegram)
+    v.hint = body.hint
+    v.cost_usd = vd.cost_usd
+    v.instagram_seo = vd.instagram_seo or None
+    v.pinterest_title = vd.pinterest_title or None
+    v.pinterest_description = vd.pinterest_description or None
+    v.pinterest_board = vd.pinterest_board or None
+    v.archive_metadata = json.dumps(vd.archive_metadata) if vd.archive_metadata else None
+    db.commit()
+    return series_to_detail(s, db)
 
 
 @variants_router.delete("/{variant_id}")

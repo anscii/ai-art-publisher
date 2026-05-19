@@ -10,6 +10,12 @@ PROVIDER_MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gemini-2.5-flash": (0.30, 2.50),
     "gemini-2.5-flash-lite": (0.10, 0.40),
     "gemini-3.1-flash-lite": (0.25, 1.50),
+    # OpenRouter free tier — no cost
+    "openrouter/free": (0.0, 0.0),
+    "openrouter/owl-alpha": (0.0, 0.0),
+    "google/gemma-4-31b-it:free": (0.0, 0.0),
+    "openai/gpt-oss-120b:free": (0.0, 0.0),
+    "deepseek/deepseek-v4-flash:free": (0.0, 0.0),
 }
 
 
@@ -39,6 +45,13 @@ PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
         {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash — balanced"},
         {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite — fast"},
     ],
+    "openrouter": [
+        {"id": "openrouter/free", "label": "Auto-select free model"},
+        {"id": "openrouter/owl-alpha", "label": "Owl Alpha"},
+        {"id": "google/gemma-4-31b-it:free", "label": "Gemma 4 31B (free)"},
+        {"id": "openai/gpt-oss-120b:free", "label": "GPT OSS 120B (free)"},
+        {"id": "deepseek/deepseek-v4-flash:free", "label": "DeepSeek V4 Flash (free)"},
+    ],
 }
 
 # Fallback defaults when no per-provider model is configured in DB settings.
@@ -48,4 +61,5 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "openai": "gpt-5.4-mini",
     "google": "gemini-2.5-flash",
     "deepseek": "deepseek-v4-flash",
+    "openrouter": "openrouter/free",
 }

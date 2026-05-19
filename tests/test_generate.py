@@ -5,7 +5,8 @@ import pytest
 from app.services.ai.base import (
     AIVariantData,
     _ensure_newlines,
-    build_system_prompt,
+    build_step1_system_prompt,
+    build_step2_system_prompt,
     extract_json,
     fix_llm_tag,
     fix_llm_text,
@@ -584,11 +585,349 @@ def test_ai_variant_data_force_inserts_newlines_on_flat_description():
     assert "\n" in vd.description_ru
 
 
-def test_build_system_prompt_num_variants():
-    prompt = build_system_prompt(1)
+def test_build_step1_system_prompt_num_variants():
+    prompt = build_step1_system_prompt(1, "en")
     assert "Generate 1 variants" in prompt
     assert "array of 1 objects" in prompt
+    assert "description_en" in prompt
+    assert "description_ru" not in prompt
 
-    prompt3 = build_system_prompt(3)
+    prompt3 = build_step1_system_prompt(3, "ru")
     assert "Generate 3 variants" in prompt3
     assert "array of 3 objects" in prompt3
+    assert "description_ru" in prompt3
+    assert "description_en" not in prompt3
+
+
+def test_build_step2_system_prompt_language_en():
+    prompt = build_step2_system_prompt("en")
+    assert "description_ru" in prompt
+    assert "title" in prompt
+    assert "JSON object" in prompt
+
+
+def test_build_step2_system_prompt_language_ru():
+    prompt = build_step2_system_prompt("ru")
+    assert "description_en" in prompt
+
+
+def test_generate_num_variants_passed_to_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    captured = {}
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda *a, **kw: (
+                captured.update({"num": kw.get("num_variants")}) or _FAKE[:2]
+            )
+        )
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "num_variants": 2})
+    assert resp.status_code == 200
+    assert captured["num"] == 2
+
+
+def test_generate_returns_newest_variants_first(client):
+    """series_to_detail sorts by generated_at desc — new drafts must be at index 0."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    # First batch: 1 full variant
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE[:1])
+        mp.return_value = p
+        client.post(f"/api/series/{sid}/generate", json={"hint": "old", "num_variants": 1})
+    # Second batch: 2 new partial drafts
+    _two_drafts = [
+        AIVariantData(
+            title="",
+            title_ru="",
+            description_en=f"Draft {i}.\n\nSecond.",
+            description_ru="",
+            tags_instagram=[],
+            tags_telegram=[],
+        )
+        for i in range(2)
+    ]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_two_drafts)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "new", "num_variants": 2})
+    variants = resp.json()
+    assert len(variants) == 3
+    # Newest-first: new partial drafts at index 0 and 1
+    assert variants[0]["title"] == ""
+    assert variants[1]["title"] == ""
+    assert variants[2]["title"] == "Dragon Forest"  # the old full variant
+
+
+def test_generate_partial_variant_has_model_field(client):
+    """Partial (step-1) variants must carry the model name for display."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-sonnet-4-6"},
+    )
+    _draft = [
+        AIVariantData(
+            title="",
+            title_ru="",
+            description_en="Draft.\n\nTwo.",
+            description_ru="",
+            tags_instagram=[],
+            tags_telegram=[],
+        )
+    ]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_draft)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "test"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["model"] == "claude-sonnet-4-6"
+
+
+# ── Step 1: partial variant generation ────────────────────────────────────────
+
+_FAKE_PARTIAL_EN = [
+    AIVariantData(
+        title="",
+        title_ru="",
+        description_en=f"Fake English description {i + 1}.\n\nSecond sentence.",
+        description_ru="",
+        tags_instagram=[],
+        tags_telegram=[],
+        cost_usd=0.001,
+    )
+    for i in range(3)
+]
+
+_FAKE_PARTIAL_RU = [
+    AIVariantData(
+        title="",
+        title_ru="",
+        description_en="",
+        description_ru=f"Фейковое описание {i + 1}.\n\nВторое предложение.",
+        tags_instagram=[],
+        tags_telegram=[],
+        cost_usd=0.001,
+    )
+    for i in range(3)
+]
+
+_FAKE_EXPANDED = AIVariantData(
+    title="Expanded Title",
+    title_ru="Расширенный заголовок",
+    description_en="Expanded English description.\n\nSecond sentence.",
+    description_ru="Расширенное русское описание.\n\nВторое предложение.",
+    tags_instagram=["#expanded", "#test"],
+    tags_telegram=["#расширен"],
+    instagram_seo="expanded archaeology • test ruins",
+    pinterest_title="Expanded Pinterest Title",
+    pinterest_description="Expanded Pinterest description.",
+    pinterest_board="Expanded Board",
+    archive_metadata={
+        "world_keywords": ["expanded", "test"],
+        "visual_keywords": ["bright"],
+        "mood_keywords": ["hopeful"],
+    },
+    cost_usd=0.005,
+)
+
+
+def test_generate_step1_passes_language_to_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    captured = {}
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda *a, **kw: (
+                captured.update({"lang": kw.get("language")}) or _FAKE_PARTIAL_EN
+            )
+        )
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "language": "en"})
+    assert resp.status_code == 200
+    assert captured["lang"] == "en"
+
+
+def test_generate_step1_ru_passes_language_to_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    captured = {}
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda *a, **kw: (
+                captured.update({"lang": kw.get("language")}) or _FAKE_PARTIAL_RU
+            )
+        )
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "language": "ru"})
+    assert resp.status_code == 200
+    assert captured["lang"] == "ru"
+
+
+def test_generate_step1_stores_partial_variant(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "language": "en"})
+    assert resp.status_code == 200
+    variants = resp.json()
+    assert len(variants) == 3
+    assert all(v["title"] == "" for v in variants)
+    assert all(v["description_en"] != "" for v in variants)
+    assert all(v["description_ru"] == "" for v in variants)
+
+
+# ── generate-full endpoint ─────────────────────────────────────────────────────
+
+
+def test_generate_full_creates_new_variant(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={"description": "My description.", "language": "en"},
+        )
+    assert resp.status_code == 200
+    variants = resp.json()["ai_variants"]
+    assert len(variants) == 1
+    v = variants[0]
+    assert v["title"] == "Expanded Title"
+    assert v["description_en"] == "My description."
+    assert v["description_ru"] != ""
+
+
+def test_generate_full_updates_existing_variant(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN)
+        mp.return_value = p
+        draft_variants = client.post(
+            f"/api/series/{sid}/generate", json={"hint": "a fox", "language": "en"}
+        ).json()
+    vid = draft_variants[0]["id"]
+
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={"description": "Edited description.", "language": "en", "variant_id": vid},
+        )
+    assert resp.status_code == 200
+    variants = resp.json()["ai_variants"]
+    assert len(variants) == 3
+    updated = next(v for v in variants if v["id"] == vid)
+    assert updated["title"] == "Expanded Title"
+    assert updated["description_en"] == "Edited description."
+
+
+def test_generate_full_missing_series_404(client):
+    resp = client.post(
+        "/api/series/nonexistent/generate-full",
+        json={"description": "text", "language": "en"},
+    )
+    assert resp.status_code == 404
+
+
+def test_generate_full_empty_description_400(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    resp = client.post(
+        f"/api/series/{sid}/generate-full",
+        json={"description": "   ", "language": "en"},
+    )
+    assert resp.status_code == 400
+
+
+def test_generate_full_invalid_variant_id_404(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={"description": "text", "language": "en", "variant_id": "nonexistent"},
+        )
+    assert resp.status_code == 404
+
+
+def test_generate_full_passes_language_to_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    captured = {}
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(
+            side_effect=lambda desc, lang, *a, **kw: (
+                captured.update({"desc": desc, "lang": lang}) or _FAKE_EXPANDED
+            )
+        )
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={"description": "My Russian text.", "language": "ru"},
+        )
+    assert resp.status_code == 200
+    assert captured["lang"] == "ru"
+    assert captured["desc"] == "My Russian text."
+
+
+def test_generate_uses_openrouter_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"openrouter_api_key": "sk-or-key", "default_provider": "openrouter"},
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    mp.assert_called_once_with("openrouter", "sk-or-key")
+
+
+def test_generate_openrouter_uses_default_model_from_settings(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={
+            "openrouter_api_key": "sk-or-key",
+            "default_provider": "openrouter",
+            "openrouter_default_model": "google/gemma-4-31b-it:free",
+        },
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all(v["model"] == "google/gemma-4-31b-it:free" for v in resp.json())
+
+
+def test_generate_openrouter_no_key_returns_400(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"default_provider": "openrouter"})
+    resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 400
+    assert "openrouter" in resp.json()["detail"].lower()

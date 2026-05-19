@@ -167,6 +167,8 @@ class AppSettings(Base):
     google_default_model: Mapped[str] = mapped_column(String, default="")
     deepseek_api_key: Mapped[str] = mapped_column(String, default="")
     deepseek_default_model: Mapped[str] = mapped_column(String, default="")
+    openrouter_api_key: Mapped[str] = mapped_column(String, default="")
+    openrouter_default_model: Mapped[str] = mapped_column(String, default="")
     telegram_bot_token: Mapped[str] = mapped_column(String, default="")
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
     instagram_access_token: Mapped[str] = mapped_column(String, default="")

@@ -696,8 +696,9 @@ function buildDescriptionsCard(series) {
         'data-variant-idx': String(i),
         onclick: () => applyVariant(i),
       });
+      const isPartialV = !v.title;
       btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
-      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: v.model }));
+      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: isPartialV ? `(draft) ${v.model}` : v.model }));
       const delBtn = h('button', {
         cls: 'btn btn-xs btn-outline-danger px-1',
         title: 'Delete variant',
@@ -848,21 +849,39 @@ function applyVariant(idx) {
   const v = App.currentSeries?.ai_variants?.[idx];
   if (!v) return;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-  set('f_desc_en', v.description_en);
-  set('f_desc_ru', v.description_ru);
-  set('f_tags_ig', (v.tags_instagram || []).join(' '));
-  set('f_tags_tg', (v.tags_telegram  || []).join(' '));
-  if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
-  if (v.title_ru) { const t = document.getElementById('f_pub_title_ru'); if (t) t.value = v.title_ru; }
-  const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
-  set('f_instagram_seo', v.instagram_seo || '');
-  set('f_pin_title', v.pinterest_title || '');
-  set('f_pin_desc', v.pinterest_description || '');
-  set('f_pin_board', v.pinterest_board || '');
-  const arch = v.archive_metadata || {};
-  set('f_arch_world', (arch.world_keywords || []).join(', '));
-  set('f_arch_visual', (arch.visual_keywords || []).join(', '));
-  set('f_arch_mood', (arch.mood_keywords || []).join(', '));
+  const isPartial = !v.title;
+  if (isPartial) {
+    set('f_desc_en', v.description_en);
+    set('f_desc_ru', v.description_ru);
+    set('f_pub_title', '');
+    set('f_pub_title_ru', '');
+    set('f_tags_ig', '');
+    set('f_tags_tg', '');
+    set('f_instagram_seo', '');
+    set('f_pin_title', '');
+    set('f_pin_desc', '');
+    set('f_pin_board', '');
+    set('f_arch_world', '');
+    set('f_arch_visual', '');
+    set('f_arch_mood', '');
+    const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
+  } else {
+    set('f_desc_en', v.description_en);
+    set('f_desc_ru', v.description_ru);
+    set('f_tags_ig', (v.tags_instagram || []).join(' '));
+    set('f_tags_tg', (v.tags_telegram  || []).join(' '));
+    if (v.title) { const t = document.getElementById('f_pub_title'); if (t) t.value = v.title; }
+    if (v.title_ru) { const t = document.getElementById('f_pub_title_ru'); if (t) t.value = v.title_ru; }
+    const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
+    set('f_instagram_seo', v.instagram_seo || '');
+    set('f_pin_title', v.pinterest_title || '');
+    set('f_pin_desc', v.pinterest_description || '');
+    set('f_pin_board', v.pinterest_board || '');
+    const arch = v.archive_metadata || {};
+    set('f_arch_world', (arch.world_keywords || []).join(', '));
+    set('f_arch_visual', (arch.visual_keywords || []).join(', '));
+    set('f_arch_mood', (arch.mood_keywords || []).join(', '));
+  }
   App.activeVariantId = v.id;
   _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
@@ -938,17 +957,44 @@ function buildGenerateCard(seriesId) {
   const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
   const provSel = document.createElement('select');
   provSel.className = 'form-select form-select-sm'; provSel.id = 'genProvider'; provSel.style.width = '120px';
-  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek']].forEach(([val, lbl]) => {
+  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']].forEach(([val, lbl]) => {
     const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
   });
+  if (App.generateProvider != null) provSel.value = App.generateProvider;
   const modelSel = document.createElement('select');
   modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
-  buildProviderModelSelect(modelSel, '', { withDefault: true });
-  provSel.addEventListener('change', () => buildProviderModelSelect(modelSel, provSel.value, { withDefault: true }));
+  buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
+  if (App.generateModel) modelSel.value = App.generateModel;
+  provSel.addEventListener('change', () => {
+    App.generateProvider = provSel.value;
+    buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
+  });
+  modelSel.addEventListener('change', () => { App.generateModel = modelSel.value; });
+  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: String(App.generateNumVariants || 1), style: 'width:60px' });
+  numVariantsInput.addEventListener('change', () => { App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 3; });
+
+  const langEn = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary active', id: 'genLangEn', text: 'EN' });
+  const langRu = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary', id: 'genLangRu', text: 'RU' });
+  const _setLang = lang => {
+    App.generateLanguage = lang;
+    langEn.classList.toggle('active', lang === 'en');
+    langRu.classList.toggle('active', lang === 'ru');
+  };
+  langEn.addEventListener('click', () => _setLang('en'));
+  langRu.addEventListener('click', () => _setLang('ru'));
+  if (!App.generateLanguage) App.generateLanguage = 'en';
+  _setLang(App.generateLanguage);
+  const langToggle = h('div', { cls: 'btn-group btn-group-sm' }, langEn, langRu);
+
   const genBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'generateBtn' });
   genBtn.appendChild(icon('bi bi-robot me-1'));
-  genBtn.appendChild(document.createTextNode('Generate'));
-  genBtn.addEventListener('click', () => generateDescriptions(seriesId));
+  genBtn.appendChild(document.createTextNode('Generate Drafts'));
+  genBtn.addEventListener('click', () => generateDrafts(seriesId));
+
+  const genFullBtn = h('button', { cls: 'btn btn-sm btn-outline-success', id: 'generateFullBtn' });
+  genFullBtn.appendChild(icon('bi bi-stars me-1'));
+  genFullBtn.appendChild(document.createTextNode('Generate Full'));
+  genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
   const imgLabel = h('label', { cls: 'd-flex align-items-center gap-1 small text-muted', style: 'cursor:pointer' });
@@ -966,16 +1012,21 @@ function buildGenerateCard(seriesId) {
         h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelSel),
+        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Variants' }), numVariantsInput),
+        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: 'Language' }), langToggle),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
+        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genFullBtn),
         h('div', { cls: 'align-self-end pb-1' }, imgLabel))));
 }
 
-async function generateDescriptions(seriesId) {
+async function generateDrafts(seriesId) {
   const btn = document.getElementById('generateBtn');
   const provider = document.getElementById('genProvider')?.value || null;
   const model    = document.getElementById('genModel')?.value.trim() || null;
   const hint          = document.getElementById('genHint')?.value.trim() || null;
   const includeImages = document.getElementById('genIncludeImages')?.checked ?? false;
+  const language = App.generateLanguage || 'en';
+  const numVariants = parseInt(document.getElementById('genNumVariants')?.value || '1', 10) || 1;
   if (btn) {
     btn.disabled = true;
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
@@ -993,20 +1044,61 @@ async function generateDescriptions(seriesId) {
   try {
     const newVariants = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
       provider: provider || null, model: model || null, hint: hint || null,
-      include_images: includeImages, selected_image_ids: selectedImageIds,
+      include_images: includeImages, selected_image_ids: selectedImageIds, language, num_variants: numVariants,
     });
     const savedSelection = new Set(_selectedImages);
     await loadSeriesDetail(seriesId);
-    applyVariant(0);
+    // Variants sorted newest-first — new drafts are always at index 0
+    if ((App.currentSeries?.ai_variants || []).length > 0) applyVariant(0);
     _restoreSelectionAfterRender(savedSelection, seriesId);
     const cost = newVariants[0]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
-    showToast(`Generated new variants${costLabel}`, 'success');
+    showToast(`Generated ${newVariants.length} drafts${costLabel}`, 'success');
   } catch (e) {
     showToast(e.message, 'danger');
     if (btn) {
       btn.disabled = false;
-      btn.replaceChildren(icon('bi bi-robot me-1'), document.createTextNode('Generate'));
+      btn.replaceChildren(icon('bi bi-robot me-1'), document.createTextNode('Generate Drafts'));
+    }
+  }
+}
+
+async function generateFull(seriesId) {
+  const language = App.generateLanguage || 'en';
+  const fieldId = language === 'ru' ? 'f_desc_ru' : 'f_desc_en';
+  const description = document.getElementById(fieldId)?.value?.trim() || '';
+  if (!description) {
+    showToast(`Enter a ${language === 'ru' ? 'Russian' : 'English'} description first`, 'warning');
+    return;
+  }
+  const btn = document.getElementById('generateFullBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Expanding…'));
+  }
+  const provider = document.getElementById('genProvider')?.value || null;
+  const model = document.getElementById('genModel')?.value?.trim() || null;
+  const hint = document.getElementById('genHint')?.value?.trim() || null;
+  try {
+    const updated = await apiFetch('POST', '/api/series/' + seriesId + '/generate-full', {
+      description, language,
+      variant_id: App.activeVariantId || null,
+      provider: provider || null, model: model || null, hint: hint || null,
+    });
+    App.currentSeries = updated;
+    const variants = updated.ai_variants || [];
+    const targetId = App.activeVariantId;
+    const idx = targetId ? variants.findIndex(v => v.id === targetId) : variants.length - 1;
+    renderEditor(updated);
+    if (idx >= 0) applyVariant(idx);
+    const cost = variants[idx >= 0 ? idx : variants.length - 1]?.cost_usd;
+    const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
+    showToast(`Full content generated${costLabel}`, 'success');
+  } catch (e) {
+    showToast(e.message, 'danger');
+    if (btn) {
+      btn.disabled = false;
+      btn.replaceChildren(icon('bi bi-stars me-1'), document.createTextNode('Generate Full'));
     }
   }
 }

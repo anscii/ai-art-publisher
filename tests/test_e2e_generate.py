@@ -10,7 +10,7 @@ _TINY_PNG = base64.b64decode(
 )
 
 
-def test_generate_descriptions(page, live_server):
+def test_generate_drafts(page, live_server):
     page.goto(live_server)
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
@@ -18,11 +18,11 @@ def test_generate_descriptions(page, live_server):
     page.locator("#genHint").fill("A fox spirit in a rain-soaked library")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
-    assert page.locator("#toastContainer").get_by_text("Generated new variants").is_visible()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    assert page.locator("#toastContainer").get_by_text("drafts").is_visible()
 
 
-def test_generate_fills_description_field(page, live_server):
+def test_generate_drafts_then_apply_fills_description_field(page, live_server):
     page.goto(live_server)
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
@@ -30,9 +30,50 @@ def test_generate_fills_description_field(page, live_server):
     page.locator("#genHint").fill("Dark academia gothic horror")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Click the first draft variant to load its description_en
+    page.locator("[data-variant-idx]").first.click()
     desc_en = page.locator("#f_desc_en").input_value()
     assert desc_en
+
+
+def test_generate_full_fills_all_fields(page, live_server):
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    page.locator("#genHint").fill("A ghost in a clockwork city")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Apply a draft
+    page.locator("[data-variant-idx]").first.click()
+    assert page.locator("#f_desc_en").input_value()
+
+    # Generate full content from the applied draft
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    # All fields should now be filled
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_en").input_value()
+    assert page.locator("#f_desc_ru").input_value()
+
+
+def test_generate_full_from_manually_typed_description(page, live_server):
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Type a description manually without generating drafts
+    page.locator("#f_desc_en").fill("A manually typed description about something strange.")
+
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_ru").input_value()
 
 
 def test_generate_preserves_image_selection(page, live_server, tmp_path):
@@ -63,7 +104,7 @@ def test_generate_preserves_image_selection(page, live_server, tmp_path):
 
     page.locator("#genHint").fill("A fox spirit")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
 
     # selected image must still be selected and first in strip
     assert page.locator(".thumb-selected").count() >= 1
@@ -82,7 +123,7 @@ def test_variant_delete_button_hidden_when_used_in_post(page, live_server):
 
     r = page.request.post(
         f"{live_server}/api/series/{series_id}/generate",
-        data='{"hint": "test"}',
+        data='{"hint": "test", "num_variants": 2}',
         headers={"Content-Type": "application/json"},
     )
     assert r.ok, r.text()
@@ -122,7 +163,12 @@ def test_reset_to_saved_restores_fields(page, live_server):
 
     page.locator("#genHint").fill("A ghost in a clockwork city")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Apply draft then generate full to get desc_en filled
+    page.locator("[data-variant-idx]").first.click()
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
 
     page.locator("button", has_text="Save").first.click()
     page.locator("#toastContainer").get_by_text("Saved").wait_for(timeout=5000)
@@ -135,3 +181,72 @@ def test_reset_to_saved_restores_fields(page, live_server):
     page.get_by_role("button", name="Reset").click()
 
     assert page.locator("#f_desc_en").input_value() == saved_en
+
+
+def test_applying_draft_clears_other_fields(page, live_server):
+    """Applying a step-1 draft must clear title, tags, and the other language description."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Generate full content so all fields are populated
+    page.locator("#genHint").fill("A fox spirit")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("[data-variant-idx]").first.click()
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    # Verify all fields are filled
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_ru").input_value()
+    assert page.locator("#f_tags_ig").input_value()
+
+    # Generate new EN drafts — applying the draft must clear derived fields
+    page.locator("#genHint").fill("New hint")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Draft auto-applied: description_en filled, everything else cleared
+    assert page.locator("#f_desc_en").input_value()
+    assert page.locator("#f_pub_title").input_value() == ""
+    assert page.locator("#f_desc_ru").input_value() == ""
+    assert page.locator("#f_tags_ig").input_value() == ""
+
+
+def test_applying_draft_restores_hint(page, live_server):
+    """After page re-render from loadSeriesDetail, hint must be restored from the draft variant."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    hint_text = "A ghost in a clockwork city"
+    page.locator("#genHint").fill(hint_text)
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # renderEditor rebuilds genHint from scratch; applyVariant must restore it from v.hint
+    assert page.locator("#genHint").input_value() == hint_text
+
+
+def test_generate_card_settings_persist_after_reload(page, live_server):
+    """Provider, model, num_variants, and language selections survive loadSeriesDetail rebuild."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Change settings away from defaults
+    page.locator("#genProvider").select_option("anthropic")
+    page.locator("#genNumVariants").fill("3")
+    page.locator("#genLangRu").click()
+
+    page.locator("#genHint").fill("test persistence")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # After card rebuild, all selections must be preserved
+    assert page.locator("#genProvider").input_value() == "anthropic"
+    assert page.locator("#genNumVariants").input_value() == "3"
+    assert page.locator("#genLangRu").get_attribute("class") and "active" in (
+        page.locator("#genLangRu").get_attribute("class") or ""
+    )
