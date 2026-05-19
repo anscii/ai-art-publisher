@@ -957,7 +957,7 @@ function buildGenerateCard(seriesId) {
   const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
   const provSel = document.createElement('select');
   provSel.className = 'form-select form-select-sm'; provSel.id = 'genProvider'; provSel.style.width = '120px';
-  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek']].forEach(([val, lbl]) => {
+  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']].forEach(([val, lbl]) => {
     const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
   });
   if (App.generateProvider != null) provSel.value = App.generateProvider;

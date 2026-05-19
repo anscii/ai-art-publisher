@@ -1,0 +1,23 @@
+from typing import Any
+
+import openai as _openai
+
+from app.services.ai.base import MAX_OUTPUT_TOKENS
+from app.services.ai.openai import OpenAIProvider
+
+
+class OpenRouterProvider(OpenAIProvider):
+    def __init__(self, api_key: str):
+        self._client = _openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://ai-art-publisher.fly.dev",
+                "X-Title": "AI Art Publisher",
+            },
+        )
+
+    def _call_api(self, model: str, messages: list[Any]) -> Any:
+        return self._client.chat.completions.create(
+            model=model, messages=messages, max_tokens=MAX_OUTPUT_TOKENS, temperature=1.0
+        )

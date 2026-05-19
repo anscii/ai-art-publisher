@@ -188,6 +188,12 @@
           <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('deepseek',this)">Test</button>
         </div>
+        <div class="mb-2 input-group input-group-sm">
+          <span class="input-group-text" style="width:170px">OpenRouter API Key</span>
+          <input type="password" class="form-control" id="s_openrouter_api_key">
+          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onclick="testConn('openrouter',this)">Test</button>
+        </div>
         <div class="row g-2 mb-2">
           <div class="col-auto"><div class="input-group input-group-sm">
             <span class="input-group-text">Default provider</span>
@@ -196,6 +202,7 @@
               <option value="openai">OpenAI</option>
               <option value="google">Google</option>
               <option value="deepseek">DeepSeek</option>
+              <option value="openrouter">OpenRouter</option>
             </select>
           </div></div>
         </div>
@@ -215,6 +222,10 @@
           <div class="col"><div class="input-group input-group-sm">
             <span class="input-group-text" style="width:140px">DeepSeek model</span>
             <select class="form-select" id="s_deepseek_default_model"></select>
+          </div></div>
+          <div class="col"><div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:140px">OpenRouter model</span>
+            <select class="form-select" id="s_openrouter_default_model"></select>
           </div></div>
         </div>
         <h6 class="text-muted small mt-3">Telegram</h6>

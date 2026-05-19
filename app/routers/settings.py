@@ -18,6 +18,7 @@ _SECRET_FIELDS = {
     "openai_api_key",
     "google_api_key",
     "deepseek_api_key",
+    "openrouter_api_key",
     "telegram_bot_token",
     "instagram_access_token",
     "facebook_page_access_token",
@@ -79,6 +80,7 @@ def test_connection(service: str, db: Session = Depends(get_db)):
         "openai": lambda: _test_openai(s.openai_api_key),
         "google": lambda: _test_google(s.google_api_key),
         "deepseek": lambda: _test_deepseek(s.deepseek_api_key),
+        "openrouter": lambda: _test_openrouter(s.openrouter_api_key),
         "r2": lambda: _test_r2(s),
     }
     if service not in handlers:
@@ -189,6 +191,10 @@ def _test_google(key: str) -> dict:
 
 def _test_deepseek(key: str) -> dict:
     return _test_openai_compatible(key, base_url="https://api.deepseek.com")
+
+
+def _test_openrouter(key: str) -> dict:
+    return _test_openai_compatible(key, base_url="https://openrouter.ai/api/v1")
 
 
 @stats_router.get("/ai", response_model=AIStatsResponse)
