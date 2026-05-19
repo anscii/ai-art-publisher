@@ -8,8 +8,11 @@ from app.services.ai.base import (
     AIProvider,
     AIVariantData,
     attach_usage,
-    build_system_prompt,
+    build_step1_system_prompt,
+    build_step2_system_prompt,
+    build_step2_user_text,
     build_user_text,
+    parse_ai_object,
     parse_ai_response,
 )
 from app.services.ai.catalogue import calc_cost
@@ -27,7 +30,12 @@ class OpenAIProvider(AIProvider):
         )
 
     def generate_variants(
-        self, images_b64: list[str], model: str, hint: str | None = None, num_variants: int = 3
+        self,
+        images_b64: list[str],
+        model: str,
+        hint: str | None = None,
+        num_variants: int = 3,
+        language: str = "en",
     ) -> list[AIVariantData]:
         content: list[Any] = []
         for b64 in images_b64[:4]:
@@ -40,7 +48,7 @@ class OpenAIProvider(AIProvider):
         content.append({"type": "text", "text": build_user_text(images_b64, hint)})
 
         messages: list[Any] = [
-            {"role": "system", "content": build_system_prompt(num_variants)},
+            {"role": "system", "content": build_step1_system_prompt(num_variants, language)},
             {"role": "user", "content": content},
         ]
 
@@ -66,3 +74,42 @@ class OpenAIProvider(AIProvider):
             calc_cost(model, resp.usage.prompt_tokens, resp.usage.completion_tokens),
         )
         return variants
+
+    def expand_variant(
+        self,
+        description: str,
+        language: str,
+        model: str,
+        hint: str | None = None,
+    ) -> AIVariantData:
+        messages: list[Any] = [
+            {"role": "system", "content": build_step2_system_prompt(language)},
+            {"role": "user", "content": build_step2_user_text(description, language, hint)},
+        ]
+        if logger.isEnabledFor(logging.DEBUG):
+            import json
+
+            logger.debug(
+                "openai expand request | model=%s | language=%s | messages=%s",
+                model,
+                language,
+                json.dumps(messages, ensure_ascii=False),
+            )
+        resp = self._call_api(model, messages)
+        text = resp.choices[0].message.content
+        assert text is not None
+        logger.debug("openai expand response | model=%s | text=%s", model, text)
+        raw = parse_ai_object(text, "openai", model)
+        data = AIVariantData.from_llm_dict(raw)
+        if language == "en":
+            data.description_en = description
+        else:
+            data.description_ru = description
+        assert resp.usage is not None
+        attach_usage(
+            [data],
+            resp.usage.prompt_tokens,
+            resp.usage.completion_tokens,
+            calc_cost(model, resp.usage.prompt_tokens, resp.usage.completion_tokens),
+        )
+        return data
