@@ -889,3 +889,45 @@ def test_generate_full_passes_language_to_provider(client):
     assert resp.status_code == 200
     assert captured["lang"] == "ru"
     assert captured["desc"] == "My Russian text."
+
+
+def test_generate_uses_openrouter_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"openrouter_api_key": "sk-or-key", "default_provider": "openrouter"},
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    mp.assert_called_once_with("openrouter", "sk-or-key")
+
+
+def test_generate_openrouter_uses_default_model_from_settings(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={
+            "openrouter_api_key": "sk-or-key",
+            "default_provider": "openrouter",
+            "openrouter_default_model": "google/gemma-4-31b-it:free",
+        },
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 200
+    assert all(v["model"] == "google/gemma-4-31b-it:free" for v in resp.json())
+
+
+def test_generate_openrouter_no_key_returns_400(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"default_provider": "openrouter"})
+    resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 400
+    assert "openrouter" in resp.json()["detail"].lower()

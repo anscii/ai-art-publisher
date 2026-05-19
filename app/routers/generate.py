@@ -40,6 +40,10 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
         from app.services.ai.deepseek import DeepSeekProvider
 
         return DeepSeekProvider(api_key)
+    elif provider_name == "openrouter":
+        from app.services.ai.openrouter import OpenRouterProvider
+
+        return OpenRouterProvider(api_key)
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
@@ -49,6 +53,7 @@ def _get_api_key(settings, provider: str) -> str:
         "openai": settings.openai_api_key,
         "google": settings.google_api_key,
         "deepseek": settings.deepseek_api_key,
+        "openrouter": settings.openrouter_api_key,
     }.get(provider, "")
 
 

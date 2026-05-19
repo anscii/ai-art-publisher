@@ -2,7 +2,7 @@ async function loadSettings() {
   try {
     const s = await apiFetch('GET', '/api/settings');
     const fields = [
-      'anthropic_api_key','openai_api_key','google_api_key','deepseek_api_key',
+      'anthropic_api_key','openai_api_key','google_api_key','deepseek_api_key','openrouter_api_key',
       'telegram_bot_token','telegram_channel_id','instagram_access_token','instagram_user_id',
       'facebook_page_access_token','facebook_page_id',
       'pinterest_access_token','pinterest_default_board_id',
@@ -11,7 +11,7 @@ async function loadSettings() {
     fields.forEach(f => { const el = document.getElementById('s_' + f); if (el) el.value = s[f] || ''; });
     const provEl = document.getElementById('s_default_provider');
     if (provEl && s.default_provider) provEl.value = s.default_provider;
-    ['anthropic', 'openai', 'google', 'deepseek'].forEach(p => {
+    ['anthropic', 'openai', 'google', 'deepseek', 'openrouter'].forEach(p => {
       const el = document.getElementById('s_' + p + '_default_model');
       if (el) buildProviderModelSelect(el, p, { selectedValue: s[p + '_default_model'] || '' });
     });
@@ -20,8 +20,8 @@ async function loadSettings() {
 
 async function saveSettings() {
   const fields = [
-    'anthropic_api_key','openai_api_key','google_api_key','deepseek_api_key','default_provider',
-    'anthropic_default_model','openai_default_model','google_default_model','deepseek_default_model',
+    'anthropic_api_key','openai_api_key','google_api_key','deepseek_api_key','openrouter_api_key','default_provider',
+    'anthropic_default_model','openai_default_model','google_default_model','deepseek_default_model','openrouter_default_model',
     'telegram_bot_token','telegram_channel_id','instagram_access_token','instagram_user_id',
     'facebook_page_access_token','facebook_page_id',
     'pinterest_access_token','pinterest_default_board_id',

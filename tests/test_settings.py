@@ -57,6 +57,26 @@ def test_deepseek_default_model_update(client):
     assert data["deepseek_default_model"] == "deepseek-v4-flash"
 
 
+def test_openrouter_fields_present_in_settings(client):
+    data = client.get("/api/settings").json()
+    assert "openrouter_api_key" in data
+    assert "openrouter_default_model" in data
+    assert data["openrouter_api_key"] == ""
+    assert data["openrouter_default_model"] == ""
+
+
+def test_openrouter_api_key_masked(client):
+    client.put("/api/settings", json={"openrouter_api_key": "sk-or-key"})
+    data = client.get("/api/settings").json()
+    assert data["openrouter_api_key"] == "****"
+
+
+def test_openrouter_default_model_update(client):
+    client.put("/api/settings", json={"openrouter_default_model": "openrouter/free"})
+    data = client.get("/api/settings").json()
+    assert data["openrouter_default_model"] == "openrouter/free"
+
+
 def test_partial_update_preserves_other_fields(client):
     client.put("/api/settings", json={"telegram_channel_id": "@mychannel"})
     client.put("/api/settings", json={"default_provider": "google"})
