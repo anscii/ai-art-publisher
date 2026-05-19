@@ -123,7 +123,7 @@ def test_variant_delete_button_hidden_when_used_in_post(page, live_server):
 
     r = page.request.post(
         f"{live_server}/api/series/{series_id}/generate",
-        data='{"hint": "test"}',
+        data='{"hint": "test", "num_variants": 2}',
         headers={"Content-Type": "application/json"},
     )
     assert r.ok, r.text()
@@ -181,3 +181,49 @@ def test_reset_to_saved_restores_fields(page, live_server):
     page.get_by_role("button", name="Reset").click()
 
     assert page.locator("#f_desc_en").input_value() == saved_en
+
+
+def test_applying_draft_clears_other_fields(page, live_server):
+    """Applying a step-1 draft must clear title, tags, and the other language description."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Generate full content so all fields are populated
+    page.locator("#genHint").fill("A fox spirit")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("[data-variant-idx]").first.click()
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    # Verify all fields are filled
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_ru").input_value()
+    assert page.locator("#f_tags_ig").input_value()
+
+    # Generate new EN drafts — applying the draft must clear derived fields
+    page.locator("#genHint").fill("New hint")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Draft auto-applied: description_en filled, everything else cleared
+    assert page.locator("#f_desc_en").input_value()
+    assert page.locator("#f_pub_title").input_value() == ""
+    assert page.locator("#f_desc_ru").input_value() == ""
+    assert page.locator("#f_tags_ig").input_value() == ""
+
+
+def test_applying_draft_restores_hint(page, live_server):
+    """After page re-render from loadSeriesDetail, hint must be restored from the draft variant."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    hint_text = "A ghost in a clockwork city"
+    page.locator("#genHint").fill(hint_text)
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # renderEditor rebuilds genHint from scratch; applyVariant must restore it from v.hint
+    assert page.locator("#genHint").input_value() == hint_text

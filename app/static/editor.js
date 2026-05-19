@@ -698,11 +698,7 @@ function buildDescriptionsCard(series) {
       });
       const isPartialV = !v.title;
       btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
-      if (isPartialV) {
-        btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:11px', text: '(draft)' }));
-      } else {
-        btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: v.model }));
-      }
+      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: isPartialV ? `(draft) ${v.model}` : v.model }));
       const delBtn = h('button', {
         cls: 'btn btn-xs btn-outline-danger px-1',
         title: 'Delete variant',
@@ -855,8 +851,20 @@ function applyVariant(idx) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   const isPartial = !v.title;
   if (isPartial) {
-    if (v.description_en) set('f_desc_en', v.description_en);
-    else if (v.description_ru) set('f_desc_ru', v.description_ru);
+    set('f_desc_en', v.description_en);
+    set('f_desc_ru', v.description_ru);
+    set('f_pub_title', '');
+    set('f_pub_title_ru', '');
+    set('f_tags_ig', '');
+    set('f_tags_tg', '');
+    set('f_instagram_seo', '');
+    set('f_pin_title', '');
+    set('f_pin_desc', '');
+    set('f_pin_board', '');
+    set('f_arch_world', '');
+    set('f_arch_visual', '');
+    set('f_arch_mood', '');
+    const hintEl = document.getElementById('genHint'); if (hintEl) hintEl.value = v.hint || '';
   } else {
     set('f_desc_en', v.description_en);
     set('f_desc_ru', v.description_ru);
@@ -952,11 +960,18 @@ function buildGenerateCard(seriesId) {
   [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek']].forEach(([val, lbl]) => {
     const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
   });
+  if (App.generateProvider != null) provSel.value = App.generateProvider;
   const modelSel = document.createElement('select');
   modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
-  buildProviderModelSelect(modelSel, '', { withDefault: true });
-  provSel.addEventListener('change', () => buildProviderModelSelect(modelSel, provSel.value, { withDefault: true }));
-  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: '3', style: 'width:60px' });
+  buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
+  if (App.generateModel) modelSel.value = App.generateModel;
+  provSel.addEventListener('change', () => {
+    App.generateProvider = provSel.value;
+    buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
+  });
+  modelSel.addEventListener('change', () => { App.generateModel = modelSel.value; });
+  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: String(App.generateNumVariants || 1), style: 'width:60px' });
+  numVariantsInput.addEventListener('change', () => { App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 3; });
 
   const langEn = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary active', id: 'genLangEn', text: 'EN' });
   const langRu = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary', id: 'genLangRu', text: 'RU' });
@@ -1011,7 +1026,7 @@ async function generateDrafts(seriesId) {
   const hint          = document.getElementById('genHint')?.value.trim() || null;
   const includeImages = document.getElementById('genIncludeImages')?.checked ?? false;
   const language = App.generateLanguage || 'en';
-  const numVariants = parseInt(document.getElementById('genNumVariants')?.value || '3', 10) || 3;
+  const numVariants = parseInt(document.getElementById('genNumVariants')?.value || '1', 10) || 1;
   if (btn) {
     btn.disabled = true;
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
@@ -1033,12 +1048,8 @@ async function generateDrafts(seriesId) {
     });
     const savedSelection = new Set(_selectedImages);
     await loadSeriesDetail(seriesId);
-    // Clear active variant — user must pick from newly generated drafts
-    App.activeVariantId = null;
-    document.querySelectorAll('[data-variant-idx]').forEach(btn => {
-      btn.classList.remove('btn-primary');
-      btn.classList.add('btn-outline-secondary');
-    });
+    // Variants sorted newest-first — new drafts are always at index 0
+    if ((App.currentSeries?.ai_variants || []).length > 0) applyVariant(0);
     _restoreSelectionAfterRender(savedSelection, seriesId);
     const cost = newVariants[0]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';

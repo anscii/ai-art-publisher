@@ -628,6 +628,67 @@ def test_generate_num_variants_passed_to_provider(client):
     assert captured["num"] == 2
 
 
+def test_generate_returns_newest_variants_first(client):
+    """series_to_detail sorts by generated_at desc — new drafts must be at index 0."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    # First batch: 1 full variant
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE[:1])
+        mp.return_value = p
+        client.post(f"/api/series/{sid}/generate", json={"hint": "old", "num_variants": 1})
+    # Second batch: 2 new partial drafts
+    _two_drafts = [
+        AIVariantData(
+            title="",
+            title_ru="",
+            description_en=f"Draft {i}.\n\nSecond.",
+            description_ru="",
+            tags_instagram=[],
+            tags_telegram=[],
+        )
+        for i in range(2)
+    ]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_two_drafts)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "new", "num_variants": 2})
+    variants = resp.json()
+    assert len(variants) == 3
+    # Newest-first: new partial drafts at index 0 and 1
+    assert variants[0]["title"] == ""
+    assert variants[1]["title"] == ""
+    assert variants[2]["title"] == "Dragon Forest"  # the old full variant
+
+
+def test_generate_partial_variant_has_model_field(client):
+    """Partial (step-1) variants must carry the model name for display."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/settings",
+        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-sonnet-4-6"},
+    )
+    _draft = [
+        AIVariantData(
+            title="",
+            title_ru="",
+            description_en="Draft.\n\nTwo.",
+            description_ru="",
+            tags_instagram=[],
+            tags_telegram=[],
+        )
+    ]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_draft)
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "test"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["model"] == "claude-sonnet-4-6"
+
+
 # ── Step 1: partial variant generation ────────────────────────────────────────
 
 _FAKE_PARTIAL_EN = [

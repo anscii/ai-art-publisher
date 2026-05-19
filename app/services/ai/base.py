@@ -78,8 +78,13 @@ _STEP2_PRIMARY_LABEL = {"en": "English", "ru": "Russian"}
 _STEP2_SECONDARY_KEY = {"en": "description_ru", "ru": "description_en"}
 _STEP2_SECONDARY_LABEL = {"en": "Russian", "ru": "English"}
 _STEP2_SECONDARY_PLATFORM = {
-    "en": "Telegram, for friends who read a lot — conversational but sharp",
-    "ru": "Instagram",
+    "en": "Telegram — friends who read a lot, know Bulgakov, Strugatsky, Henry Lion Oldie, Marina and Sergey Dyachenko. Conversational but sharp, dense with implication.",
+    "ru": "Instagram — speculative fiction readers who grew up on Zelazny, Bradbury, Lovecraft, Reynolds.",
+}
+
+_STEP2_SECONDARY_TRADITION = {
+    "en": "Russian literary tradition — allusive, philosophically weighted, comfortable with strangeness as everyday fact",
+    "ru": "English speculative fiction tradition — precise, dangerous, intimate with the cosmic, a bit weird",
 }
 
 
@@ -106,6 +111,9 @@ def build_step2_system_prompt(language: str = "en") -> str:
     secondary_platform = _STEP2_SECONDARY_PLATFORM.get(
         language, "Telegram, for friends who read a lot — conversational but sharp"
     )
+    secondary_tradition = _STEP2_SECONDARY_TRADITION.get(
+        language, "Russian literary tradition — allusive, philosophically weighted"
+    )
     return (
         _BASE_CRAFT
         + _DISCOVERY_SECTION
@@ -113,11 +121,14 @@ def build_step2_system_prompt(language: str = "en") -> str:
 
 The user provides a finalized {primary_label} description. Do NOT alter it. Generate everything else for the content package.
 
+PARALLEL COMPOSITION RULE (critical):
+Do NOT translate anything. The {secondary_label} title and description must be written fresh, as if a {secondary_label}-speaking author with the same sensibility encountered the same image independently — working from the {secondary_tradition}. Similar atmosphere, similar core strangeness. But a different entry point, different detail foregrounded, different rhythm. The {secondary_label} reader should feel this was written for them, not translated at them. Variation is not a flaw — it is the goal.
+
 Generate a single JSON object with these exact keys:
 
-- title: 3-6 words, specific and strange, not generic (English)
-- title_ru: 3-6 words in Russian — not a translation, a parallel take
-- {secondary_key}: {secondary_label} version for {secondary_platform}. Use \\n\\n between paragraphs — break on meaning and rhythm.
+- title: 3-6 words, specific and strange, not generic (English). Drawn from the atmosphere of the provided description.
+- title_ru: 3-6 words in Russian — NOT a translation of title. A parallel name: same strangeness, different angle. Could lean on a different detail or metaphor entirely.
+- {secondary_key}: Written natively in {secondary_label} for {secondary_platform}. Slightly similar world as the provided description — slightly similar atmosphere, mood, themes — but composed fresh. Allow a shifted emphasis, a different image foregrounded, different angle. 2-4 sentences. Use \\n\\n between paragraphs — break on meaning and rhythm, not mechanically.
 - instagram:
     seo: short atmospheric semantic phrase layer, 3-8 fragments separated by •
     tags: up to 5 English hashtags (array of strings with #) mixing discoverability + strange in-world taxonomy
