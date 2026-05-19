@@ -1033,6 +1033,12 @@ async function generateDrafts(seriesId) {
     });
     const savedSelection = new Set(_selectedImages);
     await loadSeriesDetail(seriesId);
+    // Clear active variant — user must pick from newly generated drafts
+    App.activeVariantId = null;
+    document.querySelectorAll('[data-variant-idx]').forEach(btn => {
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-outline-secondary');
+    });
     _restoreSelectionAfterRender(savedSelection, seriesId);
     const cost = newVariants[0]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
