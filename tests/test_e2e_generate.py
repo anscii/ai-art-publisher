@@ -227,3 +227,26 @@ def test_applying_draft_restores_hint(page, live_server):
 
     # renderEditor rebuilds genHint from scratch; applyVariant must restore it from v.hint
     assert page.locator("#genHint").input_value() == hint_text
+
+
+def test_generate_card_settings_persist_after_reload(page, live_server):
+    """Provider, model, num_variants, and language selections survive loadSeriesDetail rebuild."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Change settings away from defaults
+    page.locator("#genProvider").select_option("anthropic")
+    page.locator("#genNumVariants").fill("3")
+    page.locator("#genLangRu").click()
+
+    page.locator("#genHint").fill("test persistence")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # After card rebuild, all selections must be preserved
+    assert page.locator("#genProvider").input_value() == "anthropic"
+    assert page.locator("#genNumVariants").input_value() == "3"
+    assert page.locator("#genLangRu").get_attribute("class") and "active" in (
+        page.locator("#genLangRu").get_attribute("class") or ""
+    )
