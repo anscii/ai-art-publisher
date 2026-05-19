@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +8,9 @@ from app.database import get_db
 from app.models import Image, Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import TrashImage, TrashResponse, TrashSeries
-from app.services.storage import get_public_base_url
+from app.services.storage import get_public_base_url, get_storage_from_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/trash", tags=["trash"])
 
@@ -80,14 +84,22 @@ def permanently_delete_series(series_id: str, db: Session = Depends(get_db)):
     if not s:
         raise HTTPException(status_code=404, detail="Not found")
     settings = get_or_create_settings(db)
-    try:
-        from app.services.storage import get_storage_from_settings
-
-        storage = get_storage_from_settings(settings)
-        for img in s.images:
+    storage = get_storage_from_settings(settings)
+    for img in s.images:
+        try:
             storage.delete(img.r2_key)
-    except Exception:
-        pass
+        except Exception as err:
+            logger.error(
+                "Storage delete failed for image %s (key %s) in series %s: %s",
+                img.id,
+                img.r2_key,
+                series_id,
+                err,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Storage delete failed for image {img.id}; series not removed",
+            )
     db.delete(s)
     db.commit()
     return {"deleted": series_id}
@@ -100,11 +112,10 @@ def permanently_delete_image(image_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found")
     settings = get_or_create_settings(db)
     try:
-        from app.services.storage import get_storage_from_settings
-
         get_storage_from_settings(settings).delete(img.r2_key)
-    except Exception:
-        pass
+    except Exception as err:
+        logger.error("Storage delete failed for image %s (key %s): %s", image_id, img.r2_key, err)
+        raise HTTPException(status_code=500, detail="Storage delete failed; image not removed")
     db.delete(img)
     db.commit()
     return {"deleted": image_id}
@@ -120,20 +131,39 @@ def empty_trash(db: Session = Depends(get_db)):
         .join(Series, Image.series_id == Series.id)
         .where(Series.deleted_at.is_(None))
     ).all()
-    try:
-        from app.services.storage import get_storage_from_settings
+    logger.info("Ready to delete %s series and %s images", len(del_series), len(del_images))
+    storage = get_storage_from_settings(settings)
 
-        storage = get_storage_from_settings(settings)
-        for s in del_series:
-            for img in s.images:
-                storage.delete(img.r2_key)
-        for img in del_images:
-            storage.delete(img.r2_key)
-    except Exception:
-        pass
+    series_to_delete = []
     for s in del_series:
-        db.delete(s)
+        storage_ok = True
+        for img in s.images:
+            try:
+                storage.delete(img.r2_key)
+            except Exception as err:
+                logger.error(
+                    "Storage delete failed for image %s (key %s) in series %s: %s",
+                    img.id,
+                    img.r2_key,
+                    s.id,
+                    err,
+                )
+                storage_ok = False
+                break
+        if storage_ok:
+            series_to_delete.append(s)
+
+    images_to_delete = []
     for img in del_images:
+        try:
+            storage.delete(img.r2_key)
+            images_to_delete.append(img)
+        except Exception as err:
+            logger.error("Storage delete failed for image %s (key %s): %s", img.id, img.r2_key, err)
+
+    for s in series_to_delete:
+        db.delete(s)
+    for img in images_to_delete:
         db.delete(img)
     db.commit()
     return {"emptied": True}

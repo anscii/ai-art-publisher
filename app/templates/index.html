@@ -110,6 +110,15 @@
         <button id="emptyTrashBtn" class="btn btn-sm btn-outline-danger d-none">
           <i class="bi bi-trash3-fill me-1"></i>Empty Trash</button>
       </div>
+      <div id="trashProgressContainer" class="d-none mb-3">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+          <span id="trashProgressLabel">Deleting…</span>
+          <span id="trashProgressCount"></span>
+        </div>
+        <div class="progress" style="height:6px">
+          <div id="trashProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" style="width:0%"></div>
+        </div>
+      </div>
       <div id="trashContent"></div>
     </div>
     <div id="collectionsPanel" class="flex-grow-1 overflow-y-auto p-3 d-none">

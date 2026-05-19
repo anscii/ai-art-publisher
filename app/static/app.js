@@ -493,6 +493,11 @@ async function createCollection() {
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────────
+function _disableWithSpinner(btn) {
+  btn.disabled = true;
+  btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm' }));
+}
+
 async function refreshTrash() {
   const content = document.getElementById('trashContent');
   const emptyBtn = document.getElementById('emptyTrashBtn');
@@ -502,8 +507,31 @@ async function refreshTrash() {
     const isEmpty = !data.series.length && !data.images.length;
     emptyBtn.classList.toggle('d-none', isEmpty);
     emptyBtn.onclick = () => showConfirm('Permanently delete everything in Trash?', async () => {
-      await apiFetch('DELETE', '/api/trash');
-      showToast('Trash emptied', 'success');
+      const progressContainer = document.getElementById('trashProgressContainer');
+      const progressBar = document.getElementById('trashProgressBar');
+      const progressLabel = document.getElementById('trashProgressLabel');
+      const progressCount = document.getElementById('trashProgressCount');
+      const items = [
+        ...data.series.map(s => ({ type: 'series', id: s.id, label: s.title || s.original_folder_name || s.id.slice(0, 8) })),
+        ...data.images.map(i => ({ type: 'images', id: i.id, label: i.original_filename })),
+      ];
+      const total = items.length;
+      _disableWithSpinner(emptyBtn);
+      progressBar.style.width = '0%';
+      progressContainer.classList.remove('d-none');
+      let done = 0, failed = 0;
+      for (const item of items) {
+        progressLabel.textContent = item.label;
+        progressCount.textContent = (done + 1) + ' / ' + total;
+        try {
+          await apiFetch('DELETE', '/api/trash/' + item.type + '/' + item.id);
+        } catch (_) { failed++; }
+        done++;
+        progressBar.style.width = Math.round(done / total * 100) + '%';
+      }
+      progressContainer.classList.add('d-none');
+      if (failed) showToast(failed + ' item(s) failed to delete', 'danger');
+      else showToast('Trash emptied', 'success');
       refreshTrash();
     });
     if (isEmpty) {
@@ -530,9 +558,12 @@ function _buildTrashSeriesItem(s) {
   restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
   restoreBtn.appendChild(document.createTextNode('Restore'));
   restoreBtn.addEventListener('click', async () => {
-    await apiFetch('POST', '/api/trash/series/' + s.id + '/restore');
-    showToast('Series restored', 'success');
-    loadSeries(true);
+    _disableWithSpinner(restoreBtn);
+    try {
+      await apiFetch('POST', '/api/trash/series/' + s.id + '/restore');
+      showToast('Series restored', 'success');
+      loadSeries(true);
+    } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   });
   const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
@@ -541,8 +572,11 @@ function _buildTrashSeriesItem(s) {
   delBtn.addEventListener('click', () => showConfirm(
     'Permanently delete this series and all its images?',
     async () => {
-      await apiFetch('DELETE', '/api/trash/series/' + s.id);
-      showToast('Permanently deleted', 'success');
+      _disableWithSpinner(delBtn);
+      try {
+        await apiFetch('DELETE', '/api/trash/series/' + s.id);
+        showToast('Permanently deleted', 'success');
+      } catch (e) { showToast(e.message, 'danger'); }
       refreshTrash();
     }
   ));
@@ -567,17 +601,23 @@ function _buildTrashImageItem(i) {
   restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
   restoreBtn.appendChild(document.createTextNode('Restore'));
   restoreBtn.addEventListener('click', async () => {
-    await apiFetch('POST', '/api/trash/images/' + i.id + '/restore');
-    showToast('Image restored', 'success');
+    _disableWithSpinner(restoreBtn);
+    try {
+      await apiFetch('POST', '/api/trash/images/' + i.id + '/restore');
+      showToast('Image restored', 'success');
+      if (App.currentSeriesId === i.series_id) loadSeriesDetail(i.series_id);
+    } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
-    if (App.currentSeriesId === i.series_id) loadSeriesDetail(i.series_id);
   });
   const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
   delBtn.appendChild(icon('bi bi-trash me-1'));
   delBtn.appendChild(document.createTextNode('Delete'));
   delBtn.addEventListener('click', () => showConfirm('Permanently delete this image?', async () => {
-    await apiFetch('DELETE', '/api/trash/images/' + i.id);
-    showToast('Permanently deleted', 'success');
+    _disableWithSpinner(delBtn);
+    try {
+      await apiFetch('DELETE', '/api/trash/images/' + i.id);
+      showToast('Permanently deleted', 'success');
+    } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   }));
   const thumb = Object.assign(document.createElement('img'), {
