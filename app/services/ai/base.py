@@ -7,7 +7,7 @@ from typing import Any
 
 MAX_OUTPUT_TOKENS = 8192
 
-_SYSTEM_PROMPT_TEMPLATE = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
+_BASE_CRAFT = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
 
 CRAFT PRINCIPLES (drawn from authors the reader loves):
 
@@ -34,7 +34,9 @@ WHAT TO AVOID:
 - Describing what the image looks like (the reader can see it)
 - The first interpretation you think of — it's almost always the predictable one
 - Moral lessons and uplifting endings
-- Prose that performs depth without containing any
+- Prose that performs depth without containing any"""
+
+_DISCOVERY_SECTION = """
 
 DISCOVERY / ARCHIVE LAYER:
 
@@ -68,15 +70,54 @@ Avoid generic phrases like:
 - amazing fantasy art
 - beautiful sci-fi world
 - stunning digital artwork
-- epic AI art
+- epic AI art"""
+
+_STEP1_KEY = {"en": "description_en", "ru": "description_ru"}
+_STEP1_PLATFORM = {"en": "Instagram", "ru": "Telegram"}
+_STEP2_PRIMARY_LABEL = {"en": "English", "ru": "Russian"}
+_STEP2_SECONDARY_KEY = {"en": "description_ru", "ru": "description_en"}
+_STEP2_SECONDARY_LABEL = {"en": "Russian", "ru": "English"}
+_STEP2_SECONDARY_PLATFORM = {
+    "en": "Telegram, for friends who read a lot — conversational but sharp",
+    "ru": "Instagram",
+}
+
+
+def build_step1_system_prompt(num_variants: int = 3, language: str = "en") -> str:
+    key = _STEP1_KEY.get(language, "description_en")
+    platform = _STEP1_PLATFORM.get(language, "Instagram")
+    return (
+        _BASE_CRAFT
+        + f"""
 
 Generate {num_variants} variants differing radically in approach, tone, and implied genre — not just topic.
-Each variant must be a JSON object with these exact keys:
+Each variant must be a JSON object with exactly one key:
+
+- {key}: 2-4 sentences for {platform}. A fragment of a world. Use \\n\\n between paragraphs — break on meaning and rhythm, not mechanically after every sentence.
+
+Respond ONLY with valid JSON array of {num_variants} objects. No markdown, no preamble."""
+    )
+
+
+def build_step2_system_prompt(language: str = "en") -> str:
+    primary_label = _STEP2_PRIMARY_LABEL.get(language, "English")
+    secondary_key = _STEP2_SECONDARY_KEY.get(language, "description_ru")
+    secondary_label = _STEP2_SECONDARY_LABEL.get(language, "Russian")
+    secondary_platform = _STEP2_SECONDARY_PLATFORM.get(
+        language, "Telegram, for friends who read a lot — conversational but sharp"
+    )
+    return (
+        _BASE_CRAFT
+        + _DISCOVERY_SECTION
+        + f"""
+
+The user provides a finalized {primary_label} description. Do NOT alter it. Generate everything else for the content package.
+
+Generate a single JSON object with these exact keys:
 
 - title: 3-6 words, specific and strange, not generic (English)
 - title_ru: 3-6 words in Russian — not a translation, a parallel take
-- description_en: 2-4 sentences for Instagram. A fragment of a world. Use \n\n between paragraphs — break on meaning and rhythm, not mechanically after every sentence.
-- description_ru: for Telegram, friends who read a lot. Conversational but sharp. Use \n\n between paragraphs — break on meaning and rhythm.
+- {secondary_key}: {secondary_label} version for {secondary_platform}. Use \\n\\n between paragraphs — break on meaning and rhythm.
 - instagram:
     seo: short atmospheric semantic phrase layer, 3-8 fragments separated by •
     tags: up to 5 English hashtags (array of strings with #) mixing discoverability + strange in-world taxonomy
@@ -90,17 +131,20 @@ Each variant must be a JSON object with these exact keys:
     mood_keywords: 3-8 emotional or atmospheric descriptors (array of strings)
 - tags_telegram: up to 3 Russian hashtags (array of strings with #)
 
-Respond ONLY with valid JSON array of {num_variants} objects. No markdown, no preamble."""
+Respond ONLY with a valid JSON object. No markdown, no preamble."""
+    )
 
-
-def build_system_prompt(num_variants: int = 3) -> str:
-    return _SYSTEM_PROMPT_TEMPLATE.format(num_variants=num_variants)
-
-
-SYSTEM_PROMPT = build_system_prompt()
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
 _logger = logging.getLogger(__name__)
+
+
+def build_step2_user_text(description: str, language: str, hint: str | None) -> str:
+    key = _STEP1_KEY.get(language, "description_en")
+    lines = [f"{key}: {description}"]
+    if hint:
+        lines.append(f"\nArtwork context: {hint}")
+    return "\n".join(lines)
 
 
 def build_user_text(images_b64: list[str], hint: str | None) -> str:
@@ -151,6 +195,23 @@ def extract_json(text: str) -> str:
 def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
     try:
         return json.loads(extract_json(text))  # type: ignore[no-any-return]
+    except Exception as exc:
+        _logger.warning(
+            "json parse failed | provider=%s | model=%s | error=%s | text=%s",
+            provider,
+            model,
+            exc,
+            text,
+        )
+        raise
+
+
+def parse_ai_object(text: str, provider: str, model: str) -> dict[str, Any]:
+    try:
+        result = json.loads(extract_json(text))
+        if isinstance(result, list) and len(result) == 1:
+            return result[0]  # type: ignore[no-any-return]
+        return result  # type: ignore[return-value]
     except Exception as exc:
         _logger.warning(
             "json parse failed | provider=%s | model=%s | error=%s | text=%s",
@@ -230,4 +291,14 @@ class AIProvider(ABC):
         model: str,
         hint: str | None = None,
         num_variants: int = 3,
+        language: str = "en",
     ) -> list[AIVariantData]: ...
+
+    @abstractmethod
+    def expand_variant(
+        self,
+        description: str,
+        language: str,
+        model: str,
+        hint: str | None = None,
+    ) -> AIVariantData: ...

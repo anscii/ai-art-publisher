@@ -312,6 +312,16 @@ class GenerateRequest(BaseModel):
     hint: str | None = None
     include_images: bool = False
     selected_image_ids: list[str] | None = None
+    language: str = "en"
+
+
+class GenerateFullRequest(BaseModel):
+    description: str
+    language: str = "en"
+    variant_id: str | None = None
+    hint: str | None = None
+    provider: str | None = None
+    model: str | None = None
 
 
 # ── Scheduling (legacy queue view) ────────────────────────────────────────────

@@ -16,7 +16,7 @@ from scripts._utils import FakeSettings  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Test AI variant generation")
+    parser = argparse.ArgumentParser(description="Test AI variant generation (2-step)")
     parser.add_argument("--hint", required=True, help="Artwork description hint")
     parser.add_argument(
         "--provider",
@@ -32,7 +32,20 @@ def main() -> None:
         "--variants",
         type=int,
         default=1,
-        help="Number of variants to generate (default: 1)",
+        help="Number of draft variants to generate (default: 1)",
+    )
+    parser.add_argument(
+        "--language",
+        default="en",
+        choices=["en", "ru"],
+        help="Language for step 1 drafts (default: en)",
+    )
+    parser.add_argument(
+        "--step",
+        type=int,
+        default=1,
+        choices=[1, 2],
+        help="1=generate drafts, 2=generate drafts then expand first one (default: 1)",
     )
     args = parser.parse_args()
 
@@ -42,30 +55,55 @@ def main() -> None:
         print(f"Error: no API key for provider '{args.provider}' (set env var)", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Provider: {args.provider}  Model: {model}")
+    print(f"Provider: {args.provider}  Model: {model}  Language: {args.language}")
     print(f"Hint: {args.hint}\n")
 
     provider = get_provider(args.provider, api_key)
-    variants = provider.generate_variants(
-        images_b64=[], model=model, hint=args.hint, num_variants=args.variants
+
+    print("── Step 1: Generate drafts ──────────────────────────────")
+    drafts = provider.generate_variants(
+        images_b64=[],
+        model=model,
+        hint=args.hint,
+        num_variants=args.variants,
+        language=args.language,
     )
 
-    if variants:
-        v0 = variants[0]
+    if drafts:
+        v0 = drafts[0]
         cost_line = (
             f"Cost: ${v0.cost_usd:.6f}  ({v0.input_tokens} in + {v0.output_tokens} out tokens)"
         )
         print(cost_line)
         print()
 
-    for i, v in enumerate(variants, 1):
-        print(f"── Variant {i} ─────────────────────────────")
-        print(f"Title        : {v.title}")
-        print(f"Description  : {v.description_en}")
-        print(f"Description RU: {v.description_ru}")
-        print(f"Instagram tags: {' '.join(v.tags_instagram)}")
-        print(f"Telegram tags : {' '.join(v.tags_telegram)}")
+    for i, v in enumerate(drafts, 1):
+        print(f"── Draft {i} ─────────────────────────────")
+        if args.language == "ru":
+            print(f"Description RU: {v.description_ru}")
+        else:
+            print(f"Description EN: {v.description_en}")
         print()
+
+    if args.step == 2 and drafts:
+        first = drafts[0]
+        description = first.description_en if args.language == "en" else first.description_ru
+        print("── Step 2: Generate full content ─────────────────────")
+        print(f"Expanding from: {description[:80]}...\n")
+        expanded = provider.expand_variant(
+            description=description, language=args.language, model=model, hint=args.hint
+        )
+        cost_line = f"Cost: ${expanded.cost_usd:.6f}  ({expanded.input_tokens} in + {expanded.output_tokens} out tokens)"
+        print(cost_line)
+        print()
+        print(f"Title        : {expanded.title}")
+        print(f"Title RU     : {expanded.title_ru}")
+        print(f"Description EN: {expanded.description_en}")
+        print(f"Description RU: {expanded.description_ru}")
+        print(f"Instagram tags: {' '.join(expanded.tags_instagram)}")
+        print(f"Telegram tags : {' '.join(expanded.tags_telegram)}")
+        print(f"Instagram SEO : {expanded.instagram_seo}")
+        print(f"Pinterest     : {expanded.pinterest_title}")
 
 
 if __name__ == "__main__":

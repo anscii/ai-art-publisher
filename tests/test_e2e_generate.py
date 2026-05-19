@@ -10,7 +10,7 @@ _TINY_PNG = base64.b64decode(
 )
 
 
-def test_generate_descriptions(page, live_server):
+def test_generate_drafts(page, live_server):
     page.goto(live_server)
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
@@ -18,11 +18,11 @@ def test_generate_descriptions(page, live_server):
     page.locator("#genHint").fill("A fox spirit in a rain-soaked library")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
-    assert page.locator("#toastContainer").get_by_text("Generated new variants").is_visible()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    assert page.locator("#toastContainer").get_by_text("drafts").is_visible()
 
 
-def test_generate_fills_description_field(page, live_server):
+def test_generate_drafts_then_apply_fills_description_field(page, live_server):
     page.goto(live_server)
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
@@ -30,9 +30,50 @@ def test_generate_fills_description_field(page, live_server):
     page.locator("#genHint").fill("Dark academia gothic horror")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Click the first draft variant to load its description_en
+    page.locator("[data-variant-idx]").first.click()
     desc_en = page.locator("#f_desc_en").input_value()
     assert desc_en
+
+
+def test_generate_full_fills_all_fields(page, live_server):
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    page.locator("#genHint").fill("A ghost in a clockwork city")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Apply a draft
+    page.locator("[data-variant-idx]").first.click()
+    assert page.locator("#f_desc_en").input_value()
+
+    # Generate full content from the applied draft
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    # All fields should now be filled
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_en").input_value()
+    assert page.locator("#f_desc_ru").input_value()
+
+
+def test_generate_full_from_manually_typed_description(page, live_server):
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Type a description manually without generating drafts
+    page.locator("#f_desc_en").fill("A manually typed description about something strange.")
+
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
+
+    assert page.locator("#f_pub_title").input_value()
+    assert page.locator("#f_desc_ru").input_value()
 
 
 def test_generate_preserves_image_selection(page, live_server, tmp_path):
@@ -63,7 +104,7 @@ def test_generate_preserves_image_selection(page, live_server, tmp_path):
 
     page.locator("#genHint").fill("A fox spirit")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
 
     # selected image must still be selected and first in strip
     assert page.locator(".thumb-selected").count() >= 1
@@ -122,7 +163,12 @@ def test_reset_to_saved_restores_fields(page, live_server):
 
     page.locator("#genHint").fill("A ghost in a clockwork city")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("Generated new variants").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    # Apply draft then generate full to get desc_en filled
+    page.locator("[data-variant-idx]").first.click()
+    page.locator("#generateFullBtn").click()
+    page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
 
     page.locator("button", has_text="Save").first.click()
     page.locator("#toastContainer").get_by_text("Saved").wait_for(timeout=5000)
