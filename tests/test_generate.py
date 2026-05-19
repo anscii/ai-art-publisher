@@ -611,6 +611,23 @@ def test_build_step2_system_prompt_language_ru():
     assert "description_en" in prompt
 
 
+def test_generate_num_variants_passed_to_provider(client):
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    captured = {}
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(
+            side_effect=lambda *a, **kw: (
+                captured.update({"num": kw.get("num_variants")}) or _FAKE[:2]
+            )
+        )
+        mp.return_value = p
+        resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "num_variants": 2})
+    assert resp.status_code == 200
+    assert captured["num"] == 2
+
+
 # ── Step 1: partial variant generation ────────────────────────────────────────
 
 _FAKE_PARTIAL_EN = [

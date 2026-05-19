@@ -109,7 +109,7 @@ def generate_descriptions(
 
     provider = get_provider(provider_name, api_key)
     variants_data = provider.generate_variants(
-        images_b64, model, augmented_hint, language=body.language
+        images_b64, model, augmented_hint, num_variants=body.num_variants, language=body.language
     )
 
     for vd in variants_data:

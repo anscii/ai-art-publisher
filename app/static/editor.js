@@ -956,6 +956,8 @@ function buildGenerateCard(seriesId) {
   modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
   buildProviderModelSelect(modelSel, '', { withDefault: true });
   provSel.addEventListener('change', () => buildProviderModelSelect(modelSel, provSel.value, { withDefault: true }));
+  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: '3', style: 'width:60px' });
+
   const langEn = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary active', id: 'genLangEn', text: 'EN' });
   const langRu = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary', id: 'genLangRu', text: 'RU' });
   const _setLang = lang => {
@@ -995,6 +997,7 @@ function buildGenerateCard(seriesId) {
         h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
         h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelSel),
+        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Variants' }), numVariantsInput),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: 'Language' }), langToggle),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genFullBtn),
@@ -1008,6 +1011,7 @@ async function generateDrafts(seriesId) {
   const hint          = document.getElementById('genHint')?.value.trim() || null;
   const includeImages = document.getElementById('genIncludeImages')?.checked ?? false;
   const language = App.generateLanguage || 'en';
+  const numVariants = parseInt(document.getElementById('genNumVariants')?.value || '3', 10) || 3;
   if (btn) {
     btn.disabled = true;
     btn.replaceChildren(h('span', { cls: 'spinner-border spinner-border-sm me-1' }), document.createTextNode('Generating…'));
@@ -1025,7 +1029,7 @@ async function generateDrafts(seriesId) {
   try {
     const newVariants = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
       provider: provider || null, model: model || null, hint: hint || null,
-      include_images: includeImages, selected_image_ids: selectedImageIds, language,
+      include_images: includeImages, selected_image_ids: selectedImageIds, language, num_variants: numVariants,
     });
     const savedSelection = new Set(_selectedImages);
     await loadSeriesDetail(seriesId);

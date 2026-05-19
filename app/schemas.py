@@ -313,6 +313,7 @@ class GenerateRequest(BaseModel):
     include_images: bool = False
     selected_image_ids: list[str] | None = None
     language: str = "en"
+    num_variants: int = 3
 
 
 class GenerateFullRequest(BaseModel):
