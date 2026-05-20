@@ -59,7 +59,7 @@ def get_trash(db: Session = Depends(get_db)) -> TrashResponse:
 
 
 @router.post("/series/{series_id}/restore")
-def restore_series(series_id: str, db: Session = Depends(get_db)):
+def restore_series(series_id: str, db: Session = Depends(get_db)) -> dict:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Not found")
@@ -69,7 +69,7 @@ def restore_series(series_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/images/{image_id}/restore")
-def restore_image(image_id: str, db: Session = Depends(get_db)):
+def restore_image(image_id: str, db: Session = Depends(get_db)) -> dict:
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Not found")
@@ -79,7 +79,7 @@ def restore_image(image_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/series/{series_id}")
-def permanently_delete_series(series_id: str, db: Session = Depends(get_db)):
+def permanently_delete_series(series_id: str, db: Session = Depends(get_db)) -> dict:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Not found")
@@ -106,7 +106,7 @@ def permanently_delete_series(series_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/images/{image_id}")
-def permanently_delete_image(image_id: str, db: Session = Depends(get_db)):
+def permanently_delete_image(image_id: str, db: Session = Depends(get_db)) -> dict:
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Not found")
@@ -122,7 +122,7 @@ def permanently_delete_image(image_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("")
-def empty_trash(db: Session = Depends(get_db)):
+def empty_trash(db: Session = Depends(get_db)) -> dict:
     settings = get_or_create_settings(db)
     del_series = db.scalars(select(Series).where(Series.deleted_at.isnot(None))).all()
     del_images = db.scalars(

@@ -35,15 +35,15 @@ class Series(Base):
     description_ru: Mapped[str] = mapped_column(Text, default="")
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
-    status: Mapped[str] = mapped_column(String, default="new")
+    status: Mapped[str] = mapped_column(String, default="new", index=True)
     collection_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("collections.id"), nullable=True
+        String, ForeignKey("collections.id"), nullable=True, index=True
     )
     collection_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     collection_number: Mapped[str | None] = mapped_column(String, nullable=True)
     chosen_variant_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     collection: Mapped["Collection | None"] = relationship("Collection", back_populates="series")
     images: Mapped[list["Image"]] = relationship(
@@ -69,14 +69,16 @@ class Image(Base):
     __tablename__ = "images"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    series_id: Mapped[str] = mapped_column(String, ForeignKey("series.id", ondelete="CASCADE"))
+    series_id: Mapped[str] = mapped_column(
+        String, ForeignKey("series.id", ondelete="CASCADE"), index=True
+    )
     r2_key: Mapped[str] = mapped_column(String)
     original_filename: Mapped[str] = mapped_column(String)
     original_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String, default="pending")
+    status: Mapped[str] = mapped_column(String, default="pending", index=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="images")
     post_images: Mapped[list["PostImage"]] = relationship("PostImage", back_populates="image")
@@ -101,13 +103,15 @@ class Post(Base):
     __tablename__ = "posts"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    series_id: Mapped[str] = mapped_column(String, ForeignKey("series.id", ondelete="CASCADE"))
+    series_id: Mapped[str] = mapped_column(
+        String, ForeignKey("series.id", ondelete="CASCADE"), index=True
+    )
     platform: Mapped[str] = mapped_column(String)
     title: Mapped[str] = mapped_column(String, default="")
     description: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[str] = mapped_column(Text, default="[]")
-    status: Mapped[str] = mapped_column(String, default="draft")
-    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="draft", index=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     external_post_id: Mapped[str | None] = mapped_column(String, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -133,7 +137,9 @@ class AIVariant(Base):
     __tablename__ = "ai_variants"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    series_id: Mapped[str] = mapped_column(String, ForeignKey("series.id", ondelete="CASCADE"))
+    series_id: Mapped[str] = mapped_column(
+        String, ForeignKey("series.id", ondelete="CASCADE"), index=True
+    )
     provider: Mapped[str] = mapped_column(String)
     model: Mapped[str] = mapped_column(String)
     title: Mapped[str] = mapped_column(String, default="")

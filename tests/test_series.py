@@ -1,6 +1,6 @@
 def test_create_series(client):
     resp = client.post("/api/series", json={"title": "Dragon Forest"})
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     d = resp.json()
     assert d["title"] == "Dragon Forest"
     assert d["status"] == "new"
@@ -131,3 +131,18 @@ def test_save_queue_clears_previous_queue(client):
     images = {i["id"]: i for i in resp.json()["images"]}
     assert images[img_a]["status"] == "pending"
     assert images[img_b]["status"] == "queued"
+
+
+def test_save_queue_persists_on_subsequent_get(client):
+    sid = client.post("/api/series", json={"title": "Q3"}).json()["id"]
+    img_a = _register_image(client, sid, "pa.jpg")
+    img_b = _register_image(client, sid, "pb.jpg")
+
+    client.put(f"/api/series/{sid}/queue", json={"image_ids": [img_a]})
+
+    # Subsequent GET (simulates user reopening the series) must reflect saved state
+    resp = client.get(f"/api/series/{sid}")
+    assert resp.status_code == 200
+    images = {i["id"]: i for i in resp.json()["images"]}
+    assert images[img_a]["status"] == "queued"
+    assert images[img_b]["status"] == "pending"

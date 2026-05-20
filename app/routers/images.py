@@ -9,7 +9,13 @@ from app.database import get_db
 from app.models import Image, Series
 from app.routers.series import image_to_resp, series_to_detail
 from app.routers.settings import get_or_create_settings
-from app.schemas import ImageStatusUpdate, MoveImageBody, RegisterImageBody, ReorderImagesBody
+from app.schemas import (
+    ImageResponse,
+    ImageStatusUpdate,
+    MoveImageBody,
+    RegisterImageBody,
+    ReorderImagesBody,
+)
 from app.services.storage import get_storage_from_settings
 
 router = APIRouter(tags=["images"])
@@ -31,8 +37,8 @@ def _next_order(series: Series) -> int:
     return max((img.order_index for img in series.images), default=-1) + 1
 
 
-@router.post("/api/series/{series_id}/images")
-async def upload_images(
+@router.post("/api/series/{series_id}/images", response_model=list[ImageResponse], status_code=201)
+def upload_images(
     series_id: str,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
@@ -44,7 +50,7 @@ async def upload_images(
     storage = get_storage_from_settings(settings)
     results = []
     for file in files:
-        data = await file.read()
+        data = file.file.read()
         ext = (file.filename or "").rsplit(".", 1)[-1] or "jpg"
         key = f"images/{uuid.uuid4()}.{ext}"
         storage.upload_bytes(data, key, file.content_type or "image/jpeg")
@@ -63,7 +69,9 @@ async def upload_images(
     return results
 
 
-@router.post("/api/series/{series_id}/images/register")
+@router.post(
+    "/api/series/{series_id}/images/register", response_model=ImageResponse, status_code=201
+)
 def register_image(
     series_id: str,
     body: RegisterImageBody,
@@ -91,7 +99,7 @@ def reorder_images(
     series_id: str,
     body: ReorderImagesBody,
     db: Session = Depends(get_db),
-):
+) -> dict:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
@@ -108,7 +116,7 @@ def move_image(
     image_id: str,
     body: MoveImageBody,
     db: Session = Depends(get_db),
-):
+) -> dict:
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Image not found")

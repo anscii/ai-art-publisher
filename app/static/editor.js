@@ -686,6 +686,14 @@ async function deleteVariant(variantId) {
 // ── Descriptions card ─────────────────────────────────────────────────────────
 function buildDescriptionsCard(series) {
   const variants = series.ai_variants || [];
+  const hasContent = !!(
+    variants.length ||
+    series.title || series.title_ru ||
+    series.description_en || series.description_ru ||
+    (series.tags_instagram || []).length ||
+    (series.tags_telegram || []).length
+  );
+  const bodyId = 'descBody-' + series.id;
   const variantBtns = h('div', { cls: 'd-flex gap-1 flex-wrap mb-2' });
   if (!variants.length) {
     variantBtns.appendChild(h('p', { cls: 'text-muted small mb-2', text: 'No AI variants yet.' }));
@@ -772,7 +780,7 @@ function buildDescriptionsCard(series) {
     apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
       _pinterestBoardsCache = data.boards || [];
       _fillBoardChips(_pinterestBoardsCache);
-    }).catch(() => {});
+    }).catch(e => console.warn('Failed to load Pinterest boards:', e));
   }
 
   const form = h('div', { cls: 'row g-2' },
@@ -806,13 +814,28 @@ function buildDescriptionsCard(series) {
     h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));
   semDetails.appendChild(semGrid);
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
+  const chevron = icon('bi bi-chevron-' + (hasContent ? 'up' : 'down'));
+  const toggleBtn = h('button', {
+    'data-bs-toggle': 'collapse',
+    'data-bs-target': '#' + bodyId,
+    cls: 'btn btn-xs btn-link p-0 ms-auto border-0 text-body',
+    title: 'Toggle descriptions',
+  });
+  toggleBtn.appendChild(chevron);
+
+  const bodyEl = h('div', { cls: 'collapse' + (hasContent ? ' show' : ''), id: bodyId },
+    h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
+  bodyEl.addEventListener('show.bs.collapse', () => { chevron.className = 'bi bi-chevron-up'; });
+  bodyEl.addEventListener('hide.bs.collapse', () => { chevron.className = 'bi bi-chevron-down'; });
+
+  const headerLabel = h('span', { cls: 'small fw-medium d-flex align-items-center w-100' });
   headerLabel.appendChild(icon('bi bi-card-text me-1'));
   headerLabel.appendChild(document.createTextNode('Descriptions'));
+  headerLabel.appendChild(toggleBtn);
 
   return h('div', { cls: 'card mb-3' },
     h('div', { cls: 'card-header py-2' }, headerLabel),
-    h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
+    bodyEl);
 }
 
 function resetToSaved() {

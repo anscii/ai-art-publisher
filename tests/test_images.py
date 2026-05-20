@@ -18,7 +18,7 @@ def _upload(client, series_id, filename="1680030203290_out.jpg"):
 def test_upload_parses_timestamp(client):
     sid = _make_series(client)
     resp = _upload(client, sid, filename="1680030203290_out.jpg")
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     img = resp.json()[0]
     assert img["original_filename"] == "1680030203290_out.jpg"
     assert img["original_created_at"] is not None
@@ -27,7 +27,7 @@ def test_upload_parses_timestamp(client):
 def test_upload_unknown_filename(client):
     sid = _make_series(client)
     resp = _upload(client, sid, filename="my_art.jpg")
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     assert resp.json()[0]["original_created_at"] is None
 
 
@@ -41,7 +41,7 @@ def test_register_image(client):
             "original_created_at": "2023-03-28T19:03:23Z",
         },
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     assert resp.json()["r2_key"] == "images/bulk.jpg"
 
 
