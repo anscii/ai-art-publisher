@@ -48,17 +48,17 @@ def _to_dict(s: AppSettings) -> dict:
 
 
 @router.get("/providers")
-def get_providers():
+def get_providers() -> dict:
     return PROVIDER_MODELS
 
 
 @router.get("")
-def get_settings(db: Session = Depends(get_db)):
+def get_settings(db: Session = Depends(get_db)) -> dict:
     return _to_dict(get_or_create_settings(db))
 
 
 @router.put("")
-def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
+def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)) -> dict:
     s = get_or_create_settings(db)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(s, field, value)
@@ -67,7 +67,7 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/test/{service}")
-def test_connection(service: str, db: Session = Depends(get_db)):
+def test_connection(service: str, db: Session = Depends(get_db)) -> dict:
     s = get_or_create_settings(db)
     handlers = {
         "telegram": lambda: _test_telegram(s.telegram_bot_token),
@@ -269,7 +269,7 @@ def _test_pinterest(token: str | None) -> dict:
 
 
 @router.get("/pinterest/boards")
-def get_pinterest_boards(db: Session = Depends(get_db)):
+def get_pinterest_boards(db: Session = Depends(get_db)) -> dict:
     s = get_or_create_settings(db)
     try:
         board_map = json.loads(s.pinterest_board_map) if s.pinterest_board_map else {}

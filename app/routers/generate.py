@@ -8,7 +8,13 @@ from app.database import get_db
 from app.models import AIVariant, Series
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
-from app.schemas import AIVariantSemanticUpdate, GenerateFullRequest, GenerateRequest
+from app.schemas import (
+    AIVariantResponse,
+    AIVariantSemanticUpdate,
+    GenerateFullRequest,
+    GenerateRequest,
+    SeriesDetail,
+)
 from app.services.ai.base import AIProvider
 from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
@@ -57,12 +63,12 @@ def _get_api_key(settings, provider: str) -> str:
     }.get(provider, "")
 
 
-@router.post("/{series_id}/generate")
+@router.post("/{series_id}/generate", status_code=201)
 def generate_descriptions(
     series_id: str,
     body: GenerateRequest,
     db: Session = Depends(get_db),
-):
+) -> list[AIVariantResponse]:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
@@ -141,12 +147,12 @@ def generate_descriptions(
     return series_to_detail(s, db).ai_variants
 
 
-@router.post("/{series_id}/generate-full")
+@router.post("/{series_id}/generate-full", status_code=201)
 def generate_full(
     series_id: str,
     body: GenerateFullRequest,
     db: Session = Depends(get_db),
-):
+) -> SeriesDetail:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
@@ -217,7 +223,7 @@ def generate_full(
 
 
 @variants_router.delete("/{variant_id}")
-def delete_variant(variant_id: str, db: Session = Depends(get_db)):
+def delete_variant(variant_id: str, db: Session = Depends(get_db)) -> SeriesDetail:
     from sqlalchemy import select as _select
 
     from app.models import Post
@@ -256,7 +262,7 @@ def update_variant_semantic(
     variant_id: str,
     body: AIVariantSemanticUpdate,
     db: Session = Depends(get_db),
-):
+) -> SeriesDetail:
     v = db.get(AIVariant, variant_id)
     if not v:
         raise HTTPException(status_code=404, detail="AIVariant not found")

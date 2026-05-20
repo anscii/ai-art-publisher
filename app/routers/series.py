@@ -154,7 +154,7 @@ def _assign_collection_index(s: Series, new_cid: str | None, db: Session) -> Non
             s.collection_number = str(s.collection_index)
 
 
-@router.post("")
+@router.post("", status_code=201)
 def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDetail:
     s = Series(
         name=body.name or body.title,
@@ -256,7 +256,7 @@ def update_series(
 
 
 @router.delete("/{series_id}")
-def delete_series(series_id: str, db: Session = Depends(get_db)):
+def delete_series(series_id: str, db: Session = Depends(get_db)) -> dict:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")

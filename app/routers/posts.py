@@ -265,7 +265,7 @@ def list_posts(series_id: str, db: Session = Depends(get_db)) -> list[PostRespon
     return [post_to_resp(p) for p in posts]
 
 
-@router.post("/api/series/{series_id}/posts")
+@router.post("/api/series/{series_id}/posts", status_code=201)
 def create_posts(
     series_id: str, body: PostBatchCreate, db: Session = Depends(get_db)
 ) -> list[PostResponse]:
@@ -380,7 +380,7 @@ def update_post(post_id: str, body: PostUpdate, db: Session = Depends(get_db)) -
 
 
 @router.delete("/api/posts/{post_id}")
-def delete_post(post_id: str, db: Session = Depends(get_db)):
+def delete_post(post_id: str, db: Session = Depends(get_db)) -> dict:
     p = db.get(Post, post_id)
     if not p or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Post not found")
