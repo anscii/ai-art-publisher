@@ -99,7 +99,7 @@ def reorder_images(
     series_id: str,
     body: ReorderImagesBody,
     db: Session = Depends(get_db),
-):
+) -> dict:
     s = db.get(Series, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
@@ -116,7 +116,7 @@ def move_image(
     image_id: str,
     body: MoveImageBody,
     db: Session = Depends(get_db),
-):
+) -> dict:
     img = db.get(Image, image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Image not found")

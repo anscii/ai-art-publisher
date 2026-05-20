@@ -8,7 +8,6 @@ class TelegramService:
         self._base = f"https://api.telegram.org/bot{token}"
 
     def post_media_group(self, image_urls: list[str], caption: str) -> dict:
-        results = []
         with httpx.Client(timeout=30) as client:
             for chunk in _chunks(image_urls, 10):
                 media = []
@@ -25,7 +24,6 @@ class TelegramService:
                 data = resp.json()
                 if not data.get("ok"):
                     return {"ok": False, "description": data.get("description", "Unknown error")}
-                results.append(data)
         return {"ok": True}
 
 
