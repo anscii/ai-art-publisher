@@ -66,7 +66,9 @@ def test_generate_full_from_manually_typed_description(page, live_server):
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
 
-    # Type a description manually without generating drafts
+    # Expand collapsed Descriptions card, then type a description manually
+    page.locator('button[title="Toggle descriptions"]').click()
+    page.locator("#f_desc_en").wait_for(state="visible", timeout=3000)
     page.locator("#f_desc_en").fill("A manually typed description about something strange.")
 
     page.locator("#generateFullBtn").click()
@@ -203,6 +205,8 @@ def test_applying_draft_clears_other_fields(page, live_server):
     assert page.locator("#f_tags_ig").input_value()
 
     # Generate new EN drafts — applying the draft must clear derived fields
+    # Wait for previous 'drafts' toast to auto-dismiss before triggering a new one
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(state="hidden", timeout=10000)
     page.locator("#genHint").fill("New hint")
     page.locator("#generateBtn").click()
     page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
