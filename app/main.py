@@ -103,7 +103,7 @@ async def noindex_header(request: Request, call_next):
 
 
 @app.get("/robots.txt", include_in_schema=False)
-def robots():
+async def robots():
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
@@ -127,5 +127,5 @@ async def index():
 
 
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}

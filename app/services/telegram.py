@@ -9,23 +9,23 @@ class TelegramService:
 
     def post_media_group(self, image_urls: list[str], caption: str) -> dict:
         results = []
-        for chunk in _chunks(image_urls, 10):
-            media = []
-            for i, url in enumerate(chunk):
-                item = {"type": "photo", "media": url}
-                if i == 0:
-                    item["caption"] = caption
-                    item["parse_mode"] = "HTML"
-                media.append(item)
-            with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=30) as client:
+            for chunk in _chunks(image_urls, 10):
+                media = []
+                for i, url in enumerate(chunk):
+                    item = {"type": "photo", "media": url}
+                    if i == 0:
+                        item["caption"] = caption
+                        item["parse_mode"] = "HTML"
+                    media.append(item)
                 resp = client.post(
                     f"{self._base}/sendMediaGroup",
                     json={"chat_id": self._channel_id, "media": media},
                 )
-            data = resp.json()
-            if not data.get("ok"):
-                return {"ok": False, "description": data.get("description", "Unknown error")}
-            results.append(data)
+                data = resp.json()
+                if not data.get("ok"):
+                    return {"ok": False, "description": data.get("description", "Unknown error")}
+                results.append(data)
         return {"ok": True}
 
 

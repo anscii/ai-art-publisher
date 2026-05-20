@@ -780,7 +780,7 @@ function buildDescriptionsCard(series) {
     apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
       _pinterestBoardsCache = data.boards || [];
       _fillBoardChips(_pinterestBoardsCache);
-    }).catch(() => {});
+    }).catch(e => console.warn('Failed to load Pinterest boards:', e));
   }
 
   const form = h('div', { cls: 'row g-2' },

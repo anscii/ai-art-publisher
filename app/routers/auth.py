@@ -36,7 +36,7 @@ def verify_session_token(token: str, secret: str) -> bool:
             return False
         data = json.loads(base64.urlsafe_b64decode(payload))
         return int(time.time()) <= data["exp"]
-    except Exception:
+    except (ValueError, KeyError):
         return False
 
 
@@ -58,7 +58,7 @@ def is_authenticated(request: Request, cfg) -> bool:
             decoded = base64.b64decode(auth[6:]).decode("utf-8")
             username, _, password = decoded.partition(":")
             return _verify_credentials(username, password, cfg)
-        except Exception:
+        except (ValueError, UnicodeDecodeError):
             pass
     return False
 

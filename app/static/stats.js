@@ -64,7 +64,7 @@ function _renderStats(el, data) {
       h('td', { cls: 'small text-secondary text-truncate', style: 'max-width:180px', text: r.model }),
       h('td', { cls: 'small text-end', text: String(r.generated) }),
       h('td', { cls: 'small text-end', text: String(r.chosen) }),
-      h('td', { cls: 'small text-end', text: r.selection_rate.toFixed(1) + '%' }),
+      h('td', { cls: 'small text-end', text: (r.selection_rate ?? 0).toFixed(1) + '%' }),
       h('td', { cls: 'small text-end', text: '$' + r.total_cost_usd.toFixed(4) }),
       h('td', { cls: 'small text-end',
         text: r.cost_per_selection != null ? '$' + r.cost_per_selection.toFixed(4) : '—' }),
