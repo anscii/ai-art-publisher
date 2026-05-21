@@ -232,18 +232,33 @@ def main() -> None:
             continue
 
         for hint in args.hints:
-            print(f"  {provider}/{model_id}  hint={hint!r} ...", end=" ", flush=True)
+            print(f"  {provider}/{model_id}  hint={hint!r} step1 ...", end=" ", flush=True)
             t0 = time.perf_counter()
             try:
-                variants = p.generate_variants(images_b64=[], model=model_id, hint=hint)
+                drafts = p.generate_variants(images_b64=[], model=model_id, hint=hint)
+                elapsed1 = round(time.perf_counter() - t0, 2)
+                print(f"{elapsed1}s  step2 ...", end=" ", flush=True)
+
+                final_variants = []
+                for draft in drafts:
+                    description = draft.description_en or draft.description_ru
+                    try:
+                        exp = p.expand_variant(
+                            description=description, language="en", model=model_id, hint=hint
+                        )
+                        exp.cost_usd = (draft.cost_usd or 0) + (exp.cost_usd or 0)
+                        final_variants.append(exp)
+                    except Exception as step2_err:
+                        # step2 failed for this draft — keep step1 data, note the error
+                        draft.description_ru = f"[step2 error: {step2_err}]"
+                        final_variants.append(draft)
+
                 elapsed = round(time.perf_counter() - t0, 2)
                 print(f"{elapsed}s")
-                cost_str = (
-                    f"${variants[0].cost_usd:.4f}" if variants and variants[0].cost_usd else ""
-                )
-                if cost_str:
-                    print(f" cost: {cost_str}", end=" ")
-                for v in variants:
+                total_cost = sum(v.cost_usd or 0 for v in final_variants)
+                if total_cost:
+                    print(f" cost: ${total_cost:.4f}", end=" ")
+                for v in final_variants:
                     rows.append(
                         {
                             "provider": provider,
@@ -251,7 +266,7 @@ def main() -> None:
                             "hint": hint,
                             "time_s": elapsed,
                             "cost_usd": v.cost_usd,
-                            "title": v.title,
+                            "title": v.title or "",
                             "description_en": v.description_en,
                             "description_ru": v.description_ru,
                             "tags_instagram": " ".join(v.tags_instagram),
