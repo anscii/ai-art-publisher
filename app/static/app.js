@@ -705,11 +705,17 @@ function getDraftEdits() {
 // ── URL state ─────────────────────────────────────────────────────────────────
 const _DEFAULT_STATUSES = 'approved,draft,new';
 
+function _seriesUrlLabel() {
+  const s = App.currentSeries;
+  return (s && (s.name || s.title)) || null;
+}
+
 function _pushState() {
   const statusStr = [...App.activeStatuses].sort().join(',');
+  const label = _seriesUrlLabel();
   const p = new URLSearchParams();
   if (App.currentView && App.currentView !== 'editor') p.set('view', App.currentView);
-  if (App.currentSeriesId) p.set('series', App.currentSeriesId);
+  if (App.currentSeriesId) p.set('series', label || App.currentSeriesId);
   if (statusStr !== _DEFAULT_STATUSES) p.set('status', statusStr);
   if (App.search) p.set('q', App.search);
   if (App.activeCollection) p.set('collection', App.activeCollection);
@@ -720,6 +726,19 @@ function _pushState() {
     status: statusStr, q: App.search,
     collection: App.activeCollection, limit: App.limit,
   }, '', url);
+}
+
+async function _resolveSeriesParam(param) {
+  if (!param) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param)) return param;
+  const norm = param.toLowerCase();
+  const inPage = App.series.find(s => (s.name || s.title || '').toLowerCase() === norm);
+  if (inPage) return inPage.id;
+  try {
+    const data = await apiFetch('GET', '/api/series?search=' + encodeURIComponent(param) + '&limit=5&status=new,draft,approved,posted,skip');
+    const match = (data.items || []).find(s => (s.name || s.title || '').toLowerCase() === norm);
+    return match?.id || null;
+  } catch { return null; }
 }
 
 function _syncFiltersFromState(status, q, collection, limit) {
@@ -739,12 +758,15 @@ function _syncFiltersFromState(status, q, collection, limit) {
 async function _restoreFromUrl() {
   const p = new URLSearchParams(location.search);
   const view = p.get('view') || 'editor';
-  const seriesId = p.get('series') || null;
+  const seriesParam = p.get('series') || null;
   _syncFiltersFromState(p.get('status'), p.get('q'), p.get('collection'), parseInt(p.get('limit')) || null);
 
   showView(view, { push: false });
   await loadSeries(true);
-  if (seriesId) await selectSeries(seriesId, { push: false });
+  if (seriesParam) {
+    const seriesId = await _resolveSeriesParam(seriesParam);
+    if (seriesId) await selectSeries(seriesId, { push: false });
+  }
 
   _pushState();
 }
