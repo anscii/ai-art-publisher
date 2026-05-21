@@ -54,6 +54,7 @@ const App = {
   currentSeries: null,
   unsortedSeriesId: null,
   search: '',
+  currentView: 'editor',
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -121,10 +122,44 @@ function statusBadge(status) {
 }
 
 // ── Series list ───────────────────────────────────────────────────────────────
+let _sentinel = null;
+let _observer = null;
+
+function _updateSentinel(active) {
+  if (!_sentinel) {
+    _sentinel = h('div', { id: 'scrollSentinel', style: 'height:1px' });
+    const sidebar = document.getElementById('seriesSidebar');
+    sidebar.insertBefore(_sentinel, document.getElementById('loadMoreBtn'));
+    _observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && App.series.length < App.total) {
+        loadMoreSeries();
+      }
+    }, { threshold: 0.1 });
+  }
+  if (active) _observer.observe(_sentinel);
+  else _observer.unobserve(_sentinel);
+}
+
+function _trimDomIfNeeded(container) {
+  const items = container.querySelectorAll('[data-id]');
+  if (items.length <= 100) return;
+  for (let i = 0; i < 50; i++) items[i].remove();
+  if (!document.getElementById('seriesTrimNotice')) {
+    const notice = h('div', {
+      id: 'seriesTrimNotice',
+      cls: 'text-muted small text-center py-1 border-bottom',
+      text: '↑ Scroll to top to reload from beginning',
+    });
+    container.prepend(notice);
+  }
+}
+
 async function loadSeries(reset) {
   if (reset) {
     App.page = 1; App.series = [];
     document.getElementById('seriesItems').replaceChildren();
+    document.getElementById('seriesTrimNotice')?.remove();
+    if (_sentinel) _observer.unobserve(_sentinel);
   }
   document.getElementById('seriesListLoading').classList.remove('d-none');
   try {
@@ -138,12 +173,15 @@ async function loadSeries(reset) {
     const container = document.getElementById('seriesItems');
     const visible = data.items.filter(s => (s.name || s.title) !== 'Unsorted' && s.id !== App.unsortedSeriesId);
     visible.forEach(s => container.appendChild(buildSeriesItem(s)));
-    document.getElementById('loadMoreBtn').classList.toggle('d-none', App.series.length >= App.total);
+    const hasMore = App.series.length < App.total;
+    document.getElementById('loadMoreBtn').classList.toggle('d-none', !hasMore);
+    _updateSentinel(hasMore);
+    if (!reset) _trimDomIfNeeded(container);
     if (reset && !App.currentSeriesId && visible.length > 0) {
       if (window.innerWidth >= 992) {
-        selectSeries(visible[0].id);
+        selectSeries(visible[0].id, { push: false });
       } else {
-        showView('list');
+        showView('list', { push: false });
       }
     }
   } catch (e) {
@@ -164,6 +202,8 @@ function buildSeriesItem(s) {
   if (s.cover_url) {
     cover = document.createElement('img');
     cover.setAttribute('src', s.cover_url);
+    cover.setAttribute('width', '48');
+    cover.setAttribute('height', '40');
     cover.className = 'rounded flex-shrink-0';
     cover.style.cssText = 'width:48px;height:40px;object-fit:cover';
     cover.loading = 'lazy';
@@ -210,23 +250,29 @@ function updateSeriesItem(s) {
   old.replaceWith(buildSeriesItem(item));
 }
 
-async function selectSeries(id) {
+async function selectSeries(id, { push = true } = {}) {
   App.currentSeriesId = id;
   document.querySelectorAll('.series-item').forEach(el => {
     el.classList.toggle('bg-body-secondary', el.dataset.id === id);
   });
-  showView('editor');
+  showView('editor', { push: false });
   await loadSeriesDetail(id);
+  if (push) _pushState();
 }
 
+let _loadDetailToken = 0;
+
 async function loadSeriesDetail(id) {
+  const token = ++_loadDetailToken;
   const panel = document.getElementById('editorPanel');
   panel.replaceChildren(h('div', { cls: 'text-center p-5' }, h('div', { cls: 'spinner-border text-secondary' })));
   try {
     const s = await apiFetch('GET', '/api/series/' + id);
+    if (token !== _loadDetailToken) return;
     App.currentSeries = s;
     renderEditor(s);
   } catch (e) {
+    if (token !== _loadDetailToken) return;
     panel.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
   }
 }
@@ -257,6 +303,7 @@ function onFilterChange() {
     [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
   );
   loadSeries(true);
+  _pushState();
 }
 
 let _searchDebounce = null;
@@ -265,11 +312,13 @@ function onSearchChange(val) {
   _searchDebounce = setTimeout(() => {
     App.search = val.trim();
     loadSeries(true);
+    _pushState();
   }, 300);
 }
 
 // ── View switching ────────────────────────────────────────────────────────────
-function showView(view) {
+function showView(view, { push = true } = {}) {
+  App.currentView = view;
   const sidebar     = document.getElementById('seriesSidebar');
   const editor      = document.getElementById('editorPanel');
   const queue       = document.getElementById('queuePanel');
@@ -310,6 +359,7 @@ function showView(view) {
     const wrap = document.getElementById('collectionFilterWrap');
     _populateCollectionFilter();
   }
+  if (push) _pushState();
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
@@ -412,6 +462,7 @@ function _populateCollectionFilter() {
 function onCollectionFilterChange(val) {
   App.activeCollection = val || null;
   loadSeries(true);
+  _pushState();
 }
 
 function _buildCollectionItem(c) {
@@ -430,7 +481,7 @@ function _buildCollectionItem(c) {
   const nameRuEl = c.name_ru ? h('span', { cls: 'text-muted small ms-1', text: '/ ' + c.name_ru }) : null;
   const countEl = h('span', { cls: 'text-muted small ms-2', text: countParts[0] });
 
-  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection' });
+  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection' });
   filterBtn.appendChild(icon('bi bi-funnel'));
   filterBtn.addEventListener('click', () => {
     onCollectionFilterChange(c.id);
@@ -527,7 +578,9 @@ async function refreshTrash() {
           await apiFetch('DELETE', '/api/trash/' + item.type + '/' + item.id);
         } catch (_) { failed++; }
         done++;
-        progressBar.style.width = Math.round(done / total * 100) + '%';
+        const pct = Math.round(done / total * 100);
+        progressBar.style.width = pct + '%';
+        progressBar.setAttribute('aria-valuenow', pct);
       }
       progressContainer.classList.add('d-none');
       if (failed) showToast(failed + ' item(s) failed to delete', 'danger');
@@ -584,6 +637,7 @@ function _buildTrashSeriesItem(s) {
   const thumb = s.cover_url
     ? Object.assign(document.createElement('img'), {
         src: s.cover_url, className: 'rounded flex-shrink-0',
+        width: 48, height: 42,
         style: 'width:48px;height:42px;object-fit:cover',
       })
     : h('div', { cls: 'bg-secondary rounded flex-shrink-0', style: 'width:48px;height:42px' });
@@ -622,6 +676,7 @@ function _buildTrashImageItem(i) {
   }));
   const thumb = Object.assign(document.createElement('img'), {
     src: i.public_url, className: 'rounded flex-shrink-0',
+    width: 48, height: 42,
     style: 'width:48px;height:42px;object-fit:cover',
   });
   return h('div', { cls: 'card mb-2' },
@@ -652,12 +707,79 @@ function getDraftEdits() {
   };
 }
 
+// ── URL state ─────────────────────────────────────────────────────────────────
+const _DEFAULT_STATUSES = 'approved,draft,new';
+
+function _seriesUrlLabel() {
+  const s = App.currentSeries;
+  return (s && (s.name || s.title)) || null;
+}
+
+function _pushState() {
+  const statusStr = [...App.activeStatuses].sort().join(',');
+  const label = _seriesUrlLabel();
+  const p = new URLSearchParams();
+  if (App.currentView && App.currentView !== 'editor') p.set('view', App.currentView);
+  if (App.currentSeriesId) p.set('series', label || App.currentSeriesId);
+  if (statusStr !== _DEFAULT_STATUSES) p.set('status', statusStr);
+  if (App.search) p.set('q', App.search);
+  if (App.activeCollection) p.set('collection', App.activeCollection);
+  if (App.limit !== 15) p.set('limit', String(App.limit));
+  const url = p.toString() ? '?' + p.toString() : location.pathname;
+  history.pushState({
+    view: App.currentView, series: App.currentSeriesId,
+    status: statusStr, q: App.search,
+    collection: App.activeCollection, limit: App.limit,
+  }, '', url);
+}
+
+async function _resolveSeriesParam(param) {
+  if (!param) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param)) return param;
+  const norm = param.toLowerCase();
+  const inPage = App.series.find(s => (s.name || s.title || '').toLowerCase() === norm);
+  if (inPage) return inPage.id;
+  try {
+    const data = await apiFetch('GET', '/api/series?search=' + encodeURIComponent(param) + '&limit=5&status=new,draft,approved,posted,skip');
+    const match = (data.items || []).find(s => (s.name || s.title || '').toLowerCase() === norm);
+    return match?.id || null;
+  } catch { return null; }
+}
+
+function _syncFiltersFromState(status, q, collection, limit) {
+  if (status) App.activeStatuses = new Set(status.split(','));
+  App.search = q || '';
+  App.activeCollection = collection || null;
+  App.limit = limit || 15;
+  document.querySelectorAll('#statusFilterMenu input').forEach(cb => {
+    cb.checked = App.activeStatuses.has(cb.value);
+  });
+  document.getElementById('limitSel').value = String(App.limit);
+  const searchEl = document.getElementById('seriesSearch');
+  if (searchEl) searchEl.value = App.search;
+  if (App.collections.length) _populateCollectionFilter();
+}
+
+async function _restoreFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const view = p.get('view') || 'editor';
+  const seriesParam = p.get('series') || null;
+  _syncFiltersFromState(p.get('status'), p.get('q'), p.get('collection'), parseInt(p.get('limit')) || null);
+
+  showView(view, { push: false });
+  await loadSeries(true);
+  if (seriesParam) {
+    const seriesId = await _resolveSeriesParam(seriesParam);
+    if (seriesId) await selectSeries(seriesId, { push: false });
+  }
+
+  _pushState();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
-  document.getElementById('limitSel').value = String(App.limit);
-  loadSeries(true);
   initLightbox();
   const filterBtn  = document.getElementById('filterBtn');
   const filterMenu = document.getElementById('statusFilterMenu');
@@ -694,6 +816,22 @@ document.addEventListener('DOMContentLoaded', () => {
     collFilterMenu.classList.toggle('show');
   });
   document.addEventListener('click', () => collFilterMenu.classList.remove('show'));
+
+  document.getElementById('limitSel').addEventListener('change', function () {
+    App.limit = +this.value;
+    loadSeries(true);
+    _pushState();
+  });
+
+  window.addEventListener('popstate', async (e) => {
+    const s = e.state;
+    if (!s) return;
+    _syncFiltersFromState(s.status, s.q, s.collection, s.limit);
+    showView(s.view || 'editor', { push: false });
+    await loadSeries(true);
+    if (s.series) await selectSeries(s.series, { push: false });
+  });
+
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();
@@ -706,4 +844,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('backBtnRow').classList.add('d-none');
     }
   });
+
+  await _restoreFromUrl();
 });
