@@ -54,6 +54,7 @@ const App = {
   currentSeries: null,
   unsortedSeriesId: null,
   search: '',
+  currentView: 'editor',
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -212,13 +213,14 @@ function updateSeriesItem(s) {
   old.replaceWith(buildSeriesItem(item));
 }
 
-async function selectSeries(id) {
+async function selectSeries(id, { push = true } = {}) {
   App.currentSeriesId = id;
   document.querySelectorAll('.series-item').forEach(el => {
     el.classList.toggle('bg-body-secondary', el.dataset.id === id);
   });
-  showView('editor');
+  showView('editor', { push: false });
   await loadSeriesDetail(id);
+  if (push) _pushState();
 }
 
 async function loadSeriesDetail(id) {
@@ -259,6 +261,7 @@ function onFilterChange() {
     [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
   );
   loadSeries(true);
+  _pushState();
 }
 
 let _searchDebounce = null;
@@ -267,11 +270,13 @@ function onSearchChange(val) {
   _searchDebounce = setTimeout(() => {
     App.search = val.trim();
     loadSeries(true);
+    _pushState();
   }, 300);
 }
 
 // ── View switching ────────────────────────────────────────────────────────────
-function showView(view) {
+function showView(view, { push = true } = {}) {
+  App.currentView = view;
   const sidebar     = document.getElementById('seriesSidebar');
   const editor      = document.getElementById('editorPanel');
   const queue       = document.getElementById('queuePanel');
@@ -312,6 +317,7 @@ function showView(view) {
     const wrap = document.getElementById('collectionFilterWrap');
     _populateCollectionFilter();
   }
+  if (push) _pushState();
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
@@ -414,6 +420,7 @@ function _populateCollectionFilter() {
 function onCollectionFilterChange(val) {
   App.activeCollection = val || null;
   loadSeries(true);
+  _pushState();
 }
 
 function _buildCollectionItem(c) {
@@ -658,12 +665,57 @@ function getDraftEdits() {
   };
 }
 
+// ── URL state ─────────────────────────────────────────────────────────────────
+const _DEFAULT_STATUSES = 'approved,draft,new';
+
+function _pushState() {
+  const statusStr = [...App.activeStatuses].sort().join(',');
+  const p = new URLSearchParams();
+  if (App.currentView && App.currentView !== 'editor') p.set('view', App.currentView);
+  if (App.currentSeriesId) p.set('series', App.currentSeriesId);
+  if (statusStr !== _DEFAULT_STATUSES) p.set('status', statusStr);
+  if (App.search) p.set('q', App.search);
+  if (App.activeCollection) p.set('collection', App.activeCollection);
+  if (App.limit !== 15) p.set('limit', String(App.limit));
+  const url = p.toString() ? '?' + p.toString() : location.pathname;
+  history.pushState({
+    view: App.currentView, series: App.currentSeriesId,
+    status: statusStr, q: App.search,
+    collection: App.activeCollection, limit: App.limit,
+  }, '', url);
+}
+
+function _syncFiltersFromState(status, q, collection, limit) {
+  if (status) App.activeStatuses = new Set(status.split(','));
+  App.search = q || '';
+  App.activeCollection = collection || null;
+  App.limit = limit || 15;
+  document.querySelectorAll('#statusFilterMenu input').forEach(cb => {
+    cb.checked = App.activeStatuses.has(cb.value);
+  });
+  document.getElementById('limitSel').value = String(App.limit);
+  const searchEl = document.getElementById('seriesSearch');
+  if (searchEl) searchEl.value = App.search;
+  if (App.collections.length) _populateCollectionFilter();
+}
+
+async function _restoreFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const view = p.get('view') || 'editor';
+  const seriesId = p.get('series') || null;
+  _syncFiltersFromState(p.get('status'), p.get('q'), p.get('collection'), parseInt(p.get('limit')) || null);
+
+  showView(view, { push: false });
+  await loadSeries(true);
+  if (seriesId) await selectSeries(seriesId, { push: false });
+
+  _pushState();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
-  document.getElementById('limitSel').value = String(App.limit);
-  loadSeries(true);
   initLightbox();
   const filterBtn  = document.getElementById('filterBtn');
   const filterMenu = document.getElementById('statusFilterMenu');
@@ -700,6 +752,22 @@ document.addEventListener('DOMContentLoaded', () => {
     collFilterMenu.classList.toggle('show');
   });
   document.addEventListener('click', () => collFilterMenu.classList.remove('show'));
+
+  document.getElementById('limitSel').addEventListener('change', function () {
+    App.limit = +this.value;
+    loadSeries(true);
+    _pushState();
+  });
+
+  window.addEventListener('popstate', async (e) => {
+    const s = e.state;
+    if (!s) return;
+    _syncFiltersFromState(s.status, s.q, s.collection, s.limit);
+    showView(s.view || 'editor', { push: false });
+    await loadSeries(true);
+    if (s.series) await selectSeries(s.series, { push: false });
+  });
+
   setInterval(() => {
     if (!App.currentSeriesId) return;
     const d = getDraftEdits();
@@ -712,4 +780,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('backBtnRow').classList.add('d-none');
     }
   });
+
+  await _restoreFromUrl();
 });
