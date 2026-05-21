@@ -140,6 +140,8 @@ function _refreshImagesHeader(total) {
 function buildThumb(img, seriesId) {
   const imgEl = document.createElement('img');
   imgEl.setAttribute('src', img.public_url);
+  imgEl.setAttribute('width', '160');
+  imgEl.setAttribute('height', '140');
   imgEl.className = 'rounded';
   imgEl.style.cssText = 'width:160px;height:140px;object-fit:cover';
   imgEl.loading = 'lazy';

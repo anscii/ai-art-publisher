@@ -164,6 +164,8 @@ function buildSeriesItem(s) {
   if (s.cover_url) {
     cover = document.createElement('img');
     cover.setAttribute('src', s.cover_url);
+    cover.setAttribute('width', '48');
+    cover.setAttribute('height', '40');
     cover.className = 'rounded flex-shrink-0';
     cover.style.cssText = 'width:48px;height:40px;object-fit:cover';
     cover.loading = 'lazy';
@@ -586,6 +588,7 @@ function _buildTrashSeriesItem(s) {
   const thumb = s.cover_url
     ? Object.assign(document.createElement('img'), {
         src: s.cover_url, className: 'rounded flex-shrink-0',
+        width: 48, height: 42,
         style: 'width:48px;height:42px;object-fit:cover',
       })
     : h('div', { cls: 'bg-secondary rounded flex-shrink-0', style: 'width:48px;height:42px' });
@@ -624,6 +627,7 @@ function _buildTrashImageItem(i) {
   }));
   const thumb = Object.assign(document.createElement('img'), {
     src: i.public_url, className: 'rounded flex-shrink-0',
+    width: 48, height: 42,
     style: 'width:48px;height:42px;object-fit:cover',
   });
   return h('div', { cls: 'card mb-2' },
