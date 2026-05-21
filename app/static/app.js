@@ -260,14 +260,19 @@ async function selectSeries(id, { push = true } = {}) {
   if (push) _pushState();
 }
 
+let _loadDetailToken = 0;
+
 async function loadSeriesDetail(id) {
+  const token = ++_loadDetailToken;
   const panel = document.getElementById('editorPanel');
   panel.replaceChildren(h('div', { cls: 'text-center p-5' }, h('div', { cls: 'spinner-border text-secondary' })));
   try {
     const s = await apiFetch('GET', '/api/series/' + id);
+    if (token !== _loadDetailToken) return;
     App.currentSeries = s;
     renderEditor(s);
   } catch (e) {
+    if (token !== _loadDetailToken) return;
     panel.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
   }
 }
