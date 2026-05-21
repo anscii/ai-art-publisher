@@ -105,15 +105,15 @@ function buildImagesCard(series) {
       .forEach(img => strip.appendChild(buildThumb(img, series.id)));
   }
 
-  const selAllBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Select all' });
+  const selAllBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Select all', 'aria-label': 'Select all images' });
   selAllBtn.appendChild(icon('bi bi-check2-all'));
   selAllBtn.addEventListener('click', () => _selectAll(series.id));
 
-  const invertBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Invert selection' });
+  const invertBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Invert selection', 'aria-label': 'Invert image selection' });
   invertBtn.appendChild(icon('bi bi-arrow-left-right'));
   invertBtn.addEventListener('click', () => _invertSelection(series.id));
 
-  const deselBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Deselect all' });
+  const deselBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Deselect all', 'aria-label': 'Deselect all images' });
   deselBtn.appendChild(icon('bi bi-x-circle'));
   deselBtn.addEventListener('click', () => _deselectAll(series.id));
 
@@ -158,7 +158,7 @@ function buildThumb(img, seriesId) {
     openLightbox(images, idx >= 0 ? idx : 0);
   });
 
-  const menuBtn = h('button', { cls: 'btn btn-xs btn-dark opacity-75', text: '⋯' });
+  const menuBtn = h('button', { cls: 'btn btn-xs btn-dark opacity-75', text: '⋯', 'aria-label': 'Image options' });
   menuBtn.setAttribute('data-bs-toggle', 'dropdown');
   menuBtn.addEventListener('click', e => e.stopPropagation());
 
@@ -189,6 +189,8 @@ function buildThumb(img, seriesId) {
     cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-1 border-0 bg-transparent',
     style: 'line-height:1',
     'data-select-btn': img.id,
+    'aria-label': _selectedImages.has(img.id) ? 'Deselect image' : 'Select image',
+    'aria-pressed': String(_selectedImages.has(img.id)),
   });
   statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
   statusBtn.addEventListener('click', e => {
@@ -219,7 +221,11 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
   const isNowSelected = !_selectedImages.has(imgId);
   if (isNowSelected) _selectedImages.add(imgId); else _selectedImages.delete(imgId);
   const btn = document.querySelector('[data-select-btn="' + imgId + '"]');
-  if (btn) { btn.replaceChildren(icon(_selectIcon(imgId, imgStatus))); }
+  if (btn) {
+    btn.replaceChildren(icon(_selectIcon(imgId, imgStatus)));
+    btn.setAttribute('aria-pressed', String(isNowSelected));
+    btn.setAttribute('aria-label', isNowSelected ? 'Deselect image' : 'Select image');
+  }
   const thumb = document.querySelector('[data-image-id="' + imgId + '"]');
   if (thumb) thumb.classList.toggle('thumb-selected', isNowSelected);
   _resortStrip();
@@ -601,12 +607,14 @@ function _lightboxRender() {
   const isSelected = _selectedImages.has(img.id);
   qBtn.replaceChildren(icon(isSelected ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
     document.createTextNode(isSelected ? 'Deselect' : 'Select'));
+  qBtn.setAttribute('aria-label', isSelected ? 'Deselect image' : 'Select image');
   qBtn.disabled = img.status === 'posted';
 
   const sBtn = document.getElementById('lightboxSkipBtn');
   const isSkip = img.status === 'skip';
   sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
     document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
+  sBtn.setAttribute('aria-label', isSkip ? 'Unskip image' : 'Skip image');
 
   const moveMenu = document.getElementById('lightboxMoveMenu');
   if (moveMenu) {
@@ -820,13 +828,22 @@ function buildDescriptionsCard(series) {
     'data-bs-target': '#' + bodyId,
     cls: 'btn btn-xs btn-link p-0 ms-auto border-0 text-body',
     title: 'Toggle descriptions',
+    'aria-label': 'Toggle descriptions',
+    'aria-expanded': String(hasContent),
+    'aria-controls': bodyId,
   });
   toggleBtn.appendChild(chevron);
 
   const bodyEl = h('div', { cls: 'collapse' + (hasContent ? ' show' : ''), id: bodyId },
     h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
-  bodyEl.addEventListener('show.bs.collapse', () => { chevron.className = 'bi bi-chevron-up'; });
-  bodyEl.addEventListener('hide.bs.collapse', () => { chevron.className = 'bi bi-chevron-down'; });
+  bodyEl.addEventListener('show.bs.collapse', () => {
+    chevron.className = 'bi bi-chevron-up';
+    toggleBtn.setAttribute('aria-expanded', 'true');
+  });
+  bodyEl.addEventListener('hide.bs.collapse', () => {
+    chevron.className = 'bi bi-chevron-down';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+  });
 
   const headerLabel = h('span', { cls: 'small fw-medium d-flex align-items-center w-100' });
   headerLabel.appendChild(icon('bi bi-card-text me-1'));
@@ -1152,6 +1169,7 @@ function buildActionsCard(series) {
   const deleteSeriesBtn = h('button', {
     cls: 'btn btn-xs btn-outline-danger ms-auto',
     title: 'Delete series',
+    'aria-label': 'Delete series',
   });
   deleteSeriesBtn.appendChild(icon('bi bi-trash'));
   deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
@@ -1446,20 +1464,20 @@ function buildPostRow(post, imgMap, series) {
 
   const actions = h('div', { cls: 'd-flex gap-1 flex-shrink-0' });
 
-  const viewBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'View post content' });
+  const viewBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'View post content', 'aria-label': 'View post content' });
   viewBtn.appendChild(icon('bi bi-eye'));
   viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
   actions.appendChild(viewBtn);
 
   if (post.status !== 'posted') {
-    const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now' });
+    const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now', 'aria-label': 'Post now' });
     postNowBtn.appendChild(icon('bi bi-send'));
     postNowBtn.addEventListener('click', () => postNow(post.id));
     actions.appendChild(postNowBtn);
   }
 
   if (post.status === 'draft' || post.status === 'failed') {
-    const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Schedule' });
+    const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Schedule', 'aria-label': 'Schedule post' });
     schedBtn.appendChild(icon('bi bi-calendar-plus'));
     schedBtn.addEventListener('click', () => {
       const pickerId = 'sched-picker-' + post.id;
@@ -1487,14 +1505,14 @@ function buildPostRow(post, imgMap, series) {
   }
 
   if (post.status === 'scheduled') {
-    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning', title: 'Cancel schedule' });
+    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning', title: 'Cancel schedule', 'aria-label': 'Cancel schedule' });
     cancelBtn.appendChild(icon('bi bi-x-circle'));
     cancelBtn.addEventListener('click', () => cancelPostSchedule(post.id));
     actions.appendChild(cancelBtn);
   }
 
   if (post.status !== 'posted') {
-    const editBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Edit post' });
+    const editBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Edit post', 'aria-label': 'Edit post' });
     editBtn.appendChild(icon('bi bi-pencil'));
     editBtn.addEventListener('click', () => {
       const existing = document.getElementById('edit-form-' + post.id);
@@ -1508,7 +1526,7 @@ function buildPostRow(post, imgMap, series) {
     });
     actions.appendChild(editBtn);
 
-    const delBtn = h('button', { cls: 'btn btn-sm btn-outline-danger', title: 'Delete post' });
+    const delBtn = h('button', { cls: 'btn btn-sm btn-outline-danger', title: 'Delete post', 'aria-label': 'Delete post' });
     delBtn.appendChild(icon('bi bi-trash'));
     delBtn.addEventListener('click', () => deletePost(post.id));
     actions.appendChild(delBtn);

@@ -44,9 +44,11 @@ function togglePass(btn) {
   const input = btn.previousElementSibling;
   if (input.type === 'password') {
     input.type = 'text';
+    btn.setAttribute('aria-label', 'Hide password');
     btn.replaceChildren(icon('bi bi-eye-slash'));
   } else {
     input.type = 'password';
+    btn.setAttribute('aria-label', 'Show password');
     btn.replaceChildren(icon('bi bi-eye'));
   }
 }

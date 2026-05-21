@@ -15,7 +15,7 @@
   <div class="d-flex align-items-center gap-2 flex-shrink-1" style="overflow-x:auto; min-width:0">
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
-              id="filterBtn" aria-expanded="false">
+              id="filterBtn" aria-expanded="false" aria-label="Filter by status">
         <i class="bi bi-funnel"></i><span class="d-none d-sm-inline ms-1">Filter</span></button>
       <ul class="dropdown-menu dropdown-menu-end" id="statusFilterMenu">
         <li><label class="dropdown-item d-flex gap-2 align-items-center">
@@ -36,6 +36,7 @@
       </ul>
     </div>
     <select id="limitSel" class="form-select form-select-sm" style="width:60px"
+            aria-label="Items per page"
             onchange="App.limit=+this.value; loadSeries(true)">
       <option>10</option>
       <option>15</option>
@@ -44,7 +45,7 @@
       <option>50</option>
     </select>
     <input id="seriesSearch" type="search" class="form-control form-control-sm"
-           placeholder="Find series…" style="width:140px"
+           placeholder="Find series…" aria-label="Search series" style="width:140px"
            oninput="onSearchChange(this.value)">
     <div id="collectionFilterWrap">
       <button id="collectionFilterBtn" type="button"
@@ -54,23 +55,23 @@
       </button>
       <ul id="collectionFilterMenu" class="dropdown-menu" style="min-width:180px"></ul>
     </div>
-    <button class="btn btn-sm btn-outline-secondary" onclick="showView('collections')">
+    <button class="btn btn-sm btn-outline-secondary" aria-label="Collections" onclick="showView('collections')">
       <i class="bi bi-collection"></i>
       <span class="d-none d-md-inline ms-1">Collections</span></button>
-    <button class="btn btn-sm btn-outline-secondary" onclick="showView('queue')">
+    <button class="btn btn-sm btn-outline-secondary" aria-label="Queue" onclick="showView('queue')">
       <i class="bi bi-calendar3"></i>
       <span class="d-none d-md-inline ms-1">Queue</span></button>
-    <button class="btn btn-sm btn-outline-secondary" onclick="showView('trash')">
+    <button class="btn btn-sm btn-outline-secondary" aria-label="Trash" onclick="showView('trash')">
       <i class="bi bi-trash3"></i>
       <span class="d-none d-md-inline ms-1">Trash</span></button>
-    <button class="btn btn-sm btn-outline-secondary" onclick="showView('stats')">
+    <button class="btn btn-sm btn-outline-secondary" aria-label="Statistics" onclick="showView('stats')">
       <i class="bi bi-bar-chart"></i>
       <span class="d-none d-md-inline ms-1">Stats</span></button>
-    <button class="btn btn-sm btn-outline-secondary"
+    <button class="btn btn-sm btn-outline-secondary" aria-label="Settings"
             data-bs-toggle="modal" data-bs-target="#settingsModal"
             onclick="loadSettings()"><i class="bi bi-gear"></i></button>
     <a href="/auth/logout" class="btn btn-sm btn-outline-secondary"
-       title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+       aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
   </div>
 </nav>
 
@@ -78,7 +79,7 @@
   <div id="seriesSidebar" class="border-end d-flex flex-column"
        style="width:280px;min-width:280px;overflow-y:auto;flex-shrink:0">
     <div id="seriesItems" class="flex-grow-1"></div>
-    <div id="seriesListLoading" class="text-center p-3 d-none">
+    <div id="seriesListLoading" class="text-center p-3 d-none" role="status" aria-live="polite" aria-label="Loading series">
       <div class="spinner-border spinner-border-sm text-secondary"></div></div>
     <div id="loadMoreBtn" class="p-2 border-top d-none">
       <button class="btn btn-sm btn-outline-secondary w-100" onclick="loadMoreSeries()">
@@ -116,7 +117,8 @@
           <span id="trashProgressCount"></span>
         </div>
         <div class="progress" style="height:6px">
-          <div id="trashProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" style="width:0%"></div>
+          <div id="trashProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" style="width:0%"
+               role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
       </div>
       <div id="trashContent"></div>
@@ -126,8 +128,8 @@
         <h5 class="mb-0"><i class="bi bi-collection me-2"></i>Collections</h5>
       </div>
       <div class="d-flex gap-2 mb-3 flex-wrap" style="max-width:500px">
-        <input type="text" class="form-control form-control-sm" id="newCollectionName" placeholder="Name (EN)…" style="min-width:160px;flex:1">
-        <input type="text" class="form-control form-control-sm" id="newCollectionNameRu" placeholder="Name (RU)…" style="min-width:160px;flex:1">
+        <input type="text" class="form-control form-control-sm" id="newCollectionName" placeholder="Name (EN)…" aria-label="Collection name (English)" style="min-width:160px;flex:1">
+        <input type="text" class="form-control form-control-sm" id="newCollectionNameRu" placeholder="Name (RU)…" aria-label="Collection name (Russian)" style="min-width:160px;flex:1">
         <button class="btn btn-sm btn-outline-primary" onclick="createCollection()">
           <i class="bi bi-plus-lg me-1"></i>Create</button>
       </div>
@@ -166,32 +168,32 @@
         <h6 class="text-muted small">AI Providers</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Anthropic API Key</span>
-          <input type="password" class="form-control" id="s_anthropic_api_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_anthropic_api_key" aria-label="Anthropic API Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('anthropic',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">OpenAI API Key</span>
-          <input type="password" class="form-control" id="s_openai_api_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_openai_api_key" aria-label="OpenAI API Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('openai',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Google API Key</span>
-          <input type="password" class="form-control" id="s_google_api_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_google_api_key" aria-label="Google API Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('google',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">DeepSeek API Key</span>
-          <input type="password" class="form-control" id="s_deepseek_api_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_deepseek_api_key" aria-label="DeepSeek API Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('deepseek',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">OpenRouter API Key</span>
-          <input type="password" class="form-control" id="s_openrouter_api_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_openrouter_api_key" aria-label="OpenRouter API Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('openrouter',this)">Test</button>
         </div>
         <div class="row g-2 mb-2">
@@ -231,70 +233,70 @@
         <h6 class="text-muted small mt-3">Telegram</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Bot Token</span>
-          <input type="password" class="form-control" id="s_telegram_bot_token">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_telegram_bot_token" aria-label="Telegram Bot Token" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('telegram',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Channel ID</span>
-          <input type="text" class="form-control" id="s_telegram_channel_id" placeholder="@yourchannel">
+          <input type="text" class="form-control" id="s_telegram_channel_id" placeholder="@yourchannel" aria-label="Telegram Channel ID">
         </div>
         <h6 class="text-muted small mt-3">Instagram</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Access Token</span>
-          <input type="password" class="form-control" id="s_instagram_access_token">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_instagram_access_token" aria-label="Instagram Access Token" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('instagram',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">User ID</span>
-          <input type="text" class="form-control" id="s_instagram_user_id">
+          <input type="text" class="form-control" id="s_instagram_user_id" aria-label="Instagram User ID">
         </div>
         <h6 class="text-muted small mt-3">Facebook</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Access Token</span>
-          <input type="password" class="form-control" id="s_facebook_page_access_token">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_facebook_page_access_token" aria-label="Facebook Access Token" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('facebook_page',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Facebook Page ID</span>
-          <input type="text" class="form-control" id="s_facebook_page_id" placeholder="123456789 (optional)">
+          <input type="text" class="form-control" id="s_facebook_page_id" placeholder="123456789 (optional)" aria-label="Facebook Page ID">
         </div>
         <h6 class="text-muted small mt-3">Pinterest</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Access Token</span>
-          <input type="password" class="form-control" id="s_pinterest_access_token">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_pinterest_access_token" aria-label="Pinterest Access Token" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('pinterest',this)">Test</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Default Board ID</span>
-          <input type="text" class="form-control" id="s_pinterest_default_board_id" placeholder="123456789 (fallback if no board name)">
+          <input type="text" class="form-control" id="s_pinterest_default_board_id" placeholder="123456789 (fallback if no board name)" aria-label="Pinterest Default Board ID">
         </div>
         <h6 class="text-muted small mt-3">Cloudflare R2</h6>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Endpoint URL</span>
-          <input type="text" class="form-control" id="s_r2_endpoint">
+          <input type="text" class="form-control" id="s_r2_endpoint" aria-label="R2 Endpoint URL">
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Access Key</span>
-          <input type="password" class="form-control" id="s_r2_access_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_r2_access_key" aria-label="R2 Access Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Secret Key</span>
-          <input type="password" class="form-control" id="s_r2_secret_key">
-          <button type="button" class="btn btn-outline-secondary" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+          <input type="password" class="form-control" id="s_r2_secret_key" aria-label="R2 Secret Key" autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
           <button type="button" class="btn btn-outline-secondary" onclick="testConn('r2',this)">Test R2</button>
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Bucket</span>
-          <input type="text" class="form-control" id="s_r2_bucket">
+          <input type="text" class="form-control" id="s_r2_bucket" aria-label="R2 Bucket">
         </div>
         <div class="mb-2 input-group input-group-sm">
           <span class="input-group-text" style="width:170px">Public Base URL</span>
-          <input type="text" class="form-control" id="s_r2_public_base_url">
+          <input type="text" class="form-control" id="s_r2_public_base_url" aria-label="R2 Public Base URL">
         </div>
       </div>
       <div class="modal-footer py-2">
@@ -314,17 +316,17 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-0 d-flex align-items-center justify-content-center">
-        <button id="lightboxPrev" class="btn btn-dark btn-sm opacity-75 me-2" style="flex-shrink:0">
+        <button id="lightboxPrev" class="btn btn-dark btn-sm opacity-75 me-2" style="flex-shrink:0" aria-label="Previous image">
           <i class="bi bi-chevron-left"></i>
         </button>
         <img id="lightboxImg" src="" alt="" class="lightbox-img">
-        <button id="lightboxNext" class="btn btn-dark btn-sm opacity-75 ms-2" style="flex-shrink:0">
+        <button id="lightboxNext" class="btn btn-dark btn-sm opacity-75 ms-2" style="flex-shrink:0" aria-label="Next image">
           <i class="bi bi-chevron-right"></i>
         </button>
       </div>
       <div class="modal-footer border-0 justify-content-center py-2 gap-2">
-        <button id="lightboxQueueBtn" class="btn btn-sm btn-outline-primary"></button>
-        <button id="lightboxSkipBtn" class="btn btn-sm btn-outline-secondary"></button>
+        <button id="lightboxQueueBtn" class="btn btn-sm btn-outline-primary" aria-label="Select image"></button>
+        <button id="lightboxSkipBtn" class="btn btn-sm btn-outline-secondary" aria-label="Skip image"></button>
         <div class="dropdown">
           <button id="lightboxMoveBtn" class="btn btn-sm btn-outline-secondary dropdown-toggle"
                   data-bs-toggle="dropdown">

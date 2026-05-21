@@ -430,7 +430,7 @@ function _buildCollectionItem(c) {
   const nameRuEl = c.name_ru ? h('span', { cls: 'text-muted small ms-1', text: '/ ' + c.name_ru }) : null;
   const countEl = h('span', { cls: 'text-muted small ms-2', text: countParts[0] });
 
-  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection' });
+  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection' });
   filterBtn.appendChild(icon('bi bi-funnel'));
   filterBtn.addEventListener('click', () => {
     onCollectionFilterChange(c.id);
@@ -527,7 +527,9 @@ async function refreshTrash() {
           await apiFetch('DELETE', '/api/trash/' + item.type + '/' + item.id);
         } catch (_) { failed++; }
         done++;
-        progressBar.style.width = Math.round(done / total * 100) + '%';
+        const pct = Math.round(done / total * 100);
+        progressBar.style.width = pct + '%';
+        progressBar.setAttribute('aria-valuenow', pct);
       }
       progressContainer.classList.add('d-none');
       if (failed) showToast(failed + ' item(s) failed to delete', 'danger');
