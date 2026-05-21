@@ -122,10 +122,44 @@ function statusBadge(status) {
 }
 
 // ── Series list ───────────────────────────────────────────────────────────────
+let _sentinel = null;
+let _observer = null;
+
+function _updateSentinel(active) {
+  if (!_sentinel) {
+    _sentinel = h('div', { id: 'scrollSentinel', style: 'height:1px' });
+    const sidebar = document.getElementById('seriesSidebar');
+    sidebar.insertBefore(_sentinel, document.getElementById('loadMoreBtn'));
+    _observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && App.series.length < App.total) {
+        loadMoreSeries();
+      }
+    }, { threshold: 0.1 });
+  }
+  if (active) _observer.observe(_sentinel);
+  else _observer.unobserve(_sentinel);
+}
+
+function _trimDomIfNeeded(container) {
+  const items = container.querySelectorAll('[data-id]');
+  if (items.length <= 100) return;
+  for (let i = 0; i < 50; i++) items[i].remove();
+  if (!document.getElementById('seriesTrimNotice')) {
+    const notice = h('div', {
+      id: 'seriesTrimNotice',
+      cls: 'text-muted small text-center py-1 border-bottom',
+      text: '↑ Scroll to top to reload from beginning',
+    });
+    container.prepend(notice);
+  }
+}
+
 async function loadSeries(reset) {
   if (reset) {
     App.page = 1; App.series = [];
     document.getElementById('seriesItems').replaceChildren();
+    document.getElementById('seriesTrimNotice')?.remove();
+    if (_sentinel) _observer.unobserve(_sentinel);
   }
   document.getElementById('seriesListLoading').classList.remove('d-none');
   try {
@@ -139,12 +173,15 @@ async function loadSeries(reset) {
     const container = document.getElementById('seriesItems');
     const visible = data.items.filter(s => (s.name || s.title) !== 'Unsorted' && s.id !== App.unsortedSeriesId);
     visible.forEach(s => container.appendChild(buildSeriesItem(s)));
-    document.getElementById('loadMoreBtn').classList.toggle('d-none', App.series.length >= App.total);
+    const hasMore = App.series.length < App.total;
+    document.getElementById('loadMoreBtn').classList.toggle('d-none', !hasMore);
+    _updateSentinel(hasMore);
+    if (!reset) _trimDomIfNeeded(container);
     if (reset && !App.currentSeriesId && visible.length > 0) {
       if (window.innerWidth >= 992) {
-        selectSeries(visible[0].id);
+        selectSeries(visible[0].id, { push: false });
       } else {
-        showView('list');
+        showView('list', { push: false });
       }
     }
   } catch (e) {
