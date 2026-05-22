@@ -530,34 +530,31 @@ async function _getOrCacheUnsorted() {
 
 // ── Action bar ────────────────────────────────────────────────────────────────
 function buildActionBar(seriesId) {
-  const bar = h('div', { id: 'imageActionBar', cls: 'd-flex align-items-center gap-2 flex-wrap mt-2 pt-2 border-top' });
-  if (_selectedImages.size === 0) { bar.classList.add('d-none'); return bar; }
+  const bar = h('div', { id: 'imageActionBar', cls: 'aap-action-bar mx-4' });
+  if (_selectedImages.size === 0) { bar.style.display = 'none'; return bar; }
 
-  bar.appendChild(h('span', { cls: 'small text-muted', text: _selectedImages.size + ' selected' }));
+  bar.appendChild(h('span', { cls: 'aap-action-bar__count' },
+    h('strong', {}, String(_selectedImages.size)),
+    document.createTextNode(' selected')
+  ));
+  bar.appendChild(h('span', { cls: 'aap-divider-v' }));
 
-  // Move to dropdown
-  const moveBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  moveBtn.appendChild(icon('bi bi-box-arrow-right me-1'));
-  moveBtn.appendChild(document.createTextNode('Move to…'));
+  const moveBtn = h('button', { cls: 'btn aap-btn' },
+    icon('bi bi-box-arrow-right me-1'), document.createTextNode('\u2197 Move to\u2026'));
   moveBtn.setAttribute('data-bs-toggle', 'dropdown');
+  const moveDrop = document.createElement('ul');
+  moveDrop.className = 'dropdown-menu';
+  buildMoveToItems(null, seriesId, true).forEach(li => moveDrop.appendChild(li));
+  bar.appendChild(h('div', { cls: 'dropdown' }, moveBtn, moveDrop));
 
-  const moveDropItems = document.createElement('ul');
-  moveDropItems.className = 'dropdown-menu';
-  buildMoveToItems(null, seriesId, true).forEach(li => moveDropItems.appendChild(li));
-
-  bar.appendChild(h('div', { cls: 'dropdown' }, moveBtn, moveDropItems));
-
-  // Skip / Unskip — shown based on what's selected
   const statusMap = new Map((App.currentSeries?.images ?? []).map(i => [i.id, i.status]));
-  const toSkip        = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
-  const toUnskip      = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
-  const toMarkPosted  = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toSkip         = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toUnskip       = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
+  const toMarkPosted   = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
   const toUnmarkPosted = [..._selectedImages].filter(id => statusMap.get(id) === 'posted');
 
-  const _mkStatusAction = (label, iconCls, ids, newStatus) => {
-    const btn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-    btn.appendChild(icon(iconCls + ' me-1'));
-    btn.appendChild(document.createTextNode(label));
+  const _mkAction = (label, ids, newStatus) => {
+    const btn = h('button', { cls: 'btn aap-btn', text: label });
     btn.addEventListener('click', async () => {
       try {
         await Promise.all(ids.map(id => apiFetch('PATCH', '/api/images/' + id + '/status', { status: newStatus })));
@@ -569,20 +566,16 @@ function buildActionBar(seriesId) {
     return btn;
   };
 
-  if (toSkip.length > 0)        bar.appendChild(_mkStatusAction('Skip',          'bi bi-eye-slash',          toSkip,        'skip'));
-  if (toUnskip.length > 0)     bar.appendChild(_mkStatusAction('Unskip',         'bi bi-eye',               toUnskip,      'pending'));
-  if (toMarkPosted.length > 0) bar.appendChild(_mkStatusAction('Mark posted',    'bi bi-check-circle-fill', toMarkPosted,  'posted'));
-  if (toUnmarkPosted.length > 0) bar.appendChild(_mkStatusAction('Unmark posted','bi bi-circle',            toUnmarkPosted,'pending'));
+  if (toSkip.length > 0)         bar.appendChild(_mkAction('\u25cc Skip',         toSkip,         'skip'));
+  if (toUnskip.length > 0)       bar.appendChild(_mkAction('\u21ba Unskip',       toUnskip,       'pending'));
+  if (toMarkPosted.length > 0)   bar.appendChild(_mkAction('\u2713 Mark posted',  toMarkPosted,   'posted'));
+  if (toUnmarkPosted.length > 0) bar.appendChild(_mkAction('\u21ba Unmark posted',toUnmarkPosted, 'pending'));
 
-  // Delete selected
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn-danger', text: '\u00d7 Delete' });
   delBtn.addEventListener('click', () => {
     showConfirm('Delete ' + _selectedImages.size + ' image(s)?', async () => {
       try {
-        const toDelete = [..._selectedImages];
-        await Promise.all(toDelete.map(id => apiFetch('DELETE', '/api/images/' + id)));
+        await Promise.all([..._selectedImages].map(id => apiFetch('DELETE', '/api/images/' + id)));
         const updated = await apiFetch('GET', '/api/series/' + seriesId);
         App.currentSeries = updated;
         renderEditor(updated);
@@ -591,11 +584,9 @@ function buildActionBar(seriesId) {
     });
   });
   bar.appendChild(delBtn);
+  bar.appendChild(h('div', { style: 'flex:1' }));
 
-  // Save (persist selection as queued)
-  const saveBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
-  saveBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveBtn.appendChild(document.createTextNode('Save'));
+  const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', text: '\u21b3 Save' });
   saveBtn.addEventListener('click', async () => {
     try {
       const updated = await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
@@ -605,13 +596,13 @@ function buildActionBar(seriesId) {
     } catch (e) { showToast(e.message, 'danger'); }
   });
   bar.appendChild(saveBtn);
-
   return bar;
 }
 
 function _refreshActionBar(seriesId) {
   const old = document.getElementById('imageActionBar');
-  if (old) old.replaceWith(buildActionBar(seriesId));
+  if (!old) return;
+  old.replaceWith(buildActionBar(seriesId));
 }
 
 let _sortable = null;
