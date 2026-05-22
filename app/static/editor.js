@@ -1741,7 +1741,7 @@ function buildPostRow(post, imgMap, series) {
 
   const actions = h('div', { cls: 'aap-post-row__actions' });
 
-  const viewBtn = h('button', { cls: 'aap-icon-btn', title: 'View', 'aria-label': 'View post' },
+  const viewBtn = h('button', { cls: 'aap-icon-btn', title: 'View post content', 'aria-label': 'View post content' },
     icon('bi bi-eye'));
   viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
   actions.appendChild(viewBtn);

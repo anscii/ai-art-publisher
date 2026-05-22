@@ -418,6 +418,7 @@ function showView(view, { push = true } = {}) {
     collections && collections.classList.remove('d-none');
   } else if (view === 'stats') {
     stats && stats.classList.remove('d-none');
+    if (typeof refreshStats === 'function') refreshStats();
   }
 
   document.getElementById('navCollections')?.classList.toggle('is-active', view === 'collections');
