@@ -1,0 +1,1027 @@
+/* =====================================================================
+   AI Art Publisher — App styles
+   ---------------------------------------------------------------------
+   Sits on TOP of Bootstrap 5 and tokens.css. Overrides Bootstrap defaults
+   to match the design system (typography, color, density) and adds the
+   small handful of bespoke components Bootstrap doesn't ship.
+
+   Load order:
+     1) bootstrap.min.css
+     2) tokens.css
+     3) app.css        <-- this file
+   ===================================================================== */
+
+/* ---- Base ----------------------------------------------------------- */
+html, body {
+  background: var(--aap-bg);
+  color: var(--aap-ink);
+  font-family: var(--aap-font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Bootstrap default link color — too bright; use ink */
+a { color: var(--aap-ink); text-decoration: none; }
+a:hover { color: var(--aap-accent); }
+
+/* Monospace utility — for counts, slugs, timestamps */
+.aap-mono { font-family: var(--aap-font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Topbar --------------------------------------------------------- */
+.aap-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--aap-rule);
+  background: var(--aap-bg);
+}
+.aap-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--aap-ink);
+  white-space: nowrap;
+}
+.aap-brand-mark {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  display: grid; place-items: center;
+  font-weight: 600; font-size: 14px;
+}
+
+/* Search field — looks like a chip, not a form input */
+.aap-search {
+  flex: 1;
+  min-width: 160px; max-width: 260px;
+  position: relative;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  padding: 8px 12px 8px 32px;
+  color: var(--aap-ink-mute);
+  font-size: 13px;
+}
+.aap-search .aap-search-icon {
+  position: absolute;
+  left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--aap-ink-mute);
+  pointer-events: none;
+}
+
+/* ---- Nav buttons (icon + label) ------------------------------------ */
+.aap-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--aap-rule);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+}
+.aap-nav-btn:hover { color: var(--aap-ink); border-color: var(--aap-rule-strong); }
+.aap-nav-btn.is-active {
+  background: var(--aap-panel);
+  border-color: var(--aap-rule-strong);
+  color: var(--aap-ink);
+}
+.aap-nav-btn .aap-badge {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  font-family: var(--aap-font-mono);
+  font-weight: 700; font-size: 10px;
+  padding: 2px 5px; border-radius: 999px;
+  margin-left: 2px;
+}
+.aap-nav-btn--icon-only {
+  width: 34px; height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* ---- Filter chips (status / collection) ---------------------------- */
+.aap-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--aap-rule);
+}
+.aap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--aap-rule);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+}
+.aap-chip:hover { color: var(--aap-ink); }
+.aap-chip.is-active {
+  background: var(--aap-panel);
+  border-color: var(--aap-rule-strong);
+  color: var(--aap-ink);
+}
+.aap-chip.is-muted { color: var(--aap-ink-mute); }
+.aap-chip .aap-chip-count {
+  font-family: var(--aap-font-mono);
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+
+/* Status dot — used in chips, rows, post lists */
+.aap-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: var(--aap-ink-mute);
+  flex-shrink: 0;
+}
+.aap-dot--new    { background: var(--aap-dot-new); }
+.aap-dot--draft  { background: var(--aap-dot-draft); }
+.aap-dot--active { background: var(--aap-dot-active); }
+.aap-dot--done   { background: var(--aap-dot-done); }
+
+/* ---- Buttons (override Bootstrap btn) ------------------------------ */
+.btn.aap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-family: var(--aap-font-sans);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid var(--aap-rule-strong);
+  background: transparent;
+  color: var(--aap-ink);
+}
+.btn.aap-btn:hover { background: var(--aap-panel); color: var(--aap-ink); }
+.btn.aap-btn-primary {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  border-color: var(--aap-accent);
+}
+.btn.aap-btn-primary:hover {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  filter: brightness(0.95);
+}
+.btn.aap-btn-danger {
+  color: var(--aap-danger);
+  border-color: color-mix(in oklab, var(--aap-danger) 35%, transparent);
+}
+
+/* Square icon button (used in row actions) */
+.aap-icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--aap-rule);
+  background: var(--aap-panel);
+  color: var(--aap-ink-soft);
+  display: inline-grid; place-items: center;
+  cursor: pointer;
+}
+.aap-icon-btn:hover { color: var(--aap-ink); border-color: var(--aap-rule-strong); }
+
+/* ---- Series row card ----------------------------------------------- */
+.aap-series-row {
+  display: grid;
+  grid-template-columns: 4px 96px 1fr auto;
+  align-items: stretch;
+  margin: 6px 28px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.aap-series-row__stripe {
+  /* Background set inline via --stripe-color; falls back to mute */
+  background: var(--stripe-color, var(--aap-ink-mute));
+}
+.aap-series-row__thumb {
+  padding: 10px 0 10px 10px;
+  display: flex; align-items: center;
+}
+.aap-series-row__thumb-inner {
+  width: 84px; height: 84px;
+  border-radius: 3px;
+  /* Striped placeholder — replace with <img> when you have real thumbs.
+     The stripes use the row's --stripe-color tint. */
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--stripe-color, #888) 60%, var(--aap-panel)) 0 8px,
+      color-mix(in oklab, var(--stripe-color, #888) 45%, var(--aap-panel)) 8px 16px
+    );
+}
+.aap-series-row__body {
+  min-width: 0;
+  padding: 12px 16px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.aap-series-row__meta {
+  display: flex; align-items: center;
+  gap: 8px; margin-bottom: 6px;
+}
+.aap-status-pill {
+  padding: 2px 7px;
+  border-radius: 2px;
+  font-family: var(--aap-font-mono);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: #0e0e10; /* dot colors are bright enough that dark ink reads on all */
+  background: var(--pill-color, var(--aap-ink-mute));
+  text-transform: uppercase;
+}
+.aap-collection-tag {
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid var(--aap-rule-strong);
+  font-size: 10px; font-weight: 500;
+  color: var(--aap-ink-soft);
+}
+.aap-series-row__title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--aap-ink);
+  margin-bottom: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aap-series-row__title.is-slug {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--aap-ink-soft);
+}
+.aap-series-row__counts {
+  display: flex; align-items: center;
+  gap: 10px;
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-soft);
+}
+.aap-series-row__counts .aap-mute { color: var(--aap-ink-mute); }
+.aap-series-row__actions {
+  display: flex; align-items: center;
+  gap: 6px; padding: 0 14px;
+}
+
+/* Progress bar mini — used in counts row */
+.aap-bar-mini {
+  width: 60px; height: 4px;
+  background: var(--aap-rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.aap-bar-mini__fill {
+  height: 100%;
+  background: var(--aap-dot-done);
+  /* Width set inline via style="width: 80%" */
+}
+
+/* Right-side stats text in filter row */
+.aap-filter-row__stats {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+
+/* Divider between filter groups */
+.aap-divider-v {
+  width: 1px; height: 18px;
+  background: var(--aap-rule);
+  margin: 0 6px;
+}
+
+/* ---- Form inputs (when you need real ones) ------------------------- */
+.form-control.aap-input,
+.form-select.aap-input {
+  background: var(--aap-field-bg);
+  border: 1px solid var(--aap-rule);
+  color: var(--aap-ink);
+  border-radius: 4px;
+  font-family: var(--aap-font-sans);
+  font-size: 13px;
+}
+.form-control.aap-input:focus,
+.form-select.aap-input:focus {
+  border-color: var(--aap-accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--aap-accent) 22%, transparent);
+}
+
+/* =====================================================================
+   EDITOR PAGE
+   ---------------------------------------------------------------------
+   Everything below is specific to the Series editor screen
+   (handoff/editor.html). The list page does not need any of it.
+   ===================================================================== */
+
+/* ---- Editor topbar (different from list topbar: just back / slug / save) -- */
+.aap-editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--aap-rule);
+  background: var(--aap-bg);
+}
+.aap-editor-topbar__slug {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+.aap-save-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+
+/* ---- Title block (status + collection + heading + summary) --------- */
+.aap-title-block {
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid var(--aap-rule);
+}
+.aap-title-block__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.aap-status-label {
+  /* The uppercase status word next to the dot in the title block.
+     Color set inline via --status-color from the dot palette. */
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--status-color, var(--aap-ink-soft));
+}
+.aap-collection-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--aap-rule-strong);
+  background: var(--aap-panel);
+  color: var(--aap-ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.aap-collection-picker__name { color: var(--aap-ink); }
+.aap-collection-picker__sub {
+  color: var(--aap-ink-mute);
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+}
+
+.aap-title {
+  /* Editable heading. Use <input> or contenteditable. */
+  font-family: var(--aap-font-sans);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--aap-ink);
+  background: transparent;
+  border: 0;
+  outline: none;
+  width: 100%;
+  padding: 2px 6px;
+  margin: 0 0 8px -6px; /* negative margin so padding doesn't shift alignment */
+}
+.aap-title:focus { background: var(--aap-panel-hi); border-radius: 3px; }
+
+.aap-summary {
+  font-family: var(--aap-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--aap-ink-soft);
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  width: 100%;
+  max-width: 540px;
+  padding: 2px 6px;
+  margin-left: -6px;
+}
+.aap-summary:focus { background: var(--aap-panel-hi); border-radius: 3px; }
+
+/* ---- Section header (rule + label) --------------------------------- */
+.aap-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.aap-panel-head__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--aap-ink);
+}
+.aap-panel-head__label--mute { color: var(--aap-ink-mute); }
+.aap-panel-head__label--accent { color: var(--aap-accent); }
+.aap-panel-head__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--aap-rule);
+}
+.aap-panel-head__meta {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+
+/* ---- Image grid + thumbnails --------------------------------------- */
+.aap-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+/* The "in this post" tray sits on top, with accent dashed border */
+.aap-selected-tray {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1.5px dashed color-mix(in oklab, var(--aap-accent) 50%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--aap-accent) 8%, transparent),
+    color-mix(in oklab, var(--aap-accent) 3%, transparent));
+}
+
+.aap-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  overflow: hidden;
+  cursor: pointer;
+  /* Placeholder background — replace with <img> when wired to real data */
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in oklab, var(--thumb-color, #888) 60%, var(--aap-panel)) 0 10px,
+      color-mix(in oklab, var(--thumb-color, #888) 40%, var(--aap-panel)) 10px 20px);
+}
+.aap-thumb.is-selected {
+  box-shadow: 0 0 0 2px var(--aap-accent);
+}
+.aap-thumb.is-skipped,
+.aap-thumb.is-posted { opacity: 0.45; }
+.aap-thumb.is-skipped { filter: grayscale(0.8); }
+
+.aap-thumb__order {
+  position: absolute;
+  top: 4px; left: 4px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+.aap-thumb__check {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  border-radius: 999px;
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  display: grid; place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.aap-thumb__overlay-label {
+  position: absolute;
+  inset: 0;
+  display: grid; place-items: center;
+  font-family: var(--aap-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 1px 3px rgba(0,0,0,.6);
+}
+.aap-thumb__posted-tag {
+  position: absolute;
+  bottom: 4px; right: 4px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--aap-dot-done);
+  color: #fff;
+  font-family: var(--aap-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .14em;
+}
+.aap-thumb__drag {
+  position: absolute;
+  bottom: 4px; left: 4px;
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  cursor: grab;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+/* Empty-slot placeholder shown after the selected thumbs */
+.aap-thumb-slot {
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  border: 1px dashed var(--aap-rule-strong);
+  display: grid; place-items: center;
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+
+/* ---- Selection action bar (shown when 1+ images selected) ---------- */
+.aap-action-bar {
+  margin: 20px 24px 24px;
+  padding: 12px 16px;
+  background: var(--aap-panel);
+  border: 1px solid color-mix(in oklab, var(--aap-accent) 50%, transparent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.aap-action-bar__count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--aap-ink);
+}
+.aap-action-bar__count strong { color: var(--aap-accent); font-weight: 600; }
+
+/* ---- Card surface (used by gen panel, lang cards, composer) -------- */
+.aap-card {
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  padding: 18px;
+}
+.aap-card--gen { padding: 22px; }
+.aap-card--accent {
+  border-color: var(--aap-accent);
+}
+
+/* ---- Generation panel ---------------------------------------------- */
+.aap-field-label {
+  /* The small uppercase label that sits above every field */
+  display: block;
+  font-family: var(--aap-font-sans);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin-bottom: 6px;
+}
+.aap-hint-input {
+  background: var(--aap-field-bg);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  display: flex; align-items: stretch;
+}
+.aap-hint-input__prompt {
+  color: var(--aap-accent);
+  padding: 10px 0 10px 12px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.aap-hint-input input {
+  flex: 1;
+  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: var(--aap-font-sans);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--aap-ink);
+}
+
+/* Read-only meta value (provider, model) */
+.aap-field-value {
+  background: var(--aap-field-bg);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--aap-ink);
+  min-height: 36px;
+  display: flex; align-items: center;
+}
+
+/* Inline segmented (EN/RU language toggle in gen panel) */
+.aap-seg {
+  display: flex;
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.aap-seg button {
+  flex: 1;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.aap-seg button.is-active {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+}
+
+/* 2-step rail */
+.aap-rail {
+  display: grid;
+  grid-template-columns: 1fr 24px 1fr;
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 16px;
+}
+.aap-rail__arrow {
+  display: grid; place-items: center;
+  color: var(--aap-ink-mute);
+  font-size: 18px;
+}
+.aap-step {
+  background: var(--aap-field-bg);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  padding: 16px;
+}
+.aap-step--active { border-color: var(--aap-rule-strong); }
+.aap-step__num {
+  display: inline-grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.aap-step__num--outline {
+  background: transparent;
+  border: 1.5px solid var(--aap-accent);
+  color: var(--aap-accent);
+}
+.aap-step__head {
+  display: flex; align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.aap-step__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--aap-ink);
+}
+.aap-step__body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aap-ink-soft);
+  margin-bottom: 12px;
+}
+.aap-step__hint {
+  display: flex; align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-soft);
+}
+
+/* ---- Variant tabs (V1 / V2 / V3 / V4) ------------------------------ */
+.aap-variant-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.aap-variant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 4px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--aap-rule-strong);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+}
+.aap-variant.is-active {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  border-color: var(--aap-accent);
+}
+.aap-variant__label {
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.aap-variant__model {
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  opacity: 0.9;
+}
+.aap-variant__x {
+  display: inline-grid;
+  place-items: center;
+  width: 16px; height: 16px;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+.aap-variant.is-active .aap-variant__x { background: rgba(0,0,0,0.18); }
+
+.aap-variant-add {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px dashed var(--aap-rule-strong);
+  background: transparent;
+  color: var(--aap-ink-mute);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* ---- Description language cards (EN / RU) -------------------------- */
+.aap-lang-card { /* extends .aap-card */ }
+.aap-lang-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+}
+.aap-lang-card__title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--aap-ink);
+  background: transparent;
+  border: 0;
+  outline: none;
+  width: 100%;
+  padding: 2px 6px;
+  margin: 0 0 12px -6px;
+}
+.aap-lang-card__title:focus { background: var(--aap-panel-hi); border-radius: 3px; }
+
+.aap-lang-textarea {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  padding: 4px 6px;
+  margin-left: -6px;
+  font-family: var(--aap-font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--aap-ink);
+}
+.aap-lang-textarea:focus { background: var(--aap-panel-hi); border-radius: 3px; }
+.aap-lang-textarea--italic { font-style: italic; color: var(--aap-ink-soft); line-height: 1.55; }
+
+.aap-tag-input {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 4px 6px;
+  margin-left: -6px;
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--aap-accent);
+}
+.aap-tag-input:focus { background: var(--aap-panel-hi); border-radius: 3px; }
+
+/* ---- Pinterest mark ------------------------------------------------- */
+.aap-pin-mark {
+  width: 18px; height: 18px;
+  border-radius: 999px;
+  background: #E60023;
+  color: white;
+  display: grid; place-items: center;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ---- "auto" badge next to semantic header -------------------------- */
+.aap-auto-badge {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--aap-panel-hi);
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--aap-ink-soft);
+}
+
+/* ---- Platform pills (TG / IG / Pin toggles in composer) ------------ */
+.aap-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--aap-rule);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+}
+.aap-platform.is-on {
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  border-color: var(--aap-accent);
+}
+
+/* ---- Status segmented control -------------------------------------- */
+.aap-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--aap-rule);
+  border-bottom: 1px solid var(--aap-rule);
+}
+.aap-status-seg {
+  display: flex;
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.aap-status-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-right: 1px solid var(--aap-rule);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.aap-status-seg button:last-child { border-right: 0; }
+.aap-status-seg button.is-active {
+  background: var(--seg-color, var(--aap-accent));
+  color: #fff;
+}
+.aap-status-seg button.is-active .aap-dot { background: #fff !important; }
+
+/* ---- Composer card (new post) -------------------------------------- */
+.aap-composer { margin-top: 14px; }
+.aap-composer__head {
+  display: flex; align-items: center;
+  gap: 8px; margin-bottom: 14px;
+}
+.aap-composer__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--aap-ink);
+}
+.aap-composer__strip {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.aap-composer__thumb {
+  position: relative;
+  width: 70px; height: 70px;
+  border-radius: 4px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in oklab, var(--thumb-color, #888) 60%, var(--aap-panel)) 0 10px,
+      color-mix(in oklab, var(--thumb-color, #888) 40%, var(--aap-panel)) 10px 20px);
+}
+.aap-composer__thumb-check {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 18px; height: 18px;
+  border-radius: 999px;
+  background: var(--aap-accent);
+  color: var(--aap-accent-ink);
+  display: grid; place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.aap-composer__more {
+  width: 70px; height: 70px;
+  border-radius: 4px;
+  border: 1px dashed var(--aap-rule-strong);
+  background: transparent;
+  color: var(--aap-ink-soft);
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+/* Lang block inside composer (smaller frame than the lang cards above) */
+.aap-composer-lang {
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  padding: 14px;
+}
+
+/* ---- Post row (in the Posts section) ------------------------------- */
+.aap-post-row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+}
+.aap-post-row__thumb {
+  width: 44px; height: 44px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in oklab, var(--thumb-color, #888) 60%, var(--aap-panel)) 0 8px,
+      color-mix(in oklab, var(--thumb-color, #888) 40%, var(--aap-panel)) 8px 16px);
+}
+.aap-post-row__title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--aap-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aap-post-row__channels {
+  display: flex; gap: 6px; align-items: center;
+  margin-top: 4px;
+  color: var(--aap-ink-soft);
+}
+.aap-post-row__when {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+  margin-left: 4px;
+}
+.aap-post-row__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--status-color, var(--aap-ink-mute));
+}
+.aap-post-row__actions { display: flex; gap: 4px; }
+
