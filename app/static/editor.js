@@ -1,3 +1,33 @@
+// ── Generate card error UI ────────────────────────────────────────────────────
+function _updateGenErrorUI() {
+  const errorDiv  = document.getElementById('genError');
+  const logBadge  = document.getElementById('genErrorBadge');
+  const logList   = document.getElementById('genErrorList');
+  const all       = ErrorService.getAll();
+  const latestGen = all.find(e => e.context === 'generate');
+
+  if (errorDiv) {
+    const show = latestGen && !ErrorService.isCleared('generate');
+    errorDiv.classList.toggle('d-none', !show);
+    if (show) errorDiv.textContent = latestGen.message;
+  }
+  if (logBadge) {
+    logBadge.classList.toggle('d-none', all.length === 0);
+    if (all.length > 0) logBadge.textContent = `⚠ ${all.length}`;
+  }
+  if (logList) {
+    logList.replaceChildren(...all.map(e => {
+      const time = e.ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const li = h('li', { cls: 'list-group-item list-group-item-danger small py-1 px-2' });
+      li.appendChild(h('span', { cls: 'fw-bold me-2', text: time }));
+      li.appendChild(h('span', { cls: 'badge bg-secondary me-1', text: e.context }));
+      li.appendChild(document.createTextNode(e.message));
+      return li;
+    }));
+  }
+}
+ErrorService.subscribe(_updateGenErrorUI);
+
 // ── Selection state ───────────────────────────────────────────────────────────
 let _selectedImages = new Set();
 
@@ -1047,8 +1077,16 @@ function buildGenerateCard(seriesId) {
   headerLabel.appendChild(icon('bi bi-robot me-1'));
   headerLabel.appendChild(document.createTextNode('AI Generation'));
 
+  const errorBadge = h('a', { cls: 'ms-auto small text-warning d-none', id: 'genErrorBadge', style: 'cursor:pointer' });
+  errorBadge.setAttribute('data-bs-toggle', 'collapse');
+  errorBadge.setAttribute('href', '#genErrorLog');
+
+  const errorList = h('ul', { cls: 'list-group list-group-flush', id: 'genErrorList' });
+  const errorLog  = h('div', { cls: 'collapse', id: 'genErrorLog' }, errorList);
+  const errorDiv  = h('div', { cls: 'alert alert-danger small py-1 px-2 mt-2 mb-0 d-none', id: 'genError' });
+
   return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2' }, headerLabel),
+    h('div', { cls: 'card-header py-2 d-flex align-items-center' }, headerLabel, errorBadge),
     h('div', { cls: 'card-body p-2' },
       h('div', { cls: 'd-flex gap-2 flex-wrap align-items-end' },
         h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
@@ -1058,7 +1096,9 @@ function buildGenerateCard(seriesId) {
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: 'Language' }), langToggle),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
         h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genFullBtn),
-        h('div', { cls: 'align-self-end pb-1' }, imgLabel))));
+        h('div', { cls: 'align-self-end pb-1' }, imgLabel)),
+      errorDiv,
+      errorLog));
 }
 
 async function generateDrafts(seriesId) {
@@ -1095,9 +1135,10 @@ async function generateDrafts(seriesId) {
     _restoreSelectionAfterRender(savedSelection, seriesId);
     const cost = newVariants[0]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
+    ErrorService.clear('generate');
     showToast(`Generated ${newVariants.length} drafts${costLabel}`, 'success');
   } catch (e) {
-    showToast(e.message, 'danger');
+    ErrorService.record('generate', e.message);
     if (btn) {
       btn.disabled = false;
       btn.replaceChildren(icon('bi bi-robot me-1'), document.createTextNode('Generate Drafts'));
@@ -1135,9 +1176,10 @@ async function generateFull(seriesId) {
     if (idx >= 0) applyVariant(idx);
     const cost = variants[idx >= 0 ? idx : variants.length - 1]?.cost_usd;
     const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
+    ErrorService.clear('generate');
     showToast(`Full content generated${costLabel}`, 'success');
   } catch (e) {
-    showToast(e.message, 'danger');
+    ErrorService.record('generate', e.message);
     if (btn) {
       btn.disabled = false;
       btn.replaceChildren(icon('bi bi-stars me-1'), document.createTextNode('Generate Full'));

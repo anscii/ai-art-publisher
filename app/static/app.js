@@ -69,7 +69,11 @@ async function apiFetch(method, path, body) {
   const resp = await fetch(path, opts);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new Error(err.detail || resp.statusText);
+    const detail = err.detail;
+    const msg = Array.isArray(detail)
+      ? detail.map(d => d.msg || JSON.stringify(d)).join('; ')
+      : (detail || resp.statusText);
+    throw new Error(msg);
   }
   return resp.json();
 }
@@ -85,10 +89,38 @@ function showToast(msg, type) {
   inner.append(body, close);
   wrap.appendChild(inner);
   document.getElementById('toastContainer').appendChild(wrap);
-  const t = new bootstrap.Toast(wrap, { delay: 3500 });
+  const t = new bootstrap.Toast(wrap, type === 'danger' ? { autohide: false } : { delay: 3500 });
   t.show();
   wrap.addEventListener('hidden.bs.toast', () => wrap.remove());
 }
+
+// ── Error Service ─────────────────────────────────────────────────────────────
+const ErrorService = (() => {
+  const _log = [];
+  const MAX = 20;
+  const _listeners = new Set();
+  const _cleared = new Set();
+
+  function record(context, message) {
+    _cleared.delete(context);
+    const msg = message || 'Unknown error';
+    _log.unshift({ ts: new Date(), context, message: msg });
+    if (_log.length > MAX) _log.pop();
+    showToast(msg, 'danger');
+    _listeners.forEach(fn => fn());
+  }
+
+  function clear(context) {
+    _cleared.add(context);
+    _listeners.forEach(fn => fn());
+  }
+
+  function isCleared(context) { return _cleared.has(context); }
+  function getAll() { return [..._log]; }
+  function subscribe(fn) { _listeners.add(fn); return () => _listeners.delete(fn); }
+
+  return { record, clear, isCleared, getAll, subscribe };
+})();
 
 // ── Confirm ───────────────────────────────────────────────────────────────────
 function showConfirm(message, onOk) {

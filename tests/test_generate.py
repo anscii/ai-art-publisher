@@ -931,3 +931,21 @@ def test_generate_openrouter_no_key_returns_400(client):
     resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
     assert resp.status_code == 400
     assert "openrouter" in resp.json()["detail"].lower()
+
+
+def test_generate_error_detail_is_plain_string(client):
+    """400 errors from the generate endpoint return detail as a plain string.
+
+    The frontend apiFetch handler must receive a string (not an array) so it can
+    surface a readable message.  This test guards against accidentally using a
+    response shape that would render as '[object Object]' in the UI.
+    """
+    sid = client.post("/api/series", json={}).json()["id"]
+    resp = client.post(
+        f"/api/series/{sid}/generate",
+        json={"hint": None, "include_images": False},
+    )
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert isinstance(detail, str), f"detail must be str, got {type(detail)}: {detail!r}"
+    assert "hint" in detail.lower()
