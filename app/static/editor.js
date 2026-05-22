@@ -154,97 +154,139 @@ async function saveTitle(seriesId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-// ── Images card ───────────────────────────────────────────────────────────────
-function buildImagesCard(series) {
-  const addBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  addBtn.appendChild(icon('bi bi-plus'));
-  addBtn.appendChild(document.createTextNode(' Add'));
-  addBtn.addEventListener('click', () => addImages(series.id));
+// ── Images section ───────────────────────────────────────────────────────────
+function buildImagesSection(series) {
+  const images = (series.images || []).filter(i => !i.deleted_at);
+  const selected   = images.filter(i => _selectedImages.has(i.id));
+  const unselected = images.filter(i => !_selectedImages.has(i.id));
 
-  const headerLabel = h('span', { cls: 'small fw-medium', id: 'imagesCardLabel' });
-  headerLabel.appendChild(icon('bi bi-images me-1'));
-  headerLabel.appendChild(document.createTextNode(_imagesCountLabel(series.images.length)));
-
-  const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:160px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
-  if (!series.images.length) {
-    strip.appendChild(h('span', { cls: 'text-muted small align-self-center p-2', text: 'No images yet' }));
-  } else {
-    const _group = s => _selectedImages.has(s.id) ? 0 : s.status === 'posted' ? 2 : s.status === 'skip' ? 3 : 1;
-    [...series.images].sort((a, b) => _group(a) - _group(b))
-      .forEach(img => strip.appendChild(buildThumb(img, series.id)));
+  const selGrid = h('div', { cls: 'aap-thumb-grid', id: 'selectedTray' });
+  selected.forEach((img, idx) =>
+    selGrid.appendChild(buildThumb(img, series.id, idx + 1)));
+  const rem = selected.length % 8;
+  const slots = rem > 0 ? 8 - rem : (selected.length === 0 ? 8 : 0);
+  for (let i = 0; i < slots; i++) {
+    selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
   }
 
-  const selAllBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Select all', 'aria-label': 'Select all images' });
-  selAllBtn.appendChild(icon('bi bi-check2-all'));
+  const libGrid = h('div', { cls: 'aap-thumb-grid mt-3', id: 'libraryGrid' });
+  unselected.forEach((img, idx) =>
+    libGrid.appendChild(buildThumb(img, series.id, selected.length + idx + 1)));
+
+  const addBtn = h('button', { cls: 'btn aap-btn', style: 'font-size:12px' },
+    icon('bi bi-plus me-1'), document.createTextNode('Add images'));
+  addBtn.addEventListener('click', () => addImages(series.id));
+
+  const selAllBtn = h('button', { cls: 'btn aap-btn', title: 'Select all', 'aria-label': 'Select all' },
+    icon('bi bi-check2-all me-1'), document.createTextNode('All'));
   selAllBtn.addEventListener('click', () => _selectAll(series.id));
 
-  const invertBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Invert selection', 'aria-label': 'Invert image selection' });
-  invertBtn.appendChild(icon('bi bi-arrow-left-right'));
-  invertBtn.addEventListener('click', () => _invertSelection(series.id));
-
-  const deselBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Deselect all', 'aria-label': 'Deselect all images' });
-  deselBtn.appendChild(icon('bi bi-x-circle'));
+  const deselBtn = h('button', { cls: 'btn aap-btn', title: 'Deselect all', 'aria-label': 'Deselect all' },
+    icon('bi bi-x-circle me-1'), document.createTextNode('None'));
   deselBtn.addEventListener('click', () => _deselectAll(series.id));
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex justify-content-between align-items-center py-2' },
-      headerLabel,
-      h('div', { cls: 'd-flex gap-1 align-items-center' }, selAllBtn, invertBtn, deselBtn, addBtn)),
-    h('div', { cls: 'card-body p-2' }, strip, buildActionBar(series.id)));
-}
-
-function _imagesCountLabel(total) {
-  const sel = _selectedImages.size;
-  return sel > 0
-    ? 'Images (' + sel + ' selected / ' + total + ')'
-    : 'Images (' + total + ')';
+  return h('section', { cls: 'px-4 pt-4 pb-2' },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent',
+        text: '\u2191 In this post \u00b7 story order' }),
+      h('span', { cls: 'aap-panel-head__meta', text: 'drag to reorder' })
+    ),
+    h('div', { cls: 'aap-selected-tray mt-2' }, selGrid),
+    h('div', { cls: 'aap-panel-head mt-4' },
+      h('span', { cls: 'aap-panel-head__label aap-panel-head__label--mute',
+        id: 'imagesCardLabel',
+        text: 'Library \u00b7 ' + unselected.length + ' unselected' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('div', { cls: 'd-flex gap-2' }, selAllBtn, deselBtn, addBtn)
+    ),
+    libGrid
+  );
 }
 
 function _refreshImagesHeader(total) {
   const el = document.getElementById('imagesCardLabel');
   if (!el) return;
-  el.replaceChildren(icon('bi bi-images me-1'), document.createTextNode(_imagesCountLabel(total)));
+  el.textContent = 'Library \u00b7 ' + (total - _selectedImages.size) + ' unselected';
 }
 
-function buildThumb(img, seriesId) {
-  const imgEl = document.createElement('img');
-  imgEl.setAttribute('src', img.public_url);
-  imgEl.setAttribute('width', '160');
-  imgEl.setAttribute('height', '140');
-  imgEl.className = 'rounded';
-  imgEl.style.cssText = 'width:160px;height:140px;object-fit:cover';
-  imgEl.loading = 'lazy';
-  imgEl.setAttribute('draggable', 'false');
-  imgEl.style.cursor = 'zoom-in';
-  imgEl.addEventListener('click', e => {
-    e.stopPropagation();
-    const strip = document.getElementById('imageStrip');
-    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-    const images = thumbs.map(el => ({
-      id: el.dataset.imageId,
-      public_url: el.querySelector('img').getAttribute('src'),
-      status: el.dataset.imageStatus || 'pending',
-    }));
-    const idx = thumbs.findIndex(el => el.dataset.imageId === img.id);
-    openLightbox(images, idx >= 0 ? idx : 0);
-  });
+function buildThumb(img, seriesId, orderNum) {
+  const isSelected = _selectedImages.has(img.id);
+  const isPosted   = img.status === 'posted';
+  const isSkipped  = img.status === 'skip';
+  const hue = [...img.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
 
-  const menuBtn = h('button', { cls: 'btn btn-xs btn-dark opacity-75', text: '⋯', 'aria-label': 'Image options' });
+  let cls = 'aap-thumb';
+  if (isSelected) cls += ' is-selected';
+  if (isPosted)   cls += ' is-posted';
+  if (isSkipped)  cls += ' is-skipped';
+
+  const thumb = h('div', {
+    cls,
+    'data-image-id': img.id,
+    'data-image-status': img.status,
+    style: '--thumb-color: hsl(' + hue + ' 35% 40%)',
+  });
+  thumb.style.position = 'relative';
+
+  if (img.public_url) {
+    const imgEl = document.createElement('img');
+    imgEl.setAttribute('src', img.public_url);
+    imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:inherit;cursor:zoom-in';
+    imgEl.loading = 'lazy';
+    imgEl.setAttribute('draggable', 'false');
+    imgEl.addEventListener('click', e => {
+      e.stopPropagation();
+      const allImgs = _getAllThumbImages();
+      openLightbox(allImgs, allImgs.findIndex(im => im.id === img.id));
+    });
+    thumb.appendChild(imgEl);
+  }
+
+  if (orderNum != null) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__order' },
+      String(orderNum).padStart(2, '0')));
+  }
+  if (isSelected) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
+  }
+  if (isPosted) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__posted-tag', text: 'POSTED' }));
+  }
+  if (isSkipped) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__overlay-label', text: 'SKIPPED' }));
+  }
+  thumb.appendChild(h('span', { cls: 'aap-thumb__drag', text: '\u22ee\u22ee' }));
+
+  const statusBtn = h('button', {
+    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-0 border-0 bg-transparent',
+    style: 'line-height:1;width:22px;height:22px;z-index:2',
+    'data-select-btn': img.id,
+    'aria-label': isSelected ? 'Deselect image' : 'Select image',
+    'aria-pressed': String(isSelected),
+  });
+  statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
+  statusBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _toggleSelection(img.id, img.status, seriesId);
+  });
+  thumb.appendChild(statusBtn);
+
+  const menuBtn = h('button', {
+    cls: 'btn btn-xs btn-dark opacity-75 position-absolute top-0 end-0 m-1',
+    'aria-label': 'Image options',
+  });
+  menuBtn.appendChild(document.createTextNode('\u22ef'));
   menuBtn.setAttribute('data-bs-toggle', 'dropdown');
   menuBtn.addEventListener('click', e => e.stopPropagation());
-
   const dropItems = document.createElement('ul');
   dropItems.className = 'dropdown-menu dropdown-menu-end';
-
-  // "Move to" header + items
-  const hdr = document.createElement('li');
-  hdr.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
-  dropItems.appendChild(hdr);
+  const hdr2 = document.createElement('li');
+  hdr2.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
+  dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
   const divLi = document.createElement('li');
   divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
   dropItems.appendChild(divLi);
-
   const delLi = document.createElement('li');
   const delA = h('a', { cls: 'dropdown-item small text-danger', href: '#' });
   delA.appendChild(icon('bi bi-trash me-1'));
@@ -252,34 +294,19 @@ function buildThumb(img, seriesId) {
   delA.addEventListener('click', e => { e.preventDefault(); deleteImage(img.id); });
   delLi.appendChild(delA);
   dropItems.appendChild(delLi);
+  thumb.appendChild(h('div', { cls: 'position-absolute top-0 end-0' },
+    h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
 
-  const gripEl = h('div', { cls: 'thumb-grip position-absolute' });
-  gripEl.appendChild(icon('bi bi-grip-vertical'));
+  return thumb;
+}
 
-  const statusBtn = h('button', {
-    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-1 border-0 bg-transparent',
-    style: 'line-height:1',
-    'data-select-btn': img.id,
-    'aria-label': _selectedImages.has(img.id) ? 'Deselect image' : 'Select image',
-    'aria-pressed': String(_selectedImages.has(img.id)),
-  });
-  statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
-  statusBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    _toggleSelection(img.id, img.status, seriesId);
-  });
-
-  const isSelected = _selectedImages.has(img.id);
-  const outerCls = 'position-relative flex-shrink-0' +
-    (img.status === 'posted' ? ' thumb-posted' : '') +
-    (img.status === 'skip' ? ' thumb-skip' : '') +
-    (isSelected ? ' thumb-selected' : '');
-  return h('div', { cls: outerCls, 'data-image-id': img.id, 'data-image-status': img.status },
-    imgEl,
-    statusBtn,
-    gripEl,
-    h('div', { cls: 'position-absolute top-0 end-0 m-1' },
-      h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
+function _getAllThumbImages() {
+  const sel = [...document.querySelectorAll('#selectedTray [data-image-id]')];
+  const lib = [...document.querySelectorAll('#libraryGrid [data-image-id]')];
+  const imgById = Object.fromEntries(
+    (App.currentSeries?.images ?? []).map(i => [i.id, i])
+  );
+  return [...sel, ...lib].map(el => imgById[el.dataset.imageId]).filter(Boolean);
 }
 
 function _selectIcon(imgId, status) {
@@ -298,7 +325,7 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
     btn.setAttribute('aria-label', isNowSelected ? 'Deselect image' : 'Select image');
   }
   const thumb = document.querySelector('[data-image-id="' + imgId + '"]');
-  if (thumb) thumb.classList.toggle('thumb-selected', isNowSelected);
+  if (thumb) thumb.classList.toggle('is-selected', isNowSelected);
   _resortStrip();
   const total = App.currentSeries?.images?.length ?? 0;
   _refreshImagesHeader(total);
@@ -307,31 +334,53 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
 }
 
 function _resortStrip() {
-  const strip = document.getElementById('imageStrip');
-  if (!strip) return;
-  const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-  if (!thumbs.length) return;
-  const _g = el => {
-    if (_selectedImages.has(el.dataset.imageId)) return 0;
-    const s = el.dataset.imageStatus || 'pending';
-    return s === 'posted' ? 2 : s === 'skip' ? 3 : 1;
-  };
-  thumbs
-    .map((el, i) => ({ el, g: _g(el), i }))
-    .sort((a, b) => a.g - b.g || a.i - b.i)
-    .forEach(({ el }) => strip.appendChild(el));
+  const selGrid = document.getElementById('selectedTray');
+  const libGrid = document.getElementById('libraryGrid');
+  if (!selGrid || !libGrid) return;
+
+  selGrid.querySelectorAll('.aap-thumb-slot').forEach(s => s.remove());
+  const allThumbs = [
+    ...selGrid.querySelectorAll('[data-image-id]'),
+    ...libGrid.querySelectorAll('[data-image-id]'),
+  ];
+  if (!allThumbs.length) return;
+
+  let selIdx = 1;
+  allThumbs.forEach(el => {
+    const id = el.dataset.imageId;
+    if (_selectedImages.has(id)) {
+      const badge = el.querySelector('.aap-thumb__order');
+      if (badge) badge.textContent = String(selIdx).padStart(2, '0');
+      selIdx++;
+      if (!el.querySelector('.aap-thumb__check')) {
+        el.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
+      }
+      el.classList.add('is-selected');
+      selGrid.appendChild(el);
+    } else {
+      el.classList.remove('is-selected');
+      el.querySelector('.aap-thumb__check')?.remove();
+      libGrid.appendChild(el);
+    }
+  });
+
+  const rem = selGrid.querySelectorAll('[data-image-id]').length % 8;
+  const slotsNeeded = rem > 0 ? 8 - rem : 0;
+  for (let i = 0; i < slotsNeeded; i++) {
+    selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
+  }
 }
 
 function _syncSelectionUI(seriesId) {
-  const strip = document.getElementById('imageStrip');
-  if (strip) {
-    strip.querySelectorAll('[data-image-id]').forEach(thumb => {
-      const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus || 'pending';
-      thumb.classList.toggle('thumb-selected', _selectedImages.has(id));
-      const btn = thumb.querySelector('[data-select-btn]');
-      if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
-    });
-  }
+  [
+    ...document.querySelectorAll('#selectedTray [data-image-id]'),
+    ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+  ].forEach(thumb => {
+    const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus || 'pending';
+    thumb.classList.toggle('is-selected', _selectedImages.has(id));
+    const btn = thumb.querySelector('[data-select-btn]');
+    if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
+  });
   _resortStrip();
   _refreshImagesHeader((App.currentSeries?.images ?? []).length);
   _refreshActionBar(seriesId);
@@ -571,24 +620,25 @@ let _lightboxIdx    = 0;
 let _lightboxOpen   = false;
 
 function initImageSortable(seriesId) {
-  const strip = document.getElementById('imageStrip');
-  if (!strip) return;
+  const grid = document.getElementById('selectedTray');
+  if (!grid) return;
   if (_sortable) { _sortable.destroy(); _sortable = null; }
   const touch = window.matchMedia('(pointer: coarse)').matches;
-  _sortable = Sortable.create(strip, {
+  _sortable = Sortable.create(grid, {
     animation: 150,
     ghostClass: 'sortable-ghost',
+    filter: '.aap-thumb-slot',
     ...(touch
       ? { delay: 300, forceFallback: true, touchStartThreshold: 8 }
-      : { handle: '.thumb-grip', touchStartThreshold: 4 }),
+      : { handle: '.aap-thumb__drag', touchStartThreshold: 4 }),
     onEnd: async () => {
-      const ids = [...strip.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
+      const ids = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
       try {
         await apiFetch('PUT', '/api/series/' + seriesId + '/images/reorder', { image_ids: ids });
       } catch (e) { showToast('Reorder failed: ' + e.message, 'danger'); }
     },
   });
-  if (touch) strip.addEventListener('contextmenu', e => e.preventDefault());
+  if (touch) grid.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 function initLightbox() {
@@ -1091,24 +1141,17 @@ async function saveDescription(seriesId) {
 
 function _restoreSelectionAfterRender(savedSel, seriesId) {
   _selectedImages = savedSel;
-  (App.currentSeries?.images ?? []).forEach(img => {
-    const isSelected = savedSel.has(img.id);
-    const btn = document.querySelector('[data-select-btn="' + img.id + '"]');
-    if (btn) btn.replaceChildren(icon(_selectIcon(img.id, img.status)));
-    const thumb = document.querySelector('[data-image-id="' + img.id + '"]');
-    if (thumb) thumb.classList.toggle('thumb-selected', isSelected);
+  [
+    ...document.querySelectorAll('#selectedTray [data-image-id]'),
+    ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+  ].forEach(thumb => {
+    const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus;
+    thumb.classList.toggle('is-selected', savedSel.has(id));
+    const btn = thumb.querySelector('[data-select-btn]');
+    if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
   });
-  const strip = document.getElementById('imageStrip');
-  if (strip) {
-    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-    const _grp = el => {
-      const id = el.dataset.imageId, st = el.dataset.imageStatus;
-      return savedSel.has(id) ? 0 : st === 'posted' ? 2 : st === 'skip' ? 3 : 1;
-    };
-    thumbs.sort((a, b) => _grp(a) - _grp(b)).forEach(t => strip.appendChild(t));
-  }
-  const bar = document.getElementById('imageActionBar');
-  if (bar) bar.replaceWith(buildActionBar(seriesId));
+  _resortStrip();
+  _refreshActionBar(seriesId);
   _refreshImagesHeader((App.currentSeries?.images ?? []).length);
 }
 
@@ -1203,12 +1246,12 @@ async function generateDrafts(seriesId) {
   }
   let selectedImageIds = null;
   if (includeImages && _selectedImages.size > 0) {
-    const strip = document.getElementById('imageStrip');
-    selectedImageIds = strip
-      ? [...strip.querySelectorAll('[data-image-id]')]
-          .map(el => el.dataset.imageId)
-          .filter(id => _selectedImages.has(id))
-          .slice(0, 3)
+    const orderedThumbIds = [
+      ...document.querySelectorAll('#selectedTray [data-image-id]'),
+      ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+    ].map(el => el.dataset.imageId);
+    selectedImageIds = orderedThumbIds.length > 0
+      ? orderedThumbIds.filter(id => _selectedImages.has(id)).slice(0, 3)
       : [..._selectedImages].slice(0, 3);
   }
   try {
