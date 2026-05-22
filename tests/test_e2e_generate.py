@@ -254,3 +254,38 @@ def test_generate_card_settings_persist_after_reload(page, live_server):
     assert page.locator("#genLangRu").get_attribute("class") and "active" in (
         page.locator("#genLangRu").get_attribute("class") or ""
     )
+
+
+def test_generate_error_shows_inline_and_badge(page, live_server):
+    """When generate fails, the inline error div and error badge become visible."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # No hint filled — backend returns 400 "Hint is required when not including images"
+    page.locator("#generateBtn").click()
+
+    page.locator("#genError").wait_for(state="visible", timeout=5000)
+    assert "hint" in page.locator("#genError").text_content().lower()
+
+    badge = page.locator("#genErrorBadge")
+    assert badge.is_visible()
+    assert "1" in badge.text_content()
+
+
+def test_generate_error_clears_on_success(page, live_server):
+    """Inline error clears after a subsequent successful generate."""
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    # Trigger error first
+    page.locator("#generateBtn").click()
+    page.locator("#genError").wait_for(state="visible", timeout=5000)
+
+    # Now fill hint and generate successfully
+    page.locator("#genHint").fill("A fox spirit in the rain")
+    page.locator("#generateBtn").click()
+    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+
+    assert not page.locator("#genError").is_visible()
