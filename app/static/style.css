@@ -1,10 +1,10 @@
 .bg-purple  { background-color: #6f42c1 !important; }
 .text-purple { color: #a78bda; }
-.sortable-ghost { opacity: 0.3; outline: 2px dashed var(--bs-primary); }
-.series-item { cursor: pointer; transition: background 0.1s; }
-.series-item:hover { background-color: var(--bs-body-secondary) !important; }
-.btn-xs { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1.2; }
-#imageStrip { min-height: 160px; overflow-x: auto; flex-wrap: nowrap !important; }
+.sortable-ghost { opacity: 0.3; outline: 2px dashed var(--aap-accent); }
+
+.aap-series-row { cursor: pointer; }
+.aap-series-row:hover { background: var(--aap-panel-hi) !important; }
+.aap-series-row.is-active { background: var(--aap-panel-hi) !important; border-color: var(--aap-rule-strong) !important; }
 
 .lightbox-img {
   max-width: min(90vw, 1400px);
@@ -17,8 +17,7 @@
 
 .thumb-grip {
   position: absolute;
-  bottom: 2px;
-  left: 2px;
+  bottom: 2px; left: 2px;
   cursor: grab;
   color: rgba(255, 255, 255, 0.85);
   font-size: 0.75rem;
@@ -36,5 +35,5 @@
 }
 
 .thumb-posted > img { opacity: 0.55; filter: grayscale(100%) blur(1px); }
-.thumb-skip > img { opacity: 0.4; filter: grayscale(10%) blur(2px); }
-.thumb-selected > img { outline: 2px solid var(--bs-primary); border-radius: 4px; }
+.thumb-skip > img   { opacity: 0.4;  filter: grayscale(10%) blur(2px); }
+.thumb-selected > img { outline: 2px solid var(--aap-accent); border-radius: 4px; }

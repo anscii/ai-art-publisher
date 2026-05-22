@@ -57,6 +57,29 @@ const App = {
   currentView: 'editor',
 };
 
+// Maps display-status names → DB status values they represent.
+// "draft" covers approved; "active" covers partial_posted.
+const STATUS_DISPLAY_GROUPS = {
+  new:    ['new'],
+  draft:  ['draft', 'approved'],
+  active: ['active', 'partial_posted'],
+  done:   ['done', 'posted'],
+  skip:   ['skip'],
+};
+
+function statusDisplay(dbStatus) {
+  for (const [display, dbValues] of Object.entries(STATUS_DISPLAY_GROUPS)) {
+    if (dbValues.includes(dbStatus)) return display;
+  }
+  return dbStatus;
+}
+
+function activeDbStatuses() {
+  const active = [...document.querySelectorAll('.aap-chip[data-status-group].is-active')]
+    .map(el => el.dataset.statusGroup);
+  return active.flatMap(g => STATUS_DISPLAY_GROUPS[g] || [g]);
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
   const opts = { method };
@@ -141,18 +164,6 @@ function formatDate(isoStr) {
          d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-const STATUS_COLOR = {
-  new: 'bg-info text-dark', draft: 'bg-warning text-dark',
-  approved: 'bg-primary', scheduled: 'bg-purple',
-  posted: 'bg-success', skip: 'bg-secondary',
-};
-
-function statusBadge(status) {
-  const frag = document.createDocumentFragment();
-  frag.appendChild(h('span', { cls: 'badge ' + (STATUS_COLOR[status] || 'bg-secondary'), text: status }));
-  return frag;
-}
-
 // ── Series list ───────────────────────────────────────────────────────────────
 let _sentinel = null;
 let _observer = null;
@@ -160,7 +171,7 @@ let _observer = null;
 function _updateSentinel(active) {
   if (!_sentinel) {
     _sentinel = h('div', { id: 'scrollSentinel', style: 'height:1px' });
-    const sidebar = document.getElementById('seriesSidebar');
+    const sidebar = document.getElementById('seriesListPanel');
     sidebar.insertBefore(_sentinel, document.getElementById('loadMoreBtn'));
     _observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && App.series.length < App.total) {
@@ -202,6 +213,8 @@ async function loadSeries(reset) {
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
+    const countEl = document.getElementById('seriesCount');
+    if (countEl) countEl.textContent = App.total + ' series';
     const container = document.getElementById('seriesItems');
     const visible = data.items.filter(s => (s.name || s.title) !== 'Unsorted' && s.id !== App.unsortedSeriesId);
     visible.forEach(s => container.appendChild(buildSeriesItem(s)));
@@ -209,12 +222,8 @@ async function loadSeries(reset) {
     document.getElementById('loadMoreBtn').classList.toggle('d-none', !hasMore);
     _updateSentinel(hasMore);
     if (!reset) _trimDomIfNeeded(container);
-    if (reset && !App.currentSeriesId && visible.length > 0) {
-      if (window.innerWidth >= 992) {
-        selectSeries(visible[0].id, { push: false });
-      } else {
-        showView('list', { push: false });
-      }
+    if (reset && !App.currentSeriesId) {
+      showView('list', { push: false });
     }
   } catch (e) {
     showToast(e.message, 'danger');
@@ -229,43 +238,75 @@ async function loadMoreSeries() {
 }
 
 function buildSeriesItem(s) {
-  const name = s.name || s.title || s.original_folder_name || s.id.slice(0, 8);
-  let cover;
-  if (s.cover_url) {
-    cover = document.createElement('img');
-    cover.setAttribute('src', s.cover_url);
-    cover.setAttribute('width', '48');
-    cover.setAttribute('height', '40');
-    cover.className = 'rounded flex-shrink-0';
-    cover.style.cssText = 'width:48px;height:40px;object-fit:cover';
-    cover.loading = 'lazy';
+  const displayStatus = statusDisplay(s.status);
+  const dotVar = `var(--aap-dot-${displayStatus})`;
+  const name = s.name || s.title || s.original_folder_name || String(s.id).slice(0, 8);
+  const isSlug = !(s.name || s.title);
+
+  const thumb = s.cover_url
+    ? h('img', {
+        cls: 'aap-series-row__thumb-inner',
+        src: s.cover_url,
+        style: 'object-fit:cover',
+        loading: 'lazy',
+      })
+    : h('div', { cls: 'aap-series-row__thumb-inner' });
+
+  const postedCount = s.posted_count ?? 0;
+  const imageCount  = s.image_count  ?? 0;
+
+  const countsChildren = [h('span', {}, String(imageCount) + ' img')];
+  if (postedCount > 0) {
+    const pct = imageCount > 0 ? Math.round((postedCount / imageCount) * 100) : 0;
+    countsChildren.push(
+      h('span', { cls: 'aap-bar-mini' },
+        h('div', { cls: 'aap-bar-mini__fill', style: `width:${pct}%` })
+      ),
+      h('span', {}, `${postedCount}/${imageCount}`)
+    );
   } else {
-    const imgIcon = icon('bi bi-image text-muted');
-    imgIcon.style.fontSize = '14px';
-    cover = h('div', {
-      cls: 'rounded flex-shrink-0 bg-secondary d-flex align-items-center justify-content-center',
-      style: 'width:48px;height:40px',
-    }, imgIcon);
+    countsChildren.push(h('span', { cls: 'aap-mute' }, 'no posts yet'));
   }
 
-  const nameEl = h('div', { cls: 'text-truncate', style: 'font-size:13px;font-weight:500', text: name });
-  const badgesRow = h('div', { cls: 'd-flex gap-1 align-items-center flex-wrap' });
-  badgesRow.appendChild(statusBadge(s.status));
+  const metaChildren = [
+    h('span', {
+      cls: 'aap-status-pill',
+      style: `--pill-color:${dotVar}`,
+      text: displayStatus,
+    }),
+  ];
   if (s.collection_name) {
-    const cn = s.collection_name.length > 20 ? s.collection_name.slice(0, 19) + '…' : s.collection_name;
-    const tooltip = s.collection_name_ru ? s.collection_name + ' / ' + s.collection_name_ru : s.collection_name;
-    badgesRow.appendChild(h('span', { cls: 'badge bg-purple', style: 'font-size:10px', text: cn, title: tooltip }));
+    const label = s.collection_name.length > 22
+      ? s.collection_name.slice(0, 21) + '…'
+      : s.collection_name;
+    metaChildren.push(h('span', { cls: 'aap-collection-tag', text: '↪ ' + label }));
   }
-  badgesRow.appendChild(h('span', { cls: 'text-muted', style: 'font-size:11px', text: s.image_count + ' img' }));
-  const info = h('div', { cls: 'flex-grow-1 overflow-hidden' }, nameEl, badgesRow);
 
-  return h('div', {
-    cls: 'series-item d-flex align-items-start gap-2 p-2 border-bottom' +
-         (App.currentSeriesId === s.id ? ' bg-body-secondary' : ''),
+  return h('article', {
+    cls: 'aap-series-row',
     id: 'si-' + s.id,
     'data-id': s.id,
+    style: `--stripe-color:${dotVar};--pill-color:${dotVar}`,
     onclick: () => selectSeries(s.id),
-  }, cover, info);
+  },
+    h('div', { cls: 'aap-series-row__stripe' }),
+    h('div', { cls: 'aap-series-row__thumb' }, thumb),
+    h('div', { cls: 'aap-series-row__body' },
+      h('div', { cls: 'aap-series-row__meta' }, ...metaChildren),
+      h('div', {
+        cls: 'aap-series-row__title' + (isSlug ? ' is-slug' : ''),
+        text: name,
+      }),
+      h('div', { cls: 'aap-series-row__counts' }, ...countsChildren)
+    ),
+    h('div', { cls: 'aap-series-row__actions' },
+      h('button', {
+        cls: 'aap-icon-btn',
+        title: 'Open',
+        onclick: (e) => { e.stopPropagation(); selectSeries(s.id); },
+      }, '→')
+    )
+  );
 }
 
 function updateSeriesItem(s) {
@@ -284,8 +325,8 @@ function updateSeriesItem(s) {
 
 async function selectSeries(id, { push = true } = {}) {
   App.currentSeriesId = id;
-  document.querySelectorAll('.series-item').forEach(el => {
-    el.classList.toggle('bg-body-secondary', el.dataset.id === id);
+  document.querySelectorAll('.aap-series-row').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.id === String(id));
   });
   showView('editor', { push: false });
   await loadSeriesDetail(id);
@@ -330,10 +371,15 @@ async function createSeries() {
 }
 
 // ── Filter ────────────────────────────────────────────────────────────────────
+function onChipToggle(chip) {
+  chip.classList.toggle('is-active');
+  App.activeStatuses = new Set(activeDbStatuses());
+  loadSeries(true);
+  _pushState();
+}
+
 function onFilterChange() {
-  App.activeStatuses = new Set(
-    [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
-  );
+  App.activeStatuses = new Set(activeDbStatuses());
   loadSeries(true);
   _pushState();
 }
@@ -351,46 +397,34 @@ function onSearchChange(val) {
 // ── View switching ────────────────────────────────────────────────────────────
 function showView(view, { push = true } = {}) {
   App.currentView = view;
-  const sidebar     = document.getElementById('seriesSidebar');
+  const listPanel   = document.getElementById('seriesListPanel');
   const editor      = document.getElementById('editorPanel');
   const queue       = document.getElementById('queuePanel');
   const trash       = document.getElementById('trashPanel');
   const collections = document.getElementById('collectionsPanel');
   const stats       = document.getElementById('statsPanel');
-  const back        = document.getElementById('backBtnRow');
-  const mobile      = window.innerWidth < 992;
-  const panels      = [editor, queue, trash, collections, stats];
 
-  if (!mobile) {
-    sidebar.classList.remove('d-none');
-    back.classList.add('d-none');
-    editor.classList.toggle('d-none', view !== 'editor' && view !== 'list');
-    queue.classList.toggle('d-none',  view !== 'queue');
-    trash.classList.toggle('d-none',  view !== 'trash');
-    if (collections) collections.classList.toggle('d-none', view !== 'collections');
-    if (stats) stats.classList.toggle('d-none', view !== 'stats');
-  } else if (view === 'list') {
-    sidebar.classList.remove('d-none');
-    panels.forEach(p => p?.classList.add('d-none'));
-    back.classList.add('d-none');
-  } else {
-    sidebar.classList.add('d-none');
-    back.classList.remove('d-none');
-    editor.classList.toggle('d-none', view !== 'editor');
-    queue.classList.toggle('d-none',  view !== 'queue');
-    trash.classList.toggle('d-none',  view !== 'trash');
-    if (collections) collections.classList.toggle('d-none', view !== 'collections');
-    if (stats) stats.classList.toggle('d-none', view !== 'stats');
+  [listPanel, editor, queue, trash, collections, stats].forEach(p => p && p.classList.add('d-none'));
+
+  if (view === 'list') {
+    listPanel.classList.remove('d-none');
+  } else if (view === 'editor') {
+    editor.classList.remove('d-none');
+  } else if (view === 'queue') {
+    queue.classList.remove('d-none');
+  } else if (view === 'trash') {
+    trash.classList.remove('d-none');
+  } else if (view === 'collections') {
+    collections && collections.classList.remove('d-none');
+  } else if (view === 'stats') {
+    stats && stats.classList.remove('d-none');
   }
-  if (view === 'queue') refreshQueue();
-  if (view === 'trash') refreshTrash();
-  if (view === 'collections') refreshCollections();
-  if (view === 'stats') refreshStats();
-  if (view !== 'editor' && view !== 'list') {
-    App.activeCollection = null;
-    const wrap = document.getElementById('collectionFilterWrap');
-    _populateCollectionFilter();
-  }
+
+  document.getElementById('navCollections')?.classList.toggle('is-active', view === 'collections');
+  document.getElementById('navQueue')?.classList.toggle('is-active', view === 'queue');
+  document.getElementById('navTrash')?.classList.toggle('is-active', view === 'trash');
+  document.getElementById('navStats')?.classList.toggle('is-active', view === 'stats');
+
   if (push) _pushState();
 }
 
@@ -783,8 +817,10 @@ function _syncFiltersFromState(status, q, collection, limit) {
   App.search = q || '';
   App.activeCollection = collection || null;
   App.limit = limit || 15;
-  document.querySelectorAll('#statusFilterMenu input').forEach(cb => {
-    cb.checked = App.activeStatuses.has(cb.value);
+  document.querySelectorAll('.aap-chip[data-status-group]').forEach(chip => {
+    const dbVals = STATUS_DISPLAY_GROUPS[chip.dataset.statusGroup] || [];
+    const active = dbVals.some(v => App.activeStatuses.has(v));
+    chip.classList.toggle('is-active', active);
   });
   document.getElementById('limitSel').value = String(App.limit);
   const searchEl = document.getElementById('seriesSearch');
@@ -808,30 +844,31 @@ async function _restoreFromUrl() {
   _pushState();
 }
 
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('aap-theme', next);
+  document.documentElement.setAttribute('data-theme', next);
+  document.documentElement.setAttribute('data-bs-theme', next);
+  const icon = document.getElementById('aap-theme-icon');
+  if (icon) icon.textContent = next === 'dark' ? '☀' : '☾';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('aap-theme', next);
+  document.documentElement.setAttribute('data-theme', next);
+  document.documentElement.setAttribute('data-bs-theme', next);
+  const icon = document.getElementById('aap-theme-icon');
+  if (icon) icon.textContent = next === 'dark' ? '☀' : '☾';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
   initLightbox();
-  const filterBtn  = document.getElementById('filterBtn');
-  const filterMenu = document.getElementById('statusFilterMenu');
-  filterBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const open = filterMenu.classList.contains('show');
-    if (!open) {
-      const r = filterBtn.getBoundingClientRect();
-      filterMenu.style.position = 'fixed';
-      filterMenu.style.top      = r.bottom + 'px';
-      filterMenu.style.left     = 'auto';
-      filterMenu.style.right    = (window.innerWidth - r.right) + 'px';
-    }
-    filterMenu.classList.toggle('show');
-    filterBtn.setAttribute('aria-expanded', String(!open));
-  });
-  document.addEventListener('click', () => {
-    filterMenu.classList.remove('show');
-    filterBtn.setAttribute('aria-expanded', 'false');
-  });
 
   const collFilterBtn  = document.getElementById('collectionFilterBtn');
   const collFilterMenu = document.getElementById('collectionFilterMenu');
@@ -870,12 +907,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (d.desc_en || d.desc_ru || d.title)
       localStorage.setItem('draft_' + App.currentSeriesId, JSON.stringify(d));
   }, 30000);
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 992) {
-      document.getElementById('seriesSidebar').classList.remove('d-none');
-      document.getElementById('backBtnRow').classList.add('d-none');
-    }
-  });
 
   await _restoreFromUrl();
 });
