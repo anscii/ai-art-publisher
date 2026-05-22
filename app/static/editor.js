@@ -577,12 +577,10 @@ function initLightbox() {
     try {
       const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: newStatus });
       _lightboxImages[_lightboxIdx] = { ...img, status: newStatus };
-      // preserve frontend selection across re-render; remove patched image if it became skip/posted
       const savedSelection = new Set(_selectedImages);
       if (newStatus === 'skip' || newStatus === 'posted') savedSelection.delete(img.id);
       App.currentSeries = updated;
       renderEditor(updated);
-      // restore selection (renderEditor re-inits from DB queued; we override with saved)
       _selectedImages = savedSelection;
       _lightboxRender();
     } catch (err) { showToast(err.message, 'danger'); }
@@ -591,13 +589,16 @@ function initLightbox() {
   document.getElementById('lightboxQueueBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
     if (img.status === 'posted') return;
-    const seriesId = App.currentSeriesId;
-    _toggleSelection(img.id, img.status, seriesId);
+    _toggleSelection(img.id, img.status, App.currentSeriesId);
     _lightboxRender();
   });
   document.getElementById('lightboxSkipBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
     _lightboxPatch(img.status === 'skip' ? 'pending' : 'skip');
+  });
+  document.getElementById('lightboxMarkPostedBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    if (img.status !== 'posted') _lightboxPatch('posted');
   });
   document.getElementById('lightboxDeleteBtn').addEventListener('click', async () => {
     const img = _lightboxImages[_lightboxIdx];
@@ -615,6 +616,12 @@ function initLightbox() {
       showToast('Moved to Trash', 'success');
     } catch (err) { showToast(err.message, 'danger'); }
   });
+  document.getElementById('lightboxFilmstrip').addEventListener('click', e => {
+    const thumb = e.target.closest('[data-filmstrip-idx]');
+    if (!thumb) return;
+    _lightboxIdx = parseInt(thumb.dataset.filmstripIdx, 10);
+    _lightboxRender();
+  });
 }
 
 function openLightbox(images, startIdx) {
@@ -627,26 +634,41 @@ function openLightbox(images, startIdx) {
 
 function _lightboxRender() {
   const img = _lightboxImages[_lightboxIdx];
+
   document.getElementById('lightboxImg').setAttribute('src', img.public_url);
   document.getElementById('lightboxImg').setAttribute('alt', 'Image ' + (_lightboxIdx + 1));
-  document.getElementById('lightboxCounter').textContent =
-    (_lightboxIdx + 1) + ' / ' + _lightboxImages.length;
+
+  const counter = document.getElementById('lightboxCounter');
+  const muteSpan = h('span', { cls: 'aap-mute' }, '/ ' + _lightboxImages.length);
+  counter.replaceChildren(
+    document.createTextNode((_lightboxIdx + 1) + ' '),
+    muteSpan
+  );
+
   const single = _lightboxImages.length <= 1;
   document.getElementById('lightboxPrev').classList.toggle('invisible', single);
   document.getElementById('lightboxNext').classList.toggle('invisible', single);
 
+  const selBadge = document.getElementById('lightboxSelectedBadge');
+  if (selBadge) selBadge.classList.toggle('d-none', !_selectedImages.has(img.id));
+
+  const label = document.getElementById('lightboxActionsLabel');
+  if (label) label.textContent = 'image ' + String(_lightboxIdx + 1).padStart(2, '0');
+
   const qBtn = document.getElementById('lightboxQueueBtn');
   const isSelected = _selectedImages.has(img.id);
-  qBtn.replaceChildren(icon(isSelected ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
-    document.createTextNode(isSelected ? 'Deselect' : 'Select'));
+  qBtn.textContent = isSelected ? '✓ Deselect' : '+ Select';
+  qBtn.classList.toggle('aap-btn-selected', isSelected);
   qBtn.setAttribute('aria-label', isSelected ? 'Deselect image' : 'Select image');
   qBtn.disabled = img.status === 'posted';
 
   const sBtn = document.getElementById('lightboxSkipBtn');
   const isSkip = img.status === 'skip';
-  sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
-    document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
+  sBtn.textContent = isSkip ? '↺ Unskip' : '◌ Skip';
   sBtn.setAttribute('aria-label', isSkip ? 'Unskip image' : 'Skip image');
+
+  const mpBtn = document.getElementById('lightboxMarkPostedBtn');
+  if (mpBtn) mpBtn.classList.toggle('d-none', img.status === 'posted');
 
   const moveMenu = document.getElementById('lightboxMoveMenu');
   if (moveMenu) {
@@ -661,6 +683,33 @@ function _lightboxRender() {
         _lightboxRender();
       }
     }).forEach(li => moveMenu.appendChild(li));
+  }
+
+  // Filmstrip
+  const strip = document.getElementById('lightboxFilmstrip');
+  if (strip) {
+    strip.replaceChildren(
+      ..._lightboxImages.map((im, i) => {
+        const hue = [...im.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+        const btn = h('button', {
+          cls: 'aap-filmstrip__thumb' + (i === _lightboxIdx ? ' is-current' : ''),
+          type: 'button',
+          style: '--thumb-color: hsl(' + hue + ' 35% 40%)',
+          'data-filmstrip-idx': String(i),
+        },
+          h('span', { cls: 'aap-filmstrip__thumb-num' },
+            String(i + 1).padStart(2, '0'))
+        );
+        if (im.public_url) {
+          const fImg = document.createElement('img');
+          fImg.src = im.public_url;
+          fImg.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0';
+          btn.style.position = 'relative';
+          btn.insertBefore(fImg, btn.firstChild);
+        }
+        return btn;
+      })
+    );
   }
 }
 
