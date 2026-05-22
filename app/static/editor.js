@@ -70,27 +70,67 @@ function renderEditor(series) {
   _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
   App.activeVariantId = series.chosen_variant_id || null;
 
+  const slug = series.original_folder_name || String(series.id).slice(0, 12);
+  const displayStatus = statusDisplay(series.status);
+  const dotVar = 'var(--aap-dot-' + displayStatus + ')';
+
+  const topbar = h('header', { cls: 'aap-editor-topbar' },
+    h('button', {
+      cls: 'aap-icon-btn',
+      type: 'button',
+      title: 'Back to list',
+      onclick: () => showView('list'),
+    }, '←'),
+    h('div', { cls: 'aap-editor-topbar__slug', text: slug }),
+    h('div', { style: 'flex:1' }),
+    h('span', { cls: 'aap-save-indicator' },
+      h('span', { cls: 'aap-dot aap-dot--' + displayStatus }),
+      document.createTextNode(' auto-saved')
+    )
+  );
+
   const titleInput = h('input', {
-    type: 'text', cls: 'form-control form-control-sm fw-semibold',
-    id: 'editorTitle', placeholder: 'Series name (internal)...',
+    type: 'text',
+    cls: 'aap-title',
+    id: 'editorTitle',
+    placeholder: 'Series title…',
+    'aria-label': 'Series title',
   });
   titleInput.value = series.name || series.title || '';
   titleInput.addEventListener('blur', () => saveTitle(series.id));
+  titleInput.addEventListener('input', _updateSaveDescBtn);
 
-  const titleRow = h('div', { cls: 'd-flex align-items-center gap-2 mb-2' }, titleInput);
-  if (series.original_folder_name) {
-    const note = h('span', { cls: 'text-muted small text-truncate flex-shrink-1', style: 'max-width:180px', text: series.original_folder_name });
-    note.title = series.original_folder_name;
-    titleRow.appendChild(note);
-  }
+  const collPicker = buildCollectionPicker(series);
+  const imageCount = (series.images || []).filter(i => !i.deleted_at).length;
+  const selCount = _selectedImages.size;
+  const countMeta = h('span', {
+    cls: 'aap-mono',
+    style: 'font-size:11px;color:var(--aap-ink-mute)',
+    text: '· ' + imageCount + ' images' + (selCount > 0 ? ' · ' + selCount + ' selected' : ''),
+  });
+
+  const titleBlock = h('section', { cls: 'aap-title-block' },
+    h('div', { cls: 'aap-title-block__meta' },
+      h('span', { cls: 'aap-dot aap-dot--' + displayStatus, style: 'width:8px;height:8px' }),
+      h('span', {
+        cls: 'aap-status-label',
+        style: '--status-color:' + dotVar,
+        text: displayStatus,
+      }),
+      collPicker,
+      countMeta
+    ),
+    titleInput
+  );
 
   document.getElementById('editorPanel').replaceChildren(
-    titleRow,
-    buildCollectionPicker(series),
-    buildImagesCard(series),
-    buildDescriptionsCard(series),
+    topbar,
+    titleBlock,
+    buildImagesSection(series),
+    buildActionBar(series.id),
     buildGenerateCard(series.id),
-    buildActionsCard(series),
+    buildDescriptionsCard(series),
+    buildStatusBar(series),
     buildPostsCard(series),
   );
 
@@ -101,7 +141,6 @@ function renderEditor(series) {
     if (chosen && hintEl) hintEl.value = chosen.hint || '';
   }
   restoreDraft(series.id);
-  document.getElementById('editorTitle')?.addEventListener('input', _updateSaveDescBtn);
   _updateSaveDescBtn();
 }
 
@@ -1291,9 +1330,7 @@ async function deleteSeries(seriesId) {
     App.currentSeriesId = null;
     App.currentSeries = null;
     document.getElementById('si-' + seriesId)?.remove();
-    document.getElementById('editorPanel').replaceChildren(
-      h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
-    );
+    showView('list');
     showToast('Moved to Trash', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }
