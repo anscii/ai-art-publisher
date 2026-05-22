@@ -1148,79 +1148,124 @@ function _restoreSelectionAfterRender(savedSel, seriesId) {
 
 // ── Generate card ─────────────────────────────────────────────────────────────
 function buildGenerateCard(seriesId) {
-  const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
+  const hintInput = h('input', {
+    type: 'text', cls: 'form-control aap-input', id: 'genHint',
+    placeholder: 'e.g. astronaut on lost space station sees a Hand. Outside.',
+  });
+
   const provSel = document.createElement('select');
-  provSel.className = 'form-select form-select-sm'; provSel.id = 'genProvider'; provSel.style.width = '120px';
-  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']].forEach(([val, lbl]) => {
-    const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
+  provSel.className = 'form-select aap-input'; provSel.id = 'genProvider';
+  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'],
+   ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']
+  ].forEach(([val, lbl]) => {
+    const o = document.createElement('option'); o.value = val; o.textContent = lbl;
+    provSel.appendChild(o);
   });
   if (App.generateProvider != null) provSel.value = App.generateProvider;
+
   const modelSel = document.createElement('select');
-  modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
+  modelSel.className = 'form-select aap-input'; modelSel.id = 'genModel';
   buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
   if (App.generateModel) modelSel.value = App.generateModel;
+
   provSel.addEventListener('change', () => {
     App.generateProvider = provSel.value;
     buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
   });
   modelSel.addEventListener('change', () => { App.generateModel = modelSel.value; });
-  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: String(App.generateNumVariants || 1), style: 'width:60px' });
-  numVariantsInput.addEventListener('change', () => { App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 3; });
 
-  const langEn = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary active', id: 'genLangEn', text: 'EN' });
-  const langRu = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary', id: 'genLangRu', text: 'RU' });
+  const numVariantsInput = h('input', {
+    type: 'number', cls: 'form-control aap-input', id: 'genNumVariants',
+    min: '1', max: '5',
+    value: String(App.generateNumVariants || 1),
+    style: 'width:60px',
+  });
+  numVariantsInput.addEventListener('change', () => {
+    App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 1;
+  });
+
+  const langEn = h('button', { type: 'button', cls: 'is-active', id: 'genLangEn', 'data-lang': 'EN', text: 'EN' });
+  const langRu = h('button', { type: 'button', id: 'genLangRu', 'data-lang': 'RU', text: 'RU' });
   const _setLang = lang => {
     App.generateLanguage = lang;
-    langEn.classList.toggle('active', lang === 'en');
-    langRu.classList.toggle('active', lang === 'ru');
+    langEn.classList.toggle('is-active', lang === 'en');
+    langRu.classList.toggle('is-active', lang === 'ru');
   };
   langEn.addEventListener('click', () => _setLang('en'));
   langRu.addEventListener('click', () => _setLang('ru'));
   if (!App.generateLanguage) App.generateLanguage = 'en';
   _setLang(App.generateLanguage);
-  const langToggle = h('div', { cls: 'btn-group btn-group-sm' }, langEn, langRu);
-
-  const genBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'generateBtn' });
-  genBtn.appendChild(icon('bi bi-robot me-1'));
-  genBtn.appendChild(document.createTextNode('Generate Drafts'));
-  genBtn.addEventListener('click', () => generateDrafts(seriesId));
-
-  const genFullBtn = h('button', { cls: 'btn btn-sm btn-outline-success', id: 'generateFullBtn' });
-  genFullBtn.appendChild(icon('bi bi-stars me-1'));
-  genFullBtn.appendChild(document.createTextNode('Generate Full'));
-  genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
-  const imgLabel = h('label', { cls: 'd-flex align-items-center gap-1 small text-muted', style: 'cursor:pointer' });
-  imgLabel.appendChild(imgCheck);
-  imgLabel.appendChild(document.createTextNode(' Include images'));
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-robot me-1'));
-  headerLabel.appendChild(document.createTextNode('AI Generation'));
+  const genBtn = h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn' },
+    document.createTextNode('\u2736 Generate '),
+    numVariantsInput,
+    document.createTextNode(' drafts')
+  );
+  genBtn.addEventListener('click', () => generateDrafts(seriesId));
+
+  const genFullBtn = h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
+  genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const errorBadge = h('a', { cls: 'ms-auto small text-warning d-none', id: 'genErrorBadge', style: 'cursor:pointer' });
   errorBadge.setAttribute('data-bs-toggle', 'collapse');
   errorBadge.setAttribute('href', '#genErrorLog');
-
   const errorList = h('ul', { cls: 'list-group list-group-flush', id: 'genErrorList' });
   const errorLog  = h('div', { cls: 'collapse', id: 'genErrorLog' }, errorList);
   const errorDiv  = h('div', { cls: 'alert alert-danger small py-1 px-2 mt-2 mb-0 d-none', id: 'genError' });
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2 d-flex align-items-center' }, headerLabel, errorBadge),
-    h('div', { cls: 'card-body p-2' },
-      h('div', { cls: 'd-flex gap-2 flex-wrap align-items-end' },
-        h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelSel),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Variants' }), numVariantsInput),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: 'Language' }), langToggle),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genFullBtn),
-        h('div', { cls: 'align-self-end pb-1' }, imgLabel)),
-      errorDiv,
-      errorLog));
+  return h('section', { cls: 'px-4 pb-4' },
+    h('div', { cls: 'aap-card aap-card--gen' },
+      h('div', { cls: 'aap-panel-head' },
+        h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent', text: '\u2736 Generate' }),
+        h('span', { cls: 'aap-panel-head__rule' }),
+        errorBadge
+      ),
+      h('div', null,
+        h('label', { cls: 'aap-field-label', text: 'Hint' }),
+        h('div', { cls: 'aap-hint-input' },
+          h('span', { cls: 'aap-hint-input__prompt', text: '\u203a' }),
+          hintInput
+        )
+      ),
+      h('div', { cls: 'row g-2 mt-3' },
+        h('div', { cls: 'col' },
+          h('label', { cls: 'aap-field-label', text: 'Provider' }), provSel),
+        h('div', { cls: 'col' },
+          h('label', { cls: 'aap-field-label', text: 'Model' }), modelSel),
+        h('div', { cls: 'col-auto', style: 'width:110px' },
+          h('label', { cls: 'aap-field-label', text: 'Language' }),
+          h('div', { cls: 'aap-seg' }, langEn, langRu)
+        )
+      ),
+      h('div', { cls: 'aap-rail' },
+        h('div', { cls: 'aap-step aap-step--active' },
+          h('div', { cls: 'aap-step__head' },
+            h('span', { cls: 'aap-step__num', text: '1' }),
+            h('span', { cls: 'aap-step__title', text: 'Draft descriptions' })
+          ),
+          h('p', { cls: 'aap-step__body', text: 'Produces EN drafts to choose from.' }),
+          genBtn,
+          h('label', {
+            cls: 'd-flex align-items-center gap-2 mt-2',
+            style: 'font-size:11px;color:var(--aap-ink-soft)',
+          }, imgCheck, document.createTextNode(' include images as context'))
+        ),
+        h('div', { cls: 'aap-rail__arrow', text: '\u2192' }),
+        h('div', { cls: 'aap-step' },
+          h('div', { cls: 'aap-step__head' },
+            h('span', { cls: 'aap-step__num aap-step__num--outline', text: '2' }),
+            h('span', { cls: 'aap-step__title', text: 'Fill the rest' })
+          ),
+          h('p', { cls: 'aap-step__body',
+            text: 'From chosen draft: translate, write TG & Pinterest, derive tags + semantics.' }),
+          genFullBtn
+        )
+      ),
+      errorDiv, errorLog
+    )
+  );
 }
 
 async function generateDrafts(seriesId) {
