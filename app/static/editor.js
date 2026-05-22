@@ -855,165 +855,168 @@ async function deleteVariant(variantId) {
 // ── Descriptions card ─────────────────────────────────────────────────────────
 function buildDescriptionsCard(series) {
   const variants = series.ai_variants || [];
-  const hasContent = !!(
-    variants.length ||
-    series.title || series.title_ru ||
-    series.description_en || series.description_ru ||
-    (series.tags_instagram || []).length ||
-    (series.tags_telegram || []).length
-  );
-  const bodyId = 'descBody-' + series.id;
-  const variantBtns = h('div', { cls: 'd-flex gap-1 flex-wrap mb-2' });
+
+  const variantRow = h('div', { cls: 'aap-variant-row' });
   if (!variants.length) {
-    variantBtns.appendChild(h('p', { cls: 'text-muted small mb-2', text: 'No AI variants yet.' }));
+    variantRow.appendChild(h('span', { cls: 'aap-panel-head__meta', text: 'No AI variants yet.' }));
   } else {
     variants.forEach((v, i) => {
-      const btn = h('button', {
-        cls: 'btn btn-xs ' + (v.id === series.chosen_variant_id ? 'btn-primary' : 'btn-outline-secondary'),
+      const isChosen  = v.id === series.chosen_variant_id;
+      const isPartial = !v.title;
+      const pill = h('button', {
+        cls: 'aap-variant' + (isChosen ? ' is-active' : ''),
+        type: 'button',
         'data-variant-idx': String(i),
         onclick: () => applyVariant(i),
-      });
-      const isPartialV = !v.title;
-      btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
-      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: isPartialV ? `(draft) ${v.model}` : v.model }));
-      const delBtn = h('button', {
-        cls: 'btn btn-xs btn-outline-danger px-1',
-        title: 'Delete variant',
-        onclick: (e) => { e.stopPropagation(); deleteVariant(v.id); },
-        style: v.used_in_posts ? 'display:none' : '',
-      });
-      delBtn.appendChild(document.createTextNode('×'));
-      variantBtns.appendChild(h('span', { style: 'display:inline-flex;gap:2px;align-items:center' }, btn, delBtn));
+      },
+        h('span', { cls: 'aap-variant__label', text: 'V' + (variants.length - i) }),
+        h('span', { cls: 'aap-variant__model',
+          text: (isPartial ? '(draft) ' : '') + (v.model || '') }),
+        h('span', { cls: 'aap-variant__x', text: '\u00d7' })
+      );
+      pill.querySelector('.aap-variant__x').setAttribute('title', 'Delete variant');
+      if (v.used_in_posts) {
+        pill.querySelector('.aap-variant__x').style.display = 'none';
+      } else {
+        pill.querySelector('.aap-variant__x').addEventListener('click', e => {
+          e.stopPropagation();
+          deleteVariant(v.id);
+        });
+      }
+      variantRow.appendChild(pill);
     });
   }
+  const addPill = h('button', { cls: 'aap-variant-add', type: 'button', text: '\uff0b Generate' });
+  addPill.addEventListener('click', () => document.getElementById('generateBtn')?.click());
+  variantRow.appendChild(addPill);
 
-  const descEn = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_en', rows: '4' });
-  descEn.value = series.description_en || '';
-  const descRu = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_ru', rows: '4' });
-  descRu.value = series.description_ru || '';
-  const tagsIg = h('textarea', { cls: 'form-control form-control-sm', id: 'f_tags_ig', rows: '2' });
-  tagsIg.value = (series.tags_instagram || []).join(' ');
-  const tagsTg = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_tags_tg' });
-  tagsTg.value = (series.tags_telegram || []).join(' ');
-
-  const pubTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title', placeholder: 'Publication title (pre-fills new posts)' });
-  pubTitle.value = series.title || '';
-  const pubTitleRu = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title_ru', placeholder: 'Publication title RU (pre-fills Telegram posts)' });
+  const descEn    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_en', rows: '5', 'aria-label': 'EN Instagram description' });
+  descEn.value    = series.description_en || '';
+  const descRu    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_ru', rows: '5', 'aria-label': 'RU description' });
+  descRu.value    = series.description_ru || '';
+  const tagsIg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_ig', 'aria-label': 'EN Instagram tags' });
+  tagsIg.value    = (series.tags_instagram || []).join(' ');
+  const tagsTg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_tg', 'aria-label': 'TG tags' });
+  tagsTg.value    = (series.tags_telegram || []).join(' ');
+  const pubTitle  = h('input', { type: 'text', cls: 'aap-lang-card__title', id: 'f_pub_title', placeholder: 'Publication title EN', 'aria-label': 'EN title' });
+  pubTitle.value  = series.title || '';
+  const pubTitleRu = h('input', { type: 'text', cls: 'aap-lang-card__title', id: 'f_pub_title_ru', placeholder: 'Publication title RU', 'aria-label': 'RU title' });
   pubTitleRu.value = series.title_ru || '';
 
-  const _chosenVariant = series.chosen_variant_id
+  const _cv  = series.chosen_variant_id
     ? (series.ai_variants || []).find(v => v.id === series.chosen_variant_id)
     : null;
-  const _chosenArch = _chosenVariant?.archive_metadata || {};
+  const _arch = _cv?.archive_metadata || {};
 
-  const igSeo = h('textarea', { cls: 'form-control form-control-sm', id: 'f_instagram_seo', rows: '2' });
-  igSeo.value = _chosenVariant?.instagram_seo || '';
-  const pinTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_title' });
-  pinTitle.value = _chosenVariant?.pinterest_title || '';
-  const pinDesc = h('textarea', { cls: 'form-control form-control-sm', id: 'f_pin_desc', rows: '2' });
-  pinDesc.value = _chosenVariant?.pinterest_description || '';
-  const pinBoard = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_board' });
-  pinBoard.value = _chosenVariant?.pinterest_board || '';
-  const archWorld = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_world', placeholder: 'comma-separated' });
-  archWorld.value = (_chosenArch.world_keywords || []).join(', ');
-  const archVisual = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_visual', placeholder: 'comma-separated' });
-  archVisual.value = (_chosenArch.visual_keywords || []).join(', ');
-  const archMood = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_mood', placeholder: 'comma-separated' });
-  archMood.value = (_chosenArch.mood_keywords || []).join(', ');
-
-  const saveBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveDescBtn' });
-  saveBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveBtn.appendChild(document.createTextNode('Save'));
-  saveBtn.addEventListener('click', () => saveDescription(series.id));
-
-  const resetBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary ms-2' });
-  resetBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  resetBtn.appendChild(document.createTextNode('Reset'));
-  resetBtn.addEventListener('click', resetToSaved);
-
-  const mkField = (lbl, ctrl) => h('div', { cls: 'col-12 col-lg-6' },
-    h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
+  const igSeo    = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_instagram_seo' });
+  igSeo.value    = _cv?.instagram_seo || '';
+  const pinTitle = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_pin_title' });
+  pinTitle.value = _cv?.pinterest_title || '';
+  const pinDesc  = h('textarea', { cls: 'form-control aap-input', id: 'f_pin_desc', rows: '2' });
+  pinDesc.value  = _cv?.pinterest_description || '';
+  const pinBoard = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_pin_board' });
+  pinBoard.value = _cv?.pinterest_board || '';
+  const archWorld  = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_world',  placeholder: 'comma-separated' });
+  archWorld.value  = (_arch.world_keywords  || []).join(', ');
+  const archVisual = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_visual', placeholder: 'comma-separated' });
+  archVisual.value = (_arch.visual_keywords || []).join(', ');
+  const archMood   = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_mood',   placeholder: 'comma-separated' });
+  archMood.value   = (_arch.mood_keywords   || []).join(', ');
 
   const boardChips = h('div', { cls: 'mt-1 d-flex flex-wrap gap-1' });
-  const _fillBoardChips = boards => {
-    boards.forEach(name => {
-      const chip = h('button', { type: 'button', cls: 'btn btn-outline-secondary btn-sm py-0 px-2', style: 'font-size:0.7rem' });
-      chip.appendChild(document.createTextNode(name));
-      chip.addEventListener('click', () => { pinBoard.value = name; });
-      boardChips.appendChild(chip);
-    });
-  };
+  const _fillBoards = boards => boards.forEach(name => {
+    const chip = h('button', { type: 'button', cls: 'aap-chip',
+      style: 'padding:3px 8px;font-size:11px', text: name });
+    chip.addEventListener('click', () => { pinBoard.value = name; });
+    boardChips.appendChild(chip);
+  });
   if (_pinterestBoardsCache) {
-    _fillBoardChips(_pinterestBoardsCache);
+    _fillBoards(_pinterestBoardsCache);
   } else {
-    apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
-      _pinterestBoardsCache = data.boards || [];
-      _fillBoardChips(_pinterestBoardsCache);
-    }).catch(e => console.warn('Failed to load Pinterest boards:', e));
+    apiFetch('GET', '/api/settings/pinterest/boards').then(d => {
+      _pinterestBoardsCache = d.boards || [];
+      _fillBoards(_pinterestBoardsCache);
+    }).catch(() => {});
   }
 
-  const form = h('div', { cls: 'row g-2' },
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title EN (pre-fills posts)' }), pubTitle),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title RU (pre-fills Telegram posts)' }), pubTitleRu),
-    mkField('Description EN (Instagram & FB Page)', descEn),
-    mkField('Description RU (Telegram)', descRu),
-    mkField('Instagram & FB Page tags', tagsIg),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
-    mkField('Pinterest title', pinTitle),
-    h('div', { cls: 'col-12 col-lg-6' },
-      h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }),
-      pinBoard,
-      boardChips,
+  const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', id: 'saveDescBtn' },
+    icon('bi bi-floppy me-1'), document.createTextNode('Save'));
+  saveBtn.addEventListener('click', () => saveDescription(series.id));
+
+  const resetBtn = h('button', { cls: 'btn aap-btn ms-2' },
+    icon('bi bi-arrow-counterclockwise me-1'), document.createTextNode('Reset'));
+  resetBtn.addEventListener('click', resetToSaved);
+
+  const chosenIdx = _cv ? variants.indexOf(_cv) : -1;
+  const variantCount = variants.length + ' variants'
+    + (chosenIdx >= 0 ? ' \u00b7 V' + (variants.length - chosenIdx) + ' active' : '');
+
+  const section = h('section', { cls: 'px-4 pb-4', id: 'descBody-' + series.id },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label', text: 'Descriptions' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('span', { cls: 'aap-panel-head__meta', text: variantCount })
     ),
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
-    h('div', { cls: 'col-12' }, saveBtn, resetBtn));
+    variantRow,
+    h('div', { cls: 'row g-3 mt-2' },
+      h('div', { cls: 'col-md-6' },
+        h('div', { cls: 'aap-card aap-lang-card' },
+          h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+            h('span', { cls: 'aap-lang-badge', text: 'EN' }),
+            h('span', { cls: 'aap-panel-head__meta', text: 'publication' })
+          ),
+          pubTitle,
+          h('label', { cls: 'aap-field-label', text: 'Instagram & FB' }), descEn,
+          h('label', { cls: 'aap-field-label mt-3', text: 'Tags' }), tagsIg
+        )
+      ),
+      h('div', { cls: 'col-md-6' },
+        h('div', { cls: 'aap-card aap-lang-card' },
+          h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+            h('span', { cls: 'aap-lang-badge', text: 'RU' }),
+            h('span', { cls: 'aap-panel-head__meta', text: 'publication' })
+          ),
+          pubTitleRu,
+          h('label', { cls: 'aap-field-label', text: 'Telegram' }), descRu,
+          h('label', { cls: 'aap-field-label mt-3', text: 'Tags' }), tagsTg
+        )
+      )
+    ),
+    h('div', { cls: 'aap-card mt-3' },
+      h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+        h('span', { cls: 'aap-pin-mark', text: 'P' }),
+        h('span', { cls: 'aap-composer__title', text: 'Pinterest' })
+      ),
+      h('div', { cls: 'row g-3 mb-3' },
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Title' }), pinTitle),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Board' }), pinBoard, boardChips)
+      ),
+      h('label', { cls: 'aap-field-label', text: 'Description' }), pinDesc
+    ),
+    h('div', { cls: 'aap-card mt-3' },
+      h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+        h('span', { style: 'color:var(--aap-accent);font-size:12px', text: '\u25be' }),
+        h('span', { cls: 'aap-composer__title', text: 'Semantic layer' }),
+        h('span', { cls: 'aap-auto-badge', text: 'auto' })
+      ),
+      h('div', { cls: 'row g-3' },
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Instagram discovery' }), igSeo),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'World keywords' }), archWorld),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Visual keywords' }), archVisual),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Mood keywords' }), archMood)
+      )
+    ),
+    h('div', { cls: 'mt-3' }, saveBtn, resetBtn)
+  );
 
-  form.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
-
-  const semDetails = document.createElement('details');
-  semDetails.className = 'mt-2';
-  const semSummary = document.createElement('summary');
-  semSummary.className = 'small text-muted';
-  semSummary.textContent = 'Semantic Layer';
-  semDetails.appendChild(semSummary);
-  const semGrid = h('div', { cls: 'row g-2 mt-1' },
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Instagram discovery' }), igSeo),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: world keywords' }), archWorld),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: visual keywords' }), archVisual),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));
-  semDetails.appendChild(semGrid);
-
-  const chevron = icon('bi bi-chevron-' + (hasContent ? 'up' : 'down'));
-  const toggleBtn = h('button', {
-    'data-bs-toggle': 'collapse',
-    'data-bs-target': '#' + bodyId,
-    cls: 'btn btn-xs btn-link p-0 ms-auto border-0 text-body',
-    title: 'Toggle descriptions',
-    'aria-label': 'Toggle descriptions',
-    'aria-expanded': String(hasContent),
-    'aria-controls': bodyId,
-  });
-  toggleBtn.appendChild(chevron);
-
-  const bodyEl = h('div', { cls: 'collapse' + (hasContent ? ' show' : ''), id: bodyId },
-    h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
-  bodyEl.addEventListener('show.bs.collapse', () => {
-    chevron.className = 'bi bi-chevron-up';
-    toggleBtn.setAttribute('aria-expanded', 'true');
-  });
-  bodyEl.addEventListener('hide.bs.collapse', () => {
-    chevron.className = 'bi bi-chevron-down';
-    toggleBtn.setAttribute('aria-expanded', 'false');
-  });
-
-  const headerLabel = h('span', { cls: 'small fw-medium d-flex align-items-center w-100' });
-  headerLabel.appendChild(icon('bi bi-card-text me-1'));
-  headerLabel.appendChild(document.createTextNode('Descriptions'));
-  headerLabel.appendChild(toggleBtn);
-
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2' }, headerLabel),
-    bodyEl);
+  section.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
+  return section;
 }
 
 function resetToSaved() {
@@ -1041,8 +1044,7 @@ function resetToSaved() {
   _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     const isChosen = (s.ai_variants || [])[i]?.id === s.chosen_variant_id;
-    btn.classList.toggle('btn-primary', isChosen);
-    btn.classList.toggle('btn-outline-secondary', !isChosen);
+    btn.classList.toggle('is-active', isChosen);
   });
 }
 
@@ -1086,8 +1088,7 @@ function applyVariant(idx) {
   App.activeVariantId = v.id;
   _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
-    btn.classList.toggle('btn-primary', i === idx);
-    btn.classList.toggle('btn-outline-secondary', i !== idx);
+    btn.classList.toggle('is-active', i === idx);
   });
 }
 
