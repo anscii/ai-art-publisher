@@ -58,12 +58,31 @@ function _updateSaveDescBtn() {
 
 function _updateSaveStatusBtn() {
   const btn = document.getElementById('saveStatusBtn');
-  const sel = document.getElementById('statusSelect');
-  if (!btn || !sel || !App.currentSeries) return;
-  const dirty = sel.value !== App.currentSeries.status;
+  if (!btn || !App.currentSeries) return;
+  const selected = document.querySelector('#aap-status-seg button.is-active')?.dataset.status;
+  const DISPLAY_TO_WRITE = { new: 'new', draft: 'draft', active: 'active', done: 'done' };
+  const currentWrite = DISPLAY_TO_WRITE[statusDisplay(App.currentSeries.status)];
+  const dirty = selected && selected !== currentWrite;
+  btn.classList.toggle('aap-btn-primary', !!dirty);
+}
+
+function _updateSaveDescBtn() {
+  const btn = document.getElementById('saveDescBtn');
+  if (!btn || !App.currentSeries) return;
+  const s = App.currentSeries;
+  const dirty =
+    (document.getElementById('editorTitle')?.value?.trim() ?? '') !== (s.name ?? '') ||
+    (document.getElementById('f_pub_title')?.value?.trim() ?? '') !== (s.title ?? '') ||
+    (document.getElementById('f_pub_title_ru')?.value?.trim() ?? '') !== (s.title_ru ?? '') ||
+    (document.getElementById('f_desc_en')?.value ?? '') !== (s.description_en ?? '') ||
+    (document.getElementById('f_desc_ru')?.value ?? '') !== (s.description_ru ?? '') ||
+    (document.getElementById('f_tags_ig')?.value?.trim() ?? '') !== (s.tags_instagram ?? []).join(' ') ||
+    (document.getElementById('f_tags_tg')?.value?.trim() ?? '') !== (s.tags_telegram ?? []).join(' ') ||
+    (App.activeVariantId != null && App.activeVariantId !== (s.chosen_variant_id ?? null));
   btn.classList.toggle('btn-primary', dirty);
   btn.classList.toggle('btn-outline-primary', !dirty);
 }
+
 
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
@@ -1356,44 +1375,63 @@ async function generateFull(seriesId) {
 }
 
 // ── Actions card ──────────────────────────────────────────────────────────────
-function buildActionsCard(series) {
-  const statusSel = document.createElement('select');
-  statusSel.className = 'form-select form-select-sm'; statusSel.id = 'statusSelect'; statusSel.style.width = '140px';
-  ['new', 'draft', 'approved', 'posted', 'skip'].forEach(s => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s;
-    if (s === series.status) o.selected = true;
-    statusSel.appendChild(o);
-  });
-  if (!['new', 'draft', 'approved', 'posted', 'skip'].includes(series.status)) {
-    const o = document.createElement('option'); o.value = series.status; o.textContent = series.status; o.selected = true;
-    statusSel.appendChild(o);
-  }
-  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveStatusBtn' });
-  saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveStatusBtn.appendChild(document.createTextNode('Save status'));
-  saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
-  statusSel.addEventListener('change', _updateSaveStatusBtn);
+function buildStatusBar(series) {
+  const displayStatus = statusDisplay(series.status);
+  const STATUS_SEG = [
+    { display: 'new',    dbWrite: 'new',    dotCls: 'aap-dot--new' },
+    { display: 'draft',  dbWrite: 'draft',  dotCls: 'aap-dot--draft' },
+    { display: 'active', dbWrite: 'active', dotCls: 'aap-dot--active' },
+    { display: 'done',   dbWrite: 'done',   dotCls: 'aap-dot--done' },
+  ];
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-gear me-1'));
-  headerLabel.appendChild(document.createTextNode('Series'));
+  const seg = h('div', { cls: 'aap-status-seg', id: 'aap-status-seg' });
+  STATUS_SEG.forEach(({ display, dbWrite, dotCls }) => {
+    const isActive = display === displayStatus;
+    const btn = h('button', {
+      type: 'button',
+      cls: isActive ? 'is-active' : '',
+      'data-status': dbWrite,
+    },
+      h('span', { cls: 'aap-dot ' + dotCls }),
+      document.createTextNode(' ' + display.charAt(0).toUpperCase() + display.slice(1))
+    );
+    if (isActive) btn.style.setProperty('--seg-color', 'var(--aap-dot-' + display + ')');
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => {
+        b.classList.remove('is-active');
+        b.style.removeProperty('--seg-color');
+      });
+      btn.classList.add('is-active');
+      btn.style.setProperty('--seg-color', 'var(--aap-dot-' + display + ')');
+      _updateSaveStatusBtn();
+    });
+    seg.appendChild(btn);
+  });
+
+  const saveStatusBtn = h('button', { cls: 'btn aap-btn', id: 'saveStatusBtn',
+    text: '\u21b3 Save status' });
+  saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
 
   const deleteSeriesBtn = h('button', {
-    cls: 'btn btn-xs btn-outline-danger ms-auto',
+    cls: 'btn aap-btn aap-btn-danger',
     title: 'Delete series',
     'aria-label': 'Delete series',
+    text: '\u00d7 Delete series',
   });
-  deleteSeriesBtn.appendChild(icon('bi bi-trash'));
   deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex align-items-center py-2' }, headerLabel, deleteSeriesBtn),
-    h('div', { cls: 'card-body p-2' },
-      h('div', { cls: 'd-flex gap-2 align-items-center' }, statusSel, saveStatusBtn)));
+  return h('div', { cls: 'aap-status-bar mt-4' },
+    h('span', { cls: 'aap-field-label m-0', style: 'letter-spacing:.14em', text: 'Series status' }),
+    seg,
+    h('div', { style: 'flex:1' }),
+    deleteSeriesBtn,
+    saveStatusBtn
+  );
 }
 
 async function saveStatus(seriesId) {
-  const status = document.getElementById('statusSelect')?.value;
+  const status = document.querySelector('#aap-status-seg button.is-active')?.dataset.status;
+  if (!status) return;
   try {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, { status });
     App.currentSeries = updated;
@@ -1616,15 +1654,12 @@ const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', post
 function buildPostsCard(series) {
   const imgMap = {};
   series.images.forEach(i => { if (!i.deleted_at) imgMap[i.id] = i.public_url; });
+  const activePosts = (series.posts || []).filter(p => !p.deleted_at);
+  const scheduled   = activePosts.filter(p => p.status === 'scheduled').length;
+  const published   = activePosts.filter(p => p.status === 'posted').length;
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-send me-1'));
-  headerLabel.appendChild(document.createTextNode('Posts'));
-
-  const newPostBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
-  newPostBtn.appendChild(icon('bi bi-plus me-1'));
-  newPostBtn.appendChild(document.createTextNode('New post'));
-
+  const newPostBtn = h('button', { cls: 'btn aap-btn' },
+    icon('bi bi-plus me-1'), document.createTextNode('New post'));
   const formWrap = h('div', { cls: 'd-none' });
   newPostBtn.addEventListener('click', () => {
     if (formWrap.classList.contains('d-none')) {
@@ -1639,75 +1674,106 @@ function buildPostsCard(series) {
   });
 
   const postList = h('div', { cls: 'd-flex flex-column gap-2' });
-  const activePosts = (series.posts || []).filter(p => !p.deleted_at);
   if (!activePosts.length) {
-    postList.appendChild(h('p', { cls: 'text-muted small mb-0', text: 'No posts yet.' }));
+    postList.appendChild(h('p', { cls: 'aap-mute', style: 'font-size:13px;padding:0 0 8px',
+      text: 'No posts yet.' }));
   } else {
     activePosts.forEach(p => postList.appendChild(buildPostRow(p, imgMap, series)));
   }
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex align-items-center justify-content-between py-2' }, headerLabel, newPostBtn),
-    h('div', { cls: 'card-body p-2' }, formWrap, postList));
+  return h('section', { cls: 'px-4 py-4' },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label', text: 'Posts' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('span', { cls: 'aap-panel-head__meta',
+        text: scheduled + ' scheduled \u00b7 ' + published + ' published' }),
+      newPostBtn
+    ),
+    formWrap,
+    postList
+  );
 }
 
 function buildPostRow(post, imgMap, series) {
-  const platIcon = icon((POST_PLATFORM_ICON[post.platform] || 'bi bi-send') + ' me-1');
-  const statusBadgeEl = h('span', { cls: 'badge ' + (POST_STATUS_COLOR[post.status] || 'bg-secondary') + ' ms-1', text: post.status });
-  const titleEl = h('span', { cls: 'small text-truncate flex-grow-1', text: post.title || '(no title)', style: 'max-width:180px' });
+  const PLAT_ICON = {
+    telegram:  'bi bi-telegram',
+    instagram: 'bi bi-instagram',
+    facebook:  'bi bi-facebook',
+    pinterest: 'bi bi-pinterest',
+  };
+  const STATUS_COLOR_MAP = {
+    draft:     'var(--aap-ink-mute)',
+    scheduled: 'var(--aap-dot-active)',
+    posted:    'var(--aap-dot-done)',
+    failed:    'var(--aap-danger)',
+  };
 
-  const timeEl = post.posted_at
-    ? h('span', { cls: 'text-muted small', text: formatDate(post.posted_at) })
-    : post.scheduled_at
-      ? h('span', { cls: 'text-purple small' }, icon('bi bi-clock me-1'), document.createTextNode(formatDate(post.scheduled_at)))
-      : null;
-
-  const thumbs = h('div', { cls: 'd-flex gap-1 flex-wrap' });
-  (post.image_ids || []).slice(0, 3).forEach(id => {
-    if (imgMap[id]) {
-      const img = document.createElement('img');
-      img.setAttribute('src', imgMap[id]);
-      img.style.cssText = 'width:28px;height:24px;object-fit:cover;border-radius:2px';
-      thumbs.appendChild(img);
-    }
+  const hue = [...post.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+  const thumbDiv = h('div', {
+    cls: 'aap-post-row__thumb',
+    style: '--thumb-color: hsl(' + hue + ' 40% 40%)',
   });
+  if (post.image_ids?.length && imgMap[post.image_ids[0]]) {
+    const img2 = document.createElement('img');
+    img2.src = imgMap[post.image_ids[0]];
+    img2.style.cssText = 'width:100%;height:100%;object-fit:cover';
+    thumbDiv.appendChild(img2);
+  }
 
-  const actions = h('div', { cls: 'd-flex gap-1 flex-shrink-0' });
+  const platIconCls = PLAT_ICON[post.platform] || 'bi bi-send';
+  const platEl = h('div', { cls: 'aap-post-row__channels' },
+    icon(platIconCls + ' me-1'));
+  const timeEl = post.posted_at
+    ? h('span', { cls: 'aap-post-row__when', text: formatDate(post.posted_at) })
+    : post.scheduled_at
+      ? h('span', { cls: 'aap-post-row__when',
+          style: 'color:var(--aap-dot-active)', text: formatDate(post.scheduled_at) })
+      : null;
+  if (timeEl) platEl.appendChild(timeEl);
 
-  const viewBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'View post content', 'aria-label': 'View post content' });
-  viewBtn.appendChild(icon('bi bi-eye'));
+  const statusEl = h('span', {
+    cls: 'aap-post-row__status',
+    style: '--status-color: ' + (STATUS_COLOR_MAP[post.status] || 'var(--aap-ink-mute)'),
+  },
+    h('span', { cls: 'aap-dot' }),
+    document.createTextNode(' ' + post.status)
+  );
+
+  const actions = h('div', { cls: 'aap-post-row__actions' });
+
+  const viewBtn = h('button', { cls: 'aap-icon-btn', title: 'View', 'aria-label': 'View post' },
+    icon('bi bi-eye'));
   viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
   actions.appendChild(viewBtn);
 
   if (post.status !== 'posted') {
-    const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now', 'aria-label': 'Post now' });
-    postNowBtn.appendChild(icon('bi bi-send'));
+    const postNowBtn = h('button', { cls: 'aap-icon-btn', title: 'Post now', 'aria-label': 'Post now' },
+      icon('bi bi-send'));
     postNowBtn.addEventListener('click', () => postNow(post.id));
     actions.appendChild(postNowBtn);
   }
 
   if (post.status === 'draft' || post.status === 'failed') {
-    const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Schedule', 'aria-label': 'Schedule post' });
-    schedBtn.appendChild(icon('bi bi-calendar-plus'));
+    const schedBtn = h('button', { cls: 'aap-icon-btn', title: 'Schedule', 'aria-label': 'Schedule' },
+      icon('bi bi-calendar-plus'));
     schedBtn.addEventListener('click', () => {
       const pickerId = 'sched-picker-' + post.id;
       const existing = document.getElementById(pickerId);
       if (existing) { existing.remove(); return; }
-      const dtInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm', style: 'width:200px' });
-      // Pre-fill with current scheduled_at or +1h from now
+      const dtInput = h('input', { type: 'datetime-local', cls: 'form-control aap-input', style: 'width:200px' });
       const base = post.scheduled_at
         ? new Date(post.scheduled_at.endsWith('Z') ? post.scheduled_at : post.scheduled_at + 'Z')
         : new Date(Date.now() + 3600000);
       dtInput.value = base.toISOString().slice(0, 16);
-      const okBtn = h('button', { cls: 'btn btn-sm btn-primary', text: 'Schedule' });
+      const okBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', text: 'Schedule' });
       okBtn.addEventListener('click', async () => {
         if (!dtInput.value) return;
         await schedulePost(post.id, new Date(dtInput.value).toISOString());
         picker.remove();
       });
-      const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', text: 'Cancel' });
+      const cancelBtn = h('button', { cls: 'btn aap-btn', text: 'Cancel' });
       cancelBtn.addEventListener('click', () => picker.remove());
-      const picker = h('div', { id: pickerId, cls: 'border rounded p-2 mb-1 bg-body-tertiary d-flex align-items-center gap-2 flex-wrap' },
+      const picker = h('div', { id: pickerId, cls: 'aap-card mt-2 d-flex align-items-center gap-2 flex-wrap' },
         dtInput, okBtn, cancelBtn);
       rowWrap.after(picker);
     });
@@ -1715,38 +1781,44 @@ function buildPostRow(post, imgMap, series) {
   }
 
   if (post.status === 'scheduled') {
-    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning', title: 'Cancel schedule', 'aria-label': 'Cancel schedule' });
-    cancelBtn.appendChild(icon('bi bi-x-circle'));
+    const cancelBtn = h('button', { cls: 'aap-icon-btn', title: 'Cancel schedule', 'aria-label': 'Cancel schedule' },
+      icon('bi bi-x-circle'));
     cancelBtn.addEventListener('click', () => cancelPostSchedule(post.id));
     actions.appendChild(cancelBtn);
   }
 
   if (post.status !== 'posted') {
-    const editBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Edit post', 'aria-label': 'Edit post' });
-    editBtn.appendChild(icon('bi bi-pencil'));
+    const editBtn = h('button', { cls: 'aap-icon-btn', title: 'Edit', 'aria-label': 'Edit post' },
+      icon('bi bi-pencil'));
     editBtn.addEventListener('click', () => {
       const existing = document.getElementById('edit-form-' + post.id);
       if (existing) { existing.remove(); return; }
-      const form = buildEditPostForm(post, imgMap, series, () => {
-        const el = document.getElementById('edit-form-' + post.id);
-        if (el) el.remove();
-      });
+      const form = buildEditPostForm(post, imgMap, series,
+        () => document.getElementById('edit-form-' + post.id)?.remove());
       form.id = 'edit-form-' + post.id;
       rowWrap.after(form);
     });
     actions.appendChild(editBtn);
 
-    const delBtn = h('button', { cls: 'btn btn-sm btn-outline-danger', title: 'Delete post', 'aria-label': 'Delete post' });
-    delBtn.appendChild(icon('bi bi-trash'));
+    const delBtn = h('button', { cls: 'aap-icon-btn', title: 'Delete', 'aria-label': 'Delete post' },
+      icon('bi bi-trash'));
     delBtn.addEventListener('click', () => deletePost(post.id));
     actions.appendChild(delBtn);
   }
 
-  const info = h('div', { cls: 'd-flex align-items-center gap-1 flex-grow-1 overflow-hidden' },
-    platIcon, titleEl, statusBadgeEl, timeEl ? timeEl : null);
-
-  const rowWrap = h('div', { cls: 'p-1 border rounded d-flex align-items-center gap-2', 'data-post-row': post.id, 'data-post-status': post.status },
-    thumbs, info, actions);
+  const rowWrap = h('article', {
+    cls: 'aap-post-row',
+    'data-post-row': post.id,
+    'data-post-status': post.status,
+  },
+    thumbDiv,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-post-row__title', text: post.title || '(no title)' }),
+      platEl
+    ),
+    statusEl,
+    actions
+  );
   return rowWrap;
 }
 
