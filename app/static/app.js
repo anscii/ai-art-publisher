@@ -430,35 +430,48 @@ function showView(view, { push = true } = {}) {
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
+function _platformIcon(platform) {
+  const cls = { instagram: 'bi bi-instagram', telegram: 'bi bi-telegram', pinterest: 'bi bi-pinterest' }[platform] || 'bi bi-circle';
+  return icon(cls);
+}
+
 async function refreshQueue() {
   const el = document.getElementById('queueContent');
   el.replaceChildren(h('div', { cls: 'text-center' }, h('div', { cls: 'spinner-border spinner-border-sm' })));
   try {
     const items = await apiFetch('GET', '/api/queue');
+    const kicker = document.getElementById('queueKicker');
+    if (kicker) kicker.textContent = items.length + ' post' + (items.length !== 1 ? 's' : '') + ' scheduled';
     if (!items.length) {
-      el.replaceChildren(h('p', { cls: 'text-muted', text: 'No scheduled posts.' }));
+      el.replaceChildren(h('p', { cls: 'aap-panel-head__meta text-center', style: 'padding:2rem 0', text: 'No scheduled posts.' }));
       return;
     }
-    const tbody = document.createElement('tbody');
+    const table = h('div', { cls: 'aap-table', style: '--cols: 180px 1fr 160px 120px 130px' });
+    table.appendChild(h('div', { cls: 'aap-table__head' },
+      h('span', { text: 'Series' }),
+      h('span', { text: 'Title' }),
+      h('span', { text: 'Datetime · UTC' }),
+      h('span', { text: 'Platform' }),
+      h('span', { text: 'Actions' })));
     items.forEach(item => {
-      const platformCell = h('td', null, h('span', { cls: 'badge bg-secondary', text: item.platform }));
-      const edit   = h('button', { cls: 'btn btn-xs btn-outline-secondary me-1', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
-      const cancel = h('button', { cls: 'btn btn-xs btn-outline-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });
-      tbody.appendChild(h('tr', null,
-        h('td', { text: item.series_name || item.series_id.slice(0, 8) }),
-        h('td', { text: item.title }),
-        h('td', { text: formatDate(item.scheduled_at) }),
-        platformCell,
-        h('td', null, edit, cancel)));
+      const platformPill = h('span', { cls: 'aap-platform-pill' },
+        _platformIcon(item.platform),
+        document.createTextNode(' ' + item.platform));
+      const seriesCell = h('div', { cls: 'aap-queue-series' },
+        h('span', { cls: 'aap-mini-thumb aap-mini-thumb--sm', style: '--thumb-color: hsl(210 30% 50%)' }),
+        h('span', { cls: 'aap-queue-series__name', text: item.series_name || item.series_id.slice(0, 8) }));
+      const edit   = h('button', { cls: 'btn aap-btn aap-btn--sm', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
+      const cancel = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });
+      table.appendChild(h('div', { cls: 'aap-table__row' },
+        seriesCell,
+        h('span', { cls: 'aap-queue-title', text: item.title }),
+        h('span', { cls: 'aap-queue-when', text: formatDate(item.scheduled_at) }),
+        platformPill,
+        h('div', { cls: 'd-flex gap-1' }, edit, cancel)));
     });
-    el.replaceChildren(h('div', { cls: 'table-responsive' },
-      h('table', { cls: 'table table-sm table-hover align-middle' },
-        h('thead', null, h('tr', null,
-          h('th', { text: 'Series' }), h('th', { text: 'Title' }),
-          h('th', { text: 'Datetime (UTC)' }), h('th', { text: 'Platform' }), h('th'))),
-        tbody)));
+    el.replaceChildren(table);
   } catch (e) {
-    el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
+    el.replaceChildren(h('p', { cls: 'text-danger', text: e.message }));
   }
 }
 
@@ -480,15 +493,21 @@ async function refreshCollections() {
   try {
     App.collections = await apiFetch('GET', '/api/collections');
     _populateCollectionFilter();
+    const kicker = document.getElementById('collectionsKicker');
+    if (kicker) {
+      const total = App.collections.reduce((s, c) => s + (c.series_total || 0), 0);
+      kicker.textContent = App.collections.length + ' collection' + (App.collections.length !== 1 ? 's' : '')
+        + (total ? ' · ' + total + ' series' : '');
+    }
     if (!App.collections.length) {
-      el.replaceChildren(h('p', { cls: 'text-muted', text: 'No collections yet.' }));
+      el.replaceChildren(h('p', { cls: 'aap-panel-head__meta text-center', style: 'padding:2rem 0', text: 'No collections yet.' }));
       return;
     }
     const list = h('div', { cls: 'd-flex flex-column gap-2' });
     App.collections.forEach(c => list.appendChild(_buildCollectionItem(c)));
     el.replaceChildren(list);
   } catch (e) {
-    el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
+    el.replaceChildren(h('p', { cls: 'text-danger', text: e.message }));
   }
 }
 
@@ -543,41 +562,13 @@ function _buildCollectionItem(c) {
   } else {
     countParts.push('0 series');
   }
+  const countText = countParts[0];
 
-  const nameEl = h('span', { cls: 'fw-medium', text: c.name });
-  const nameRuEl = c.name_ru ? h('span', { cls: 'text-muted small ms-1', text: '/ ' + c.name_ru }) : null;
-  const countEl = h('span', { cls: 'text-muted small ms-2', text: countParts[0] });
-
-  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection' });
+  const filterBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection', style: '--btn-color: var(--aap-accent)' });
   filterBtn.appendChild(icon('bi bi-funnel'));
-  filterBtn.addEventListener('click', () => {
-    onCollectionFilterChange(c.id);
-    const wrap = document.getElementById('collectionFilterWrap');
-    _populateCollectionFilter();
-  });
+  filterBtn.addEventListener('click', () => { onCollectionFilterChange(c.id); _populateCollectionFilter(); });
 
-  const editBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  editBtn.appendChild(icon('bi bi-pencil'));
-  editBtn.addEventListener('click', () => {
-    const nameInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (EN)', style: 'width:160px' });
-    nameInput.value = c.name;
-    const nameRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (RU)', style: 'width:160px' });
-    nameRuInput.value = c.name_ru || '';
-    const saveBtn = h('button', { cls: 'btn btn-xs btn-primary ms-1', text: 'Save' });
-    saveBtn.addEventListener('click', async () => {
-      try {
-        await apiFetch('PATCH', '/api/collections/' + c.id, {
-          name: nameInput.value.trim(),
-          name_ru: nameRuInput.value.trim() || null,
-        });
-        showToast('Saved', 'success');
-        await refreshCollections();
-      } catch (e) { showToast(e.message, 'danger'); }
-    });
-    nameEl.replaceWith(h('span', { cls: 'd-flex gap-1 align-items-center' }, nameInput, nameRuInput, saveBtn));
-  });
-
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  const delBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Delete collection', style: '--btn-color: var(--aap-danger)' });
   delBtn.appendChild(icon('bi bi-trash'));
   delBtn.addEventListener('click', () => showConfirm('Delete collection "' + c.name + '"? Series will be unassigned.', async () => {
     try {
@@ -588,10 +579,48 @@ function _buildCollectionItem(c) {
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
-  return h('div', { cls: 'card' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-2' },
-      nameEl, nameRuEl, countEl,
-      h('div', { cls: 'ms-auto d-flex gap-1' }, filterBtn, editBtn, delBtn)));
+  const row = h('article', { cls: 'aap-collection-row' });
+
+  function renderView() {
+    row.classList.remove('is-editing');
+    const editBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Edit' });
+    editBtn.appendChild(icon('bi bi-pencil'));
+    editBtn.addEventListener('click', renderEdit);
+    row.replaceChildren(
+      h('div', null,
+        h('div', { cls: 'aap-collection-row__name-en', text: c.name }),
+        c.name_ru ? h('div', { cls: 'aap-collection-row__name-ru', text: c.name_ru }) : null),
+      h('div', { cls: 'aap-collection-row__counts', text: countText }),
+      h('div'),
+      h('div', { cls: 'aap-collection-row__actions' }, filterBtn, editBtn, delBtn));
+  }
+
+  function renderEdit() {
+    row.classList.add('is-editing');
+    const nameInput = h('input', { type: 'text', cls: 'form-control aap-input', 'aria-label': 'Name (EN)' });
+    nameInput.value = c.name;
+    const nameRuInput = h('input', { type: 'text', cls: 'form-control aap-input', 'aria-label': 'Name (RU)' });
+    nameRuInput.value = c.name_ru || '';
+    const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', type: 'button', style: 'padding:6px 12px;font-size:12px' });
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', async () => {
+      try {
+        await apiFetch('PATCH', '/api/collections/' + c.id, { name: nameInput.value.trim(), name_ru: nameRuInput.value.trim() || null });
+        showToast('Saved', 'success');
+        await refreshCollections();
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    const cancelBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Cancel' });
+    cancelBtn.appendChild(icon('bi bi-x-lg'));
+    cancelBtn.addEventListener('click', renderView);
+    row.replaceChildren(
+      nameInput, nameRuInput, saveBtn,
+      h('div', { cls: 'aap-collection-row__edit-meta', text: countText }),
+      h('div', { cls: 'aap-collection-row__actions' }, filterBtn, cancelBtn, delBtn));
+  }
+
+  renderView();
+  return row;
 }
 
 async function createCollection() {
@@ -660,11 +689,11 @@ async function refreshTrash() {
     }
     const nodes = [];
     if (data.series.length) {
-      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2', text: 'Deleted Series' }));
+      nodes.push(h('h2', { cls: 'aap-section-label', text: 'Deleted series · ' + data.series.length }));
       data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
     }
     if (data.images.length) {
-      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2 mt-3', text: 'Deleted Images' }));
+      nodes.push(h('h2', { cls: 'aap-section-label' + (data.series.length ? ' mt-4' : ''), text: 'Deleted images · ' + data.images.length }));
       data.images.forEach(i => nodes.push(_buildTrashImageItem(i)));
     }
     content.replaceChildren(...nodes);
@@ -674,9 +703,9 @@ async function refreshTrash() {
 }
 
 function _buildTrashSeriesItem(s) {
-  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
-  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  restoreBtn.appendChild(document.createTextNode('Restore'));
+  const restoreBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-success' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise'));
+  restoreBtn.appendChild(document.createTextNode(' Restore'));
   restoreBtn.addEventListener('click', async () => {
     _disableWithSpinner(restoreBtn);
     try {
@@ -686,9 +715,9 @@ function _buildTrashSeriesItem(s) {
     } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   });
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger' });
+  delBtn.appendChild(icon('bi bi-trash'));
+  delBtn.appendChild(document.createTextNode(' Delete'));
   delBtn.addEventListener('click', () => showConfirm(
     'Permanently delete this series and all its images?',
     async () => {
@@ -703,24 +732,22 @@ function _buildTrashSeriesItem(s) {
   const title = s.title || s.original_folder_name || s.id.slice(0, 8);
   const thumb = s.cover_url
     ? Object.assign(document.createElement('img'), {
-        src: s.cover_url, className: 'rounded flex-shrink-0',
-        width: 48, height: 42,
-        style: 'width:48px;height:42px;object-fit:cover',
+        src: s.cover_url, className: 'aap-mini-thumb',
+        style: 'object-fit:cover',
       })
-    : h('div', { cls: 'bg-secondary rounded flex-shrink-0', style: 'width:48px;height:42px' });
-  return h('div', { cls: 'card mb-2' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
-      thumb,
-      h('div', { cls: 'flex-grow-1 overflow-hidden' },
-        h('div', { cls: 'fw-medium text-truncate', text: title }),
-        h('div', { cls: 'text-muted small', text: s.image_count + ' images · deleted ' + _timeAgo(s.deleted_at) })),
-      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+    : h('span', { cls: 'aap-mini-thumb' });
+  return h('article', { cls: 'aap-trash-row' },
+    thumb,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-trash-row__title', text: title }),
+      h('div', { cls: 'aap-trash-row__meta', text: s.image_count + ' images · deleted ' + _timeAgo(s.deleted_at) })),
+    h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn));
 }
 
 function _buildTrashImageItem(i) {
-  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
-  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  restoreBtn.appendChild(document.createTextNode('Restore'));
+  const restoreBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-success' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise'));
+  restoreBtn.appendChild(document.createTextNode(' Restore'));
   restoreBtn.addEventListener('click', async () => {
     _disableWithSpinner(restoreBtn);
     try {
@@ -730,9 +757,9 @@ function _buildTrashImageItem(i) {
     } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   });
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger' });
+  delBtn.appendChild(icon('bi bi-trash'));
+  delBtn.appendChild(document.createTextNode(' Delete'));
   delBtn.addEventListener('click', () => showConfirm('Permanently delete this image?', async () => {
     _disableWithSpinner(delBtn);
     try {
@@ -742,19 +769,19 @@ function _buildTrashImageItem(i) {
     refreshTrash();
   }));
   const thumb = Object.assign(document.createElement('img'), {
-    src: i.public_url, className: 'rounded flex-shrink-0',
-    width: 48, height: 42,
-    style: 'width:48px;height:42px;object-fit:cover',
+    src: i.public_url, className: 'aap-mini-thumb',
+    style: 'object-fit:cover',
   });
-  return h('div', { cls: 'card mb-2' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
-      thumb,
-      h('div', { cls: 'flex-grow-1 overflow-hidden' },
-        h('div', { cls: 'fw-medium text-truncate small', text: i.original_filename }),
-        h('div', { cls: 'text-muted small', text: 'from "' + i.series_title + '" · deleted ' + _timeAgo(i.deleted_at) })),
-      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+  return h('article', { cls: 'aap-trash-row' },
+    thumb,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-trash-row__title', text: i.original_filename }),
+      h('div', { cls: 'aap-trash-row__meta' },
+        document.createTextNode('from '),
+        h('span', { cls: 'aap-mono', text: i.series_title }),
+        document.createTextNode(' · deleted ' + _timeAgo(i.deleted_at)))),
+    h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn));
 }
-
 function _timeAgo(iso) {
   const secs = Math.floor((Date.now() - new Date(iso + 'Z')) / 1000);
   if (secs < 60) return 'just now';

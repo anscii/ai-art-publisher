@@ -6,6 +6,7 @@
 - Branch prefix must be `feat/` or `feature/` — never use Linear's auto-suggested branch name (it has a user-specific prefix like `murkycat/`).
 - Always use `origin/<branch>` refs (not local branch names) in `git log`/`git diff` for PR descriptions and release notes — local branches may be stale.
 - Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped. After running `make format`, re-stage any modified files (`git add`) before committing — ruff modifies files in-place, leaving format changes unstaged.
+- **Before every `git push` and before creating any PR**: run `make format && make types && make test-back` (and `make test-front` if any JS changed). Never push or open a PR on a failing or unchecked suite.
 
 ## Running tests
 
@@ -94,6 +95,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 ## Frontend conventions
 
 - `h(tag, props, ...children)` — DOM builder defined in `app.js`, available globally
+- **`app/static/editor.js` and `app.js` contain non-ASCII characters** (U+00A0 non-breaking space in label text, U+2026 ellipsis in button labels). The Edit tool's `old_string` matching fails silently on these. Use Python (`str.replace`) for any multi-line replacement that spans these characters.
 - `icon(cls)` — creates `<i class="...">` elements
 - `App` global holds state: `series`, `currentSeries`, `activeStatuses`, etc.
 - `apiFetch(method, path, body)` — API wrapper with error handling
@@ -103,6 +105,10 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - `showView(view)` — switches between `'editor'`, `'queue'`, `'trash'`, `'list'` (mobile)
 - `refreshTrash()` — fetches `/api/trash` and re-renders the trash panel
 - `renderEditor(series)` — rebuilds the full editor from a SeriesDetail object (can be called safely while lightbox is open)
+
+## Rebase Guardrails
+
+- During `git rebase origin/develop`, conflicts on files **you didn't change** mean an intermediate commit modified that file. Never blindly `git checkout --theirs` — it may take a simplified/regressed version. Instead restore with `git show origin/develop:<file> > <file>` then re-apply your specific changes on top.
 
 ## Linear Issue Workflow
 
