@@ -475,6 +475,11 @@ a:hover { color: var(--aap-accent); }
     color-mix(in oklab, var(--aap-accent) 8%, transparent),
     color-mix(in oklab, var(--aap-accent) 3%, transparent));
 }
+/* Thumbs inside the selected tray are drag-to-reorder; use grab cursor */
+.aap-selected-tray .aap-thumb       { cursor: grab; }
+.aap-selected-tray .aap-thumb img   { cursor: grab; }
+.aap-selected-tray .aap-thumb:active,
+.aap-selected-tray .aap-thumb:active img { cursor: grabbing; }
 
 .aap-thumb {
   position: relative;

@@ -638,9 +638,11 @@ function initImageSortable(seriesId) {
     animation: 150,
     ghostClass: 'sortable-ghost',
     filter: '.aap-thumb-slot',
+    forceFallback: true,
+    fallbackTolerance: 4,
     ...(touch
-      ? { delay: 300, forceFallback: true, touchStartThreshold: 8 }
-      : { handle: '.aap-thumb__drag', touchStartThreshold: 4 }),
+      ? { delay: 300, touchStartThreshold: 8 }
+      : {}),
     onEnd: async () => {
       const ids = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
       try {
