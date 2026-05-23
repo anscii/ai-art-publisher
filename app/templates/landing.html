@@ -111,55 +111,11 @@
     <div class="aap-landing__samples-head">
       <span class="aap-landing__samples-head-label">recent dispatches</span>
       <span class="aap-landing__samples-head-rule"></span>
-      <span class="aap-landing__samples-head-meta">@murky_airt &middot; 612 posts</span>
+      <span id="aap-dispatches-meta" class="aap-landing__samples-head-meta"></span>
     </div>
 
-    <div class="aap-landing__samples-grid">
-
-      <article class="aap-sample-card">
-        <div class="aap-sample-card__image" style="--thumb-color: hsl(220 25% 48%);"></div>
-        <div class="aap-sample-card__body">
-          <div class="aap-sample-card__meta">
-            <span class="aap-sample-card__lang">EN</span>
-            <span class="aap-sample-card__when">17 May &middot; IG &middot; TG</span>
-          </div>
-          <div class="aap-sample-card__title">The Hand that Refused Ascension</div>
-        </div>
-      </article>
-
-      <article class="aap-sample-card">
-        <div class="aap-sample-card__image" style="--thumb-color: hsl(30 25% 48%);"></div>
-        <div class="aap-sample-card__body">
-          <div class="aap-sample-card__meta">
-            <span class="aap-sample-card__lang">RU</span>
-            <span class="aap-sample-card__when">20 May &middot; IG &middot; PIN</span>
-          </div>
-          <div class="aap-sample-card__title">&#x417;&#x432;&#x451;&#x437;&#x434;&#x43D;&#x430;&#x44F; &#x442;&#x43E;&#x441;&#x43A;&#x430; &#x434;&#x440;&#x430;&#x43A;&#x43E;&#x43D;&#x430;</div>
-        </div>
-      </article>
-
-      <article class="aap-sample-card">
-        <div class="aap-sample-card__image" style="--thumb-color: hsl(320 20% 45%);"></div>
-        <div class="aap-sample-card__body">
-          <div class="aap-sample-card__meta">
-            <span class="aap-sample-card__lang">EN</span>
-            <span class="aap-sample-card__when">12 May &middot; TG &middot; PIN</span>
-          </div>
-          <div class="aap-sample-card__title">Rent Is Due in Centuries</div>
-        </div>
-      </article>
-
-      <article class="aap-sample-card">
-        <div class="aap-sample-card__image" style="--thumb-color: hsl(50 25% 45%);"></div>
-        <div class="aap-sample-card__body">
-          <div class="aap-sample-card__meta">
-            <span class="aap-sample-card__lang">EN</span>
-            <span class="aap-sample-card__when">23 May &middot; scheduled</span>
-          </div>
-          <div class="aap-sample-card__title">Carapace of the Last Court</div>
-        </div>
-      </article>
-
+    <div id="aap-dispatches-grid" class="aap-landing__samples-grid">
+      <!-- populated by /api/landing/recent fetch below -->
     </div>
   </section>
 
@@ -198,6 +154,73 @@
     if (new URLSearchParams(location.search).get('login_error')) {
       document.getElementById('loginError').style.display = '';
     }
+  })();
+
+  // Dynamic recent dispatches
+  (function () {
+    var PLAT = {instagram: 'IG', telegram: 'TG', pinterest: 'PIN', facebook: 'FB'};
+
+    function fmtDate(iso) {
+      return new Date(iso + 'Z').toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+    }
+
+    function buildCard(post) {
+      var img = document.createElement('div');
+      img.className = 'aap-sample-card__image';
+      if (post.thumbnail_url) {
+        img.setAttribute('style', 'background-image:url(' + post.thumbnail_url + ');background-size:cover;background-position:center;');
+      }
+
+      var when = document.createElement('span');
+      when.className = 'aap-sample-card__when';
+      when.textContent = fmtDate(post.posted_at) + ' · ' + (PLAT[post.platform] || post.platform.toUpperCase());
+
+      var meta = document.createElement('div');
+      meta.className = 'aap-sample-card__meta';
+      meta.appendChild(when);
+
+      var title = document.createElement('div');
+      title.className = 'aap-sample-card__title';
+      title.textContent = post.title;
+
+      var body = document.createElement('div');
+      body.className = 'aap-sample-card__body';
+      body.appendChild(meta);
+      body.appendChild(title);
+
+      var art = document.createElement('article');
+      art.className = 'aap-sample-card';
+      art.appendChild(img);
+      art.appendChild(body);
+
+      if (post.post_url) {
+        var a = document.createElement('a');
+        a.href = post.post_url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.setAttribute('style', 'display:contents;text-decoration:none;color:inherit;');
+        a.appendChild(art);
+        return a;
+      }
+      return art;
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      fetch('/api/landing/recent')
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (data) {
+          var grid = document.getElementById('aap-dispatches-grid');
+          var metaEl = document.getElementById('aap-dispatches-meta');
+          if (grid) {
+            while (grid.firstChild) { grid.removeChild(grid.firstChild); }
+            (data.posts || []).forEach(function (p) { grid.appendChild(buildCard(p)); });
+          }
+          if (metaEl) {
+            metaEl.textContent = '@murky_airt · ' + (data.total_posted || 0) + ' posts';
+          }
+        })
+        .catch(function () { /* leave grid empty on error */ });
+    });
   })();
 </script>
 
