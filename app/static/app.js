@@ -541,7 +541,7 @@ async function refreshQueue() {
         : h('span', { cls: 'aap-mini-thumb aap-mini-thumb--sm', style: '--thumb-color: hsl(210 30% 50%)' });
       const seriesCell = h('div', { cls: 'aap-queue-series' },
         thumbEl,
-        h('span', { cls: 'aap-queue-series__name', text: item.series_name || item.series_id.slice(0, 8) }));
+        h('button', { cls: 'aap-queue-series__name aap-queue-series__name--link', text: item.series_name || item.series_id.slice(0, 8), onclick: () => selectSeries(item.series_id) }));
       const dataRow = h('div', { cls: 'aap-table__row' },
         seriesCell,
         h('span', { cls: 'aap-queue-title', text: item.title }),

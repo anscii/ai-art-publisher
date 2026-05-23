@@ -1537,6 +1537,14 @@ a:hover { color: var(--aap-accent); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.aap-queue-series__name--link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.aap-queue-series__name--link:hover { color: var(--aap-accent); text-decoration: underline; }
 .aap-queue-title {
   font-size: 13px;
   line-height: 1.4;
