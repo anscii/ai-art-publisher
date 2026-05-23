@@ -415,8 +415,10 @@ function showView(view, { push = true } = {}) {
     refreshQueue();
   } else if (view === 'trash') {
     trash.classList.remove('d-none');
+    refreshTrash();
   } else if (view === 'collections') {
     collections && collections.classList.remove('d-none');
+    refreshCollections();
   } else if (view === 'stats') {
     stats && stats.classList.remove('d-none');
     if (typeof refreshStats === 'function') refreshStats();
