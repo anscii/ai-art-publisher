@@ -1447,6 +1447,25 @@ a:hover { color: var(--aap-accent); }
   background: color-mix(in oklab, var(--btn-color, var(--aap-ink-soft)) 10%, transparent);
 }
 
+/* Inline edit row that expands below a queue data row on Edit click. */
+.aap-queue-edit-row {
+  padding: 12px 16px;
+  background: var(--aap-panel-hi);
+  border-bottom: 1px solid var(--aap-rule);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.aap-queue-edit-row__label {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin-bottom: 5px;
+}
+
 /* ---- Table primitive (Queue, Stats) -------------------------------- */
 /* A shared table-as-grid container used by Queue and Stats. Each row
    is a CSS grid with the same template as its head. Set the template

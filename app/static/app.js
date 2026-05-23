@@ -436,6 +436,56 @@ function _platformIcon(platform) {
   return icon(cls);
 }
 
+let _activeQueueEditRow = null;
+
+function _openQueueEdit(postId, scheduledAt, dataRow) {
+  // Close any already-open edit row
+  if (_activeQueueEditRow) { _activeQueueEditRow.remove(); _activeQueueEditRow = null; }
+
+  // Convert UTC ISO string to datetime-local value (YYYY-MM-DDTHH:MM, UTC)
+  function _toLocal(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    const p = n => String(n).padStart(2, '0');
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  }
+
+  const dtInput = Object.assign(document.createElement('input'), {
+    type: 'datetime-local', value: _toLocal(scheduledAt),
+    className: 'form-control aap-input aap-input--mono', style: 'width:220px',
+  });
+  const saveBtn   = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-primary', text: 'Save',   type: 'button' });
+  const cancelBtn = h('button', { cls: 'btn aap-btn aap-btn--sm',                 text: 'Cancel', type: 'button' });
+  const label     = h('div', { cls: 'aap-queue-edit-row__label', text: 'Reschedule · UTC' });
+  const editRow   = h('div', { cls: 'aap-queue-edit-row' },
+    h('div', {}, label, dtInput),
+    saveBtn, cancelBtn);
+
+  _activeQueueEditRow = editRow;
+  dataRow.after(editRow);
+  dtInput.focus();
+
+  cancelBtn.addEventListener('click', () => {
+    editRow.remove();
+    if (_activeQueueEditRow === editRow) _activeQueueEditRow = null;
+  });
+  saveBtn.addEventListener('click', async () => {
+    if (!dtInput.value) return;
+    saveBtn.disabled = true;
+    saveBtn.textContent = '…';
+    try {
+      await apiFetch('POST', '/api/posts/' + postId + '/schedule', { datetime_utc: dtInput.value + ':00Z' });
+      showToast('Rescheduled', 'success');
+      _activeQueueEditRow = null;
+      await refreshQueue();
+    } catch (e) {
+      showToast(e.message, 'danger');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  });
+}
+
 async function refreshQueue() {
   const el = document.getElementById('queueContent');
   el.replaceChildren(h('div', { cls: 'text-center' }, h('div', { cls: 'spinner-border spinner-border-sm' })));
@@ -467,14 +517,15 @@ async function refreshQueue() {
       const seriesCell = h('div', { cls: 'aap-queue-series' },
         thumbEl,
         h('span', { cls: 'aap-queue-series__name', text: item.series_name || item.series_id.slice(0, 8) }));
-      const edit   = h('button', { cls: 'btn aap-btn aap-btn--sm', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
-      const cancel = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });
-      table.appendChild(h('div', { cls: 'aap-table__row' },
+      const dataRow = h('div', { cls: 'aap-table__row' },
         seriesCell,
         h('span', { cls: 'aap-queue-title', text: item.title }),
         h('span', { cls: 'aap-queue-when', text: formatDate(item.scheduled_at) }),
         platformPill,
-        h('div', { cls: 'd-flex gap-1' }, edit, cancel)));
+        h('div', { cls: 'd-flex gap-1' },
+          h('button', { cls: 'btn aap-btn aap-btn--sm', text: 'Edit',   onclick: () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow) }),
+          h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger',  text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) })));
+      table.appendChild(dataRow);
     });
     el.replaceChildren(table);
   } catch (e) {
