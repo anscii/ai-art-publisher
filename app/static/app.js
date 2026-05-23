@@ -652,7 +652,12 @@ function _buildCollectionItem(c) {
 
   const filterBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection', style: '--btn-color: var(--aap-accent)' });
   filterBtn.appendChild(icon('bi bi-funnel'));
-  filterBtn.addEventListener('click', () => { onCollectionFilterChange(c.id); _populateCollectionFilter(); });
+  filterBtn.addEventListener('click', () => {
+    App.activeCollection = c.id;
+    _populateCollectionFilter();
+    showView('list');
+    loadSeries(true);
+  });
 
   const delBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Delete collection', style: '--btn-color: var(--aap-danger)' });
   delBtn.appendChild(icon('bi bi-trash'));
