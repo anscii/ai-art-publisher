@@ -1822,7 +1822,7 @@ function buildPostRow(post, imgMap, series) {
   return rowWrap;
 }
 
-function buildEditPostForm(post, imgMap, series, onClose) {
+function buildEditPostForm(post, imgMap, series, onClose, onSave) {
   const allImages = series.images.filter(i => !i.deleted_at);
   const { grid: imgGrid, selected: _sel } = _buildImageSelector(allImages, post.image_ids || [], imgMap);
 
@@ -1879,7 +1879,7 @@ function buildEditPostForm(post, imgMap, series, onClose) {
       });
       showToast('Post updated', 'success');
       onClose();
-      await loadSeriesDetail(series.id);
+      if (onSave) { await onSave(); } else { await loadSeriesDetail(series.id); }
     } catch (e) { showToast(e.message, 'danger'); saveBtn.disabled = false; }
   });
 

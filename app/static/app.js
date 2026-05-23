@@ -439,8 +439,9 @@ function _platformIcon(platform) {
 let _activeQueueEditRow = null;
 
 function _openQueueEdit(postId, scheduledAt, dataRow) {
-  // Close any already-open edit row
+  // Close any already-open edit row or post-edit form
   if (_activeQueueEditRow) { _activeQueueEditRow.remove(); _activeQueueEditRow = null; }
+  document.querySelectorAll('[id^="queue-post-edit-"]').forEach(el => el.remove());
 
   // Convert UTC ISO string to datetime-local value (YYYY-MM-DDTHH:MM, UTC)
   function _toLocal(iso) {
@@ -486,6 +487,30 @@ function _openQueueEdit(postId, scheduledAt, dataRow) {
   });
 }
 
+async function _openQueueEditPost(postId, seriesId, dataRow) {
+  // Toggle: click again to close
+  const formId = 'queue-post-edit-' + postId;
+  const existing = document.getElementById(formId);
+  if (existing) { existing.remove(); return; }
+  // Close any open reschedule row
+  if (_activeQueueEditRow) { _activeQueueEditRow.remove(); _activeQueueEditRow = null; }
+  try {
+    const [post, series] = await Promise.all([
+      apiFetch('GET', '/api/posts/' + postId),
+      apiFetch('GET', '/api/series/' + seriesId),
+    ]);
+    const imgMap = {};
+    (series.images || []).forEach(i => { if (!i.deleted_at) imgMap[i.id] = i.public_url; });
+    const form = buildEditPostForm(
+      post, imgMap, series,
+      () => document.getElementById(formId)?.remove(),
+      () => refreshQueue(),
+    );
+    form.id = formId;
+    dataRow.after(form);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
 async function refreshQueue() {
   const el = document.getElementById('queueContent');
   el.replaceChildren(h('div', { cls: 'text-center' }, h('div', { cls: 'spinner-border spinner-border-sm' })));
@@ -522,9 +547,10 @@ async function refreshQueue() {
         h('span', { cls: 'aap-queue-title', text: item.title }),
         h('span', { cls: 'aap-queue-when', text: formatDate(item.scheduled_at) }),
         platformPill,
-        h('div', { cls: 'd-flex gap-1' },
-          h('button', { cls: 'btn aap-btn aap-btn--sm', text: 'Edit',   onclick: () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow) }),
-          h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger',  text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) })));
+        h('div', { cls: 'd-flex align-items-center gap-1' },
+          (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Edit post', 'aria-label': 'Edit post' }, icon('bi bi-pencil')); b.addEventListener('click', () => _openQueueEditPost(item.post_id, item.series_id, dataRow)); return b; })(),
+          (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Reschedule', 'aria-label': 'Reschedule' }, icon('bi bi-calendar-plus')); b.addEventListener('click', () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow)); return b; })(),
+          h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) })));
       table.appendChild(dataRow);
     });
     el.replaceChildren(table);
