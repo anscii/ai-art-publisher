@@ -871,7 +871,7 @@ async function _restoreFromUrl() {
 
   showView(view, { push: false });
   await loadSeries(true);
-  if (seriesParam) {
+  if (seriesParam && view === 'editor') {
     const seriesId = await _resolveSeriesParam(seriesParam);
     if (seriesId) await selectSeries(seriesId, { push: false });
   }
@@ -933,7 +933,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _syncFiltersFromState(s.status, s.q, s.collection, s.limit);
     showView(s.view || 'editor', { push: false });
     await loadSeries(true);
-    if (s.series) await selectSeries(s.series, { push: false });
+    if (s.series && (s.view === 'editor' || !s.view)) await selectSeries(s.series, { push: false });
   });
 
   setInterval(() => {
