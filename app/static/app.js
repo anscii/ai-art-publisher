@@ -458,8 +458,14 @@ async function refreshQueue() {
       const platformPill = h('span', { cls: 'aap-platform-pill' },
         _platformIcon(item.platform),
         document.createTextNode(' ' + item.platform));
+      const thumbEl = item.cover_url
+        ? Object.assign(document.createElement('img'), {
+            src: item.cover_url, className: 'aap-mini-thumb aap-mini-thumb--sm',
+            style: 'object-fit:cover',
+          })
+        : h('span', { cls: 'aap-mini-thumb aap-mini-thumb--sm', style: '--thumb-color: hsl(210 30% 50%)' });
       const seriesCell = h('div', { cls: 'aap-queue-series' },
-        h('span', { cls: 'aap-mini-thumb aap-mini-thumb--sm', style: '--thumb-color: hsl(210 30% 50%)' }),
+        thumbEl,
         h('span', { cls: 'aap-queue-series__name', text: item.series_name || item.series_id.slice(0, 8) }));
       const edit   = h('button', { cls: 'btn aap-btn aap-btn--sm', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
       const cancel = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });

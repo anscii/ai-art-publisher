@@ -339,6 +339,7 @@ class QueueItem(BaseModel):
     platform: str
     title: str
     scheduled_at: datetime
+    cover_url: str | None = None
 
 
 # ── Posting ───────────────────────────────────────────────────────────────────
