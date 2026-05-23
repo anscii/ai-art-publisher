@@ -625,32 +625,39 @@ function _refreshActionBar(seriesId) {
 }
 
 let _sortable = null;
+let _sortableLib = null;
 let _lightboxImages = [];
 let _lightboxIdx    = 0;
 let _lightboxOpen   = false;
 
 function initImageSortable(seriesId) {
   const grid = document.getElementById('selectedTray');
+  const lib  = document.getElementById('libraryGrid');
   if (!grid) return;
-  if (_sortable) { _sortable.destroy(); _sortable = null; }
+  if (_sortable)    { _sortable.destroy();    _sortable    = null; }
+  if (_sortableLib) { _sortableLib.destroy(); _sortableLib = null; }
   const touch = window.matchMedia('(pointer: coarse)').matches;
-  _sortable = Sortable.create(grid, {
+  const opts = (container) => ({
     animation: 150,
     ghostClass: 'sortable-ghost',
     filter: '.aap-thumb-slot',
     forceFallback: true,
     fallbackTolerance: 4,
-    ...(touch
-      ? { delay: 300, touchStartThreshold: 8 }
-      : {}),
+    ...(touch ? { delay: 300, touchStartThreshold: 8 } : {}),
     onEnd: async () => {
-      const ids = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
+      const selIds = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
+      const libIds = lib ? [...lib.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId) : [];
       try {
-        await apiFetch('PUT', '/api/series/' + seriesId + '/images/reorder', { image_ids: ids });
+        await apiFetch('PUT', '/api/series/' + seriesId + '/images/reorder', { image_ids: [...selIds, ...libIds] });
       } catch (e) { showToast('Reorder failed: ' + e.message, 'danger'); }
     },
   });
-  if (touch) grid.addEventListener('contextmenu', e => e.preventDefault());
+  _sortable = Sortable.create(grid, opts(grid));
+  if (lib) _sortableLib = Sortable.create(lib, opts(lib));
+  if (touch) {
+    grid.addEventListener('contextmenu', e => e.preventDefault());
+    if (lib) lib.addEventListener('contextmenu', e => e.preventDefault());
+  }
 }
 
 function initLightbox() {
