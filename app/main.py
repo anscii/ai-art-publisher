@@ -60,7 +60,14 @@ if _cfg.local_storage:
 _LANDING_HTML = (Path(__file__).parent / "templates" / "landing.html").read_text()
 
 _PUBLIC_PATHS = frozenset(
-    {"/health", "/internal/run-scheduler", "/internal/backup-db", "/auth/login", "/auth/logout"}
+    {
+        "/health",
+        "/internal/run-scheduler",
+        "/internal/backup-db",
+        "/auth/login",
+        "/auth/logout",
+        "/landing",
+    }
 )
 
 
@@ -124,6 +131,11 @@ app.include_router(trash_router.router)
 @app.get("/")
 async def index():
     return FileResponse("app/templates/index.html")
+
+
+@app.get("/landing")
+async def landing():
+    return HTMLResponse(_LANDING_HTML)
 
 
 @app.get("/health")

@@ -1681,3 +1681,282 @@ a:hover { color: var(--aap-accent); }
 }
 .aap-stats-total .aap-stats-cell--num,
 .aap-stats-total .aap-stats-cell--ink { font-weight: 700; }
+
+/* =====================================================================
+   LANDING PAGE
+   Public-facing sign-in page. Uses the same tokens as the app.
+   Classes: .aap-landing, .aap-landing__*, .aap-signin-card,
+            .aap-or-divider, .aap-google-btn, .aap-sample-card
+   ===================================================================== */
+
+/* ---- Wrapper -------------------------------------------------------- */
+.aap-landing {
+  min-height: 100dvh;
+  background: var(--aap-bg);
+  color: var(--aap-ink);
+  font-family: var(--aap-font-sans);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top bar -------------------------------------------------------- */
+.aap-landing__top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 40px;
+  border-bottom: 1px solid var(--aap-rule);
+  background: var(--aap-panel);
+}
+.aap-landing__top a {
+  font-size: 13px;
+  color: var(--aap-ink-soft);
+  text-decoration: none;
+}
+.aap-landing__top a:hover { color: var(--aap-ink); }
+
+/* ---- Hero section — 2-column grid ---------------------------------- */
+.aap-landing__hero {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 56px;
+  align-items: start;
+  padding: 72px 40px 64px;
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ---- Left column copy ---------------------------------------------- */
+.aap-landing__kicker {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin-bottom: 20px;
+}
+
+.aap-landing__title {
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+}
+.aap-landing__title-accent {
+  display: block;
+  color: var(--aap-accent);
+}
+
+.aap-landing__lede {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--aap-ink-soft);
+  margin: 0 0 40px;
+  max-width: 460px;
+}
+
+/* ---- 3-up stats strip ---------------------------------------------- */
+.aap-landing__stats {
+  display: flex;
+  gap: 0;
+}
+.aap-landing__stat {
+  padding: 0 28px 0 0;
+  margin-right: 28px;
+  border-right: 1px solid var(--aap-rule-strong);
+}
+.aap-landing__stat:first-child { padding-left: 0; }
+.aap-landing__stat:last-child  { border-right: none; margin-right: 0; }
+
+.aap-landing__stat-k {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--aap-ink);
+  line-height: 1.2;
+}
+.aap-landing__stat-v {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+  margin-top: 3px;
+}
+
+/* ---- Sign-in card --------------------------------------------------- */
+.aap-signin-card {
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule-strong);
+  border-radius: 8px;
+  padding: 28px 28px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.aap-signin-card__head {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin-bottom: 20px;
+}
+
+.aap-signin-card__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--aap-ink-soft);
+  margin-bottom: 6px;
+}
+.aap-signin-card__label a {
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+  text-decoration: none;
+}
+.aap-signin-card__label a:hover { color: var(--aap-accent); }
+
+.aap-signin-card__error {
+  font-size: 13px;
+  color: var(--aap-danger);
+  background: color-mix(in srgb, var(--aap-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--aap-danger) 25%, transparent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.aap-signin-card__submit {
+  width: 100%;
+  margin-top: 20px;
+}
+
+.aap-signin-card__foot {
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+  text-align: center;
+  margin-top: 16px;
+}
+.aap-signin-card__foot a {
+  color: var(--aap-ink-soft);
+}
+
+/* ---- Samples strip ------------------------------------------------- */
+.aap-landing__samples {
+  border-top: 1px solid var(--aap-rule);
+  padding: 40px 40px 56px;
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.aap-landing__samples-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.aap-landing__samples-head-label {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  white-space: nowrap;
+}
+.aap-landing__samples-head-rule {
+  flex: 1;
+  height: 0;
+  border-top: 1px solid var(--aap-rule);
+}
+.aap-landing__samples-head-meta {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+  white-space: nowrap;
+}
+
+.aap-landing__samples-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* ---- Sample card ---------------------------------------------------- */
+.aap-sample-card {
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--aap-panel);
+}
+.aap-sample-card__image {
+  aspect-ratio: 4 / 5;
+  background-color: var(--thumb-color, var(--aap-panel-hi));
+}
+.aap-sample-card__body {
+  padding: 12px 14px;
+  border-top: 1px solid var(--aap-rule);
+}
+.aap-sample-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.aap-sample-card__lang {
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--aap-rule-strong);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--aap-ink-soft);
+  letter-spacing: 0.05em;
+}
+.aap-sample-card__when {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  color: var(--aap-ink-mute);
+}
+.aap-sample-card__title {
+  font-family: "Newsreader", Georgia, serif;
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--aap-ink);
+}
+
+/* ---- Responsive ----------------------------------------------------- */
+@media (max-width: 768px) {
+  .aap-landing__top { padding: 12px 20px; }
+  .aap-landing__hero {
+    grid-template-columns: 1fr;
+    padding: 40px 20px 32px;
+    gap: 32px;
+  }
+  .aap-landing__samples { padding: 32px 20px 40px; }
+  .aap-landing__samples-grid { grid-template-columns: repeat(2, 1fr); }
+  .aap-landing__title { font-size: 2rem; }
+  .aap-landing__lede { max-width: 100%; }
+}
+@media (max-width: 480px) {
+  .aap-landing__samples-grid { grid-template-columns: 1fr; }
+  .aap-landing__stats { flex-direction: column; gap: 16px; }
+  .aap-landing__stat {
+    border-right: none;
+    border-bottom: 1px solid var(--aap-rule);
+    padding: 0 0 16px;
+    margin: 0;
+  }
+  .aap-landing__stat:last-child { border-bottom: none; padding-bottom: 0; }
+}

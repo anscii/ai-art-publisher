@@ -1,231 +1,205 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Art Publisher</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    body { background-color: #0d0d0d; }
-    .hero { padding: 5rem 1rem 4rem; }
-    .feature-icon { font-size: 2rem; }
-footer { border-top: 1px solid #2a2a2a; }
-  </style>
+<meta charset="utf-8">
+<title>AI Art Publisher — Sign in</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Bootstrap (form-control, btn base) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- Fonts: Inter + JetBrains Mono (app) + Newsreader (sample card titles) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,wght@1,500&display=swap" rel="stylesheet">
+
+<!-- Design tokens, then app styles -->
+<link rel="stylesheet" href="/static/aap/tokens.css">
+<link rel="stylesheet" href="/static/aap/app.css">
 </head>
 <body>
 
-<!-- Navbar -->
-<nav class="navbar bg-body-secondary px-3">
-  <span class="navbar-brand fw-bold mb-0">&#x1F3A8; AI Art Publisher</span>
-  <button class="btn btn-sm btn-outline-light ms-auto"
-          data-bs-toggle="modal" data-bs-target="#loginModal">
-    <i class="bi bi-box-arrow-in-right me-1"></i>Login
-  </button>
-</nav>
+<div class="aap-landing">
 
-<!-- Hero -->
-<section class="hero text-center">
-  <div class="container" style="max-width:720px">
-    <h1 class="display-5 fw-bold mb-3">AI Art Publisher</h1>
-    <p class="lead text-secondary mb-4">
-      A self-hosted tool for scheduling and posting AI art to social media
-      with AI-generated descriptions — built as a personal workflow tool.
-    </p>
-  </div>
-</section>
+  <!-- ================================================================
+       TOP BAR
+       ================================================================ -->
+  <header class="aap-landing__top">
+    <span class="aap-brand-mark">&#x25D0;</span>
+    <span class="aap-brand">AI Art Publisher</span>
+    <span class="flex-grow-1"></span>
+    <a class="btn aap-btn" href="#signin" style="padding: 7px 14px;">Sign in</a>
+  </header>
 
-<!-- Published Work -->
-<section class="py-5 text-center" style="background:rgba(255,255,255,.03)">
-  <div class="container" style="max-width:640px">
-    <h2 class="fw-bold mb-2">Where the Art Goes</h2>
-    <p class="text-secondary mb-4">
-      Melancholic futures, unreal worlds and beautiful anomalies —<br>
-      art &amp; microfiction published straight from this tool.
-    </p>
-    <img src="/static/landing/1c99dc7a-2a12-401d-8135-6cf101b4fb5b.jpg"
-         alt="Murky AI Art — giant monster eye"
-         class="rounded-circle mb-4 shadow"
-         style="width:120px;height:120px;object-fit:cover">
-    
-    
-    <p class="fw-semibold mb-3">Murky AI Art</p>
-    <div class="d-flex gap-2 justify-content-center flex-wrap">
-      <a href="https://www.instagram.com/murky.airt" class="btn btn-outline-light" target="_blank" rel="noopener">
-        <i class="bi bi-instagram me-1"></i>Instagram
-      </a>
-      <a href="https://www.facebook.com/murky.airt" class="btn btn-outline-light" target="_blank" rel="noopener">
-        <i class="bi bi-facebook me-1"></i>Facebook
-      </a>
-      <a href="https://t.me/murky_airt" class="btn btn-outline-light" target="_blank" rel="noopener">
-        <i class="bi bi-telegram me-1"></i>Telegram
-      </a>
-    </div>
-  </div>
-</section>
+  <!-- ================================================================
+       HERO — 2-column: copy left, sign-in card right
+       ================================================================ -->
+  <section class="aap-landing__hero">
 
-<!-- Features -->
-<section class="py-5">
-  <div class="container" style="max-width:960px">
-    <h2 class="text-center mb-5 fw-semibold">Features</h2>
-    <div class="row g-4">
-      <div class="col-md-6">
-        <div class="card h-100 bg-body-secondary border-0">
-          <div class="card-body p-4">
-            <div class="feature-icon mb-3">&#x1F4C5;</div>
-            <h5 class="card-title">Flexible Posting</h5>
-            <p class="card-text text-secondary">
-              Post manually with one click, or queue series on a schedule and let
-              the built-in scheduler handle the rest.
-            </p>
-          </div>
+    <!-- Left column -->
+    <div>
+      <div class="aap-landing__kicker">A PRIVATE WORKSHOP FOR AI-GENERATED ART</div>
+
+      <h1 class="aap-landing__title">
+        Small mythologies,<br>
+        <span class="aap-landing__title-accent">shipped to the feed.</span>
+      </h1>
+
+      <p class="aap-landing__lede">
+        Curate image series, write bilingual microfiction, and publish
+        to Instagram, Telegram, and Pinterest — from one place.
+        Schedule or post with one tap.
+      </p>
+
+      <div class="aap-landing__stats">
+        <div class="aap-landing__stat">
+          <div class="aap-landing__stat-k">3 channels</div>
+          <div class="aap-landing__stat-v">IG &middot; TG &middot; Pin</div>
         </div>
-      </div>
-      <div class="col-md-6">
-        <div class="card h-100 bg-body-secondary border-0">
-          <div class="card-body p-4">
-            <div class="feature-icon mb-3">&#x1F916;</div>
-            <h5 class="card-title">Human &amp; AI Writing</h5>
-            <p class="card-text text-secondary">
-              Generate unique descriptions with different LLMs.
-              Multiple variants per series — pick the best, or write and edit manually.
-            </p>
-          </div>
+        <div class="aap-landing__stat">
+          <div class="aap-landing__stat-k">EN / RU</div>
+          <div class="aap-landing__stat-v">bilingual posts</div>
         </div>
-      </div>
-      <div class="col-md-6">
-        <div class="card h-100 bg-body-secondary border-0">
-          <div class="card-body p-4">
-            <div class="feature-icon mb-3">&#x1F5BC;&#xFE0F;</div>
-            <h5 class="card-title">Art Series, Organized</h5>
-            <p class="card-text text-secondary">
-              Organize artwork into named series. Track image status across the
-              pipeline: pending → queued → posted. Drag-and-drop reordering.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6">
-        <div class="card h-100 bg-body-secondary border-0">
-          <div class="card-body p-4">
-            <div class="feature-icon mb-3">&#x1F4F2;</div>
-            <h5 class="card-title">Multi-Platform</h5>
-            <p class="card-text text-secondary">
-              One post, several platforms — Telegram, Instagram, Facebook and Pinterest updated
-              simultaneously. No copy-pasting, no switching tabs.
-            </p>
-          </div>
+        <div class="aap-landing__stat">
+          <div class="aap-landing__stat-k">Scheduled</div>
+          <div class="aap-landing__stat-v">or one-tap publish</div>
         </div>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- Screenshots -->
-<section class="py-5">
-  <div class="container" style="max-width:960px">
-    <h2 class="text-center mb-5 fw-semibold">Interface</h2>
+    <!-- Right column: sign-in card -->
+    <form id="signin" class="aap-signin-card" method="POST" action="/auth/login">
 
-    <div class="row g-3">
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/1_main_series_list.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Series list">
-        <p class="text-secondary small text-center mt-1">Series list</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/3_series_view_top.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Series editor">
-        <p class="text-secondary small text-center mt-1">Series editor</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/4_series_view_texts_and_generation.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="AI caption generation">
-        <p class="text-secondary small text-center mt-1">AI caption generation</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/5_saved_posts_list.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Saved posts">
-        <p class="text-secondary small text-center mt-1">Saved posts</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/6_saved_posts.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Post detail">
-        <p class="text-secondary small text-center mt-1">Post detail</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/7_schedule_saved_post.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Scheduling">
-        <p class="text-secondary small text-center mt-1">Scheduling</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/8_posted_post_view.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Posted result">
-        <p class="text-secondary small text-center mt-1">Posted result</p>
-      </div>
-      <div class="col-6 col-md-3">
-        <img src="/static/landing/screenshots/2_series_view_total_long.jpg"
-             class="img-fluid rounded shadow w-100" style="object-fit:cover;aspect-ratio:9/16"
-             alt="Full series view">
-        <p class="text-secondary small text-center mt-1">Full series view</p>
-      </div>
-    </div>
-  </div>
-</section>
+      <div class="aap-signin-card__head">SIGN IN</div>
 
-<!-- Footer -->
-<footer class="py-4 text-center text-secondary small">
-  <div class="container">
-    Designed &amp; built by a human backend developer with Claude as a code assistant · 2026
-    · <a href="https://github.com/anscii/ai-art-publisher" class="link-secondary" target="_blank" rel="noopener">GitHub</a>
-  </div>
-</footer>
-
-<!-- Login Modal -->
-<div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h6 class="modal-title" id="loginModalLabel">
-          <i class="bi bi-lock me-1"></i>Login
-        </h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      <!-- Error message (shown when ?login_error is present) -->
+      <div id="loginError" class="aap-signin-card__error" style="display:none">
+        Invalid username or password.
       </div>
-      <div class="modal-body pt-2">
-        <div id="loginErrorAlert" class="alert alert-danger py-2 small d-none" role="alert">
-          Invalid username or password.
+
+      <!-- Username -->
+      <div>
+        <div class="aap-signin-card__label"><span>username</span></div>
+        <input class="form-control aap-input" type="text" name="username"
+               placeholder="username" required autofocus autocomplete="username">
+      </div>
+
+      <!-- Password -->
+      <div style="margin-top: 12px;">
+        <div class="aap-signin-card__label">
+          <span>password</span>
         </div>
-        <form method="POST" action="/auth/login">
-          <div class="mb-3">
-            <input type="text" name="username" class="form-control"
-                   placeholder="Username" required autofocus autocomplete="username">
-          </div>
-          <div class="mb-3">
-            <input type="password" name="password" class="form-control"
-                   placeholder="Password" required autocomplete="current-password">
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Sign in</button>
-        </form>
+        <input class="form-control aap-input" type="password" name="password"
+               placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+               required autocomplete="current-password">
       </div>
+
+      <button class="btn aap-btn aap-btn-primary aap-signin-card__submit" type="submit">
+        Sign in &#x2192;
+      </button>
+
+      <div class="aap-signin-card__foot">
+        single-user &middot; invite-only
+      </div>
+    </form>
+  </section>
+
+  <!-- ================================================================
+       SAMPLE STRIP
+       ================================================================ -->
+  <section class="aap-landing__samples">
+    <div class="aap-landing__samples-head">
+      <span class="aap-landing__samples-head-label">recent dispatches</span>
+      <span class="aap-landing__samples-head-rule"></span>
+      <span class="aap-landing__samples-head-meta">@murky_airt &middot; 612 posts</span>
     </div>
-  </div>
+
+    <div class="aap-landing__samples-grid">
+
+      <article class="aap-sample-card">
+        <div class="aap-sample-card__image" style="--thumb-color: hsl(220 25% 48%);"></div>
+        <div class="aap-sample-card__body">
+          <div class="aap-sample-card__meta">
+            <span class="aap-sample-card__lang">EN</span>
+            <span class="aap-sample-card__when">17 May &middot; IG &middot; TG</span>
+          </div>
+          <div class="aap-sample-card__title">The Hand that Refused Ascension</div>
+        </div>
+      </article>
+
+      <article class="aap-sample-card">
+        <div class="aap-sample-card__image" style="--thumb-color: hsl(30 25% 48%);"></div>
+        <div class="aap-sample-card__body">
+          <div class="aap-sample-card__meta">
+            <span class="aap-sample-card__lang">RU</span>
+            <span class="aap-sample-card__when">20 May &middot; IG &middot; PIN</span>
+          </div>
+          <div class="aap-sample-card__title">&#x417;&#x432;&#x451;&#x437;&#x434;&#x43D;&#x430;&#x44F; &#x442;&#x43E;&#x441;&#x43A;&#x430; &#x434;&#x440;&#x430;&#x43A;&#x43E;&#x43D;&#x430;</div>
+        </div>
+      </article>
+
+      <article class="aap-sample-card">
+        <div class="aap-sample-card__image" style="--thumb-color: hsl(320 20% 45%);"></div>
+        <div class="aap-sample-card__body">
+          <div class="aap-sample-card__meta">
+            <span class="aap-sample-card__lang">EN</span>
+            <span class="aap-sample-card__when">12 May &middot; TG &middot; PIN</span>
+          </div>
+          <div class="aap-sample-card__title">Rent Is Due in Centuries</div>
+        </div>
+      </article>
+
+      <article class="aap-sample-card">
+        <div class="aap-sample-card__image" style="--thumb-color: hsl(50 25% 45%);"></div>
+        <div class="aap-sample-card__body">
+          <div class="aap-sample-card__meta">
+            <span class="aap-sample-card__lang">EN</span>
+            <span class="aap-sample-card__when">23 May &middot; scheduled</span>
+          </div>
+          <div class="aap-sample-card__title">Carapace of the Last Court</div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Theme toggle -->
+<button type="button" id="aap-theme-toggle" class="aap-nav-btn"
+        style="position:fixed;bottom:18px;right:18px;box-shadow:0 4px 12px rgba(0,0,0,.15);background:var(--aap-panel);z-index:100;">
+  <span id="aap-theme-icon">&#x263E;</span>
+  <span id="aap-theme-label">Dark</span>
+</button>
+
 <script>
+  // Theme toggle
   (function () {
-    const params = new URLSearchParams(location.search);
-    if (params.get('login_error')) {
-      document.getElementById('loginErrorAlert').classList.remove('d-none');
-      new bootstrap.Modal(document.getElementById('loginModal')).show();
+    var KEY = 'aap-theme';
+    var btn   = document.getElementById('aap-theme-toggle');
+    var icon  = document.getElementById('aap-theme-icon');
+    var label = document.getElementById('aap-theme-label');
+    function apply(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      var dark = theme === 'dark';
+      icon.textContent  = dark ? '☀' : '☾';
+      label.textContent = dark ? 'Light'  : 'Dark';
+    }
+    apply(localStorage.getItem(KEY) || 'light');
+    btn.addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      localStorage.setItem(KEY, next);
+      apply(next);
+    });
+  })();
+
+  // Show error if login failed
+  (function () {
+    if (new URLSearchParams(location.search).get('login_error')) {
+      document.getElementById('loginError').style.display = '';
     }
   })();
 </script>
+
 </body>
 </html>
