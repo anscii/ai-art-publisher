@@ -246,6 +246,10 @@
           <h1 class="aap-page__title">Generation Statistics</h1>
           <div class="aap-page__kicker" id="statsKicker">&nbsp;</div>
         </div>
+        <div class="d-flex gap-2">
+          <button class="btn aap-btn" id="statsRangeWeek" type="button" onclick="setStatsRange('week')">This week</button>
+          <button class="btn aap-btn aap-btn-primary" id="statsRangeAll" type="button" onclick="setStatsRange('all')">All time</button>
+        </div>
       </header>
       <main class="aap-page__body">
         <div id="statsContent"></div>
