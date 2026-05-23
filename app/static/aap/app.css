@@ -1149,3 +1149,183 @@ a:hover { color: var(--aap-accent); }
   color: var(--aap-accent-ink);
   border-color: var(--aap-accent);
 }
+
+/* ---- Settings (modal) --------------------------------------------- */
+
+/* Backdrop that dims the underlying page. The settings page in the
+   handoff is a full-page modal — there is no underlying app screen
+   here, so we synthesize the dim with a solid overlay. In your app,
+   reuse Bootstrap's .modal-backdrop instead. */
+.aap-modal-stage {
+  position: relative;
+  width: 100%; min-height: 100vh;
+  background: var(--aap-bg);
+  display: grid; place-items: center;
+  padding: 24px;
+  overflow: hidden;
+}
+.aap-modal-stage__backdrop {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 30% 30%, var(--aap-panel) 0, var(--aap-bg) 60%),
+    rgba(0,0,0,0.45);
+  background-blend-mode: multiply;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.aap-modal {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  background: var(--aap-bg);
+  border: 1px solid var(--aap-rule-strong);
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100vh - 48px);
+}
+.aap-modal__head {
+  display: flex; align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--aap-rule);
+}
+.aap-modal__title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--aap-ink);
+}
+.aap-modal__body {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.aap-modal__foot {
+  display: flex; align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--aap-rule);
+}
+.aap-modal__foot-note {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  color: var(--aap-ink-mute);
+}
+
+/* Settings sections (AI Providers, Channels, Storage). */
+.aap-settings-section { display: block; }
+.aap-settings-section__rows {
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* A single secret row: label · masked input · show · test button. */
+.aap-secret-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.aap-secret-row__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--aap-ink-soft);
+}
+/* Mono-styled "secret" input (the dots are mono, letter-spaced). */
+.form-control.aap-input--secret {
+  font-family: var(--aap-font-mono);
+  letter-spacing: .1em;
+}
+
+/* "Tested" / "Test" / "missing" button color variants. */
+.btn.aap-btn-test-ok {
+  color: var(--aap-dot-done);
+  border-color: color-mix(in oklab, var(--aap-dot-done) 35%, transparent);
+}
+.btn.aap-btn-test-missing {
+  color: var(--aap-danger);
+  border-color: color-mix(in oklab, var(--aap-danger) 35%, transparent);
+}
+
+/* A labeled field block (used inside Settings — label above input). */
+.aap-field-block { display: block; }
+.aap-field-block__label {
+  display: block;
+  font-family: var(--aap-font-sans);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin-bottom: 5px;
+}
+.form-control.aap-input--mono {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+}
+
+/* Faux-select (looks like an input with a chevron). Use a real
+   <select class="form-select aap-input"> in production; this exists
+   so the static handoff can show the styling without browser
+   chrome. */
+.aap-fake-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--aap-field-bg);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: var(--aap-font-sans);
+  font-size: 13px;
+  color: var(--aap-ink);
+  cursor: pointer;
+}
+.aap-fake-select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Toast (notification) ----------------------------------------- */
+/* Slot in the bottom-right of any page. Two variants: success (green)
+   and error (red). Position is fixed so it floats above whatever
+   page chrome is showing. */
+.aap-toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 6px;
+  background: var(--aap-dot-done);
+  color: #fff;
+  border: 1px solid color-mix(in oklab, var(--aap-dot-done) 80%, #000);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.35);
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 200px;
+  z-index: 1080;
+}
+.aap-toast--error {
+  background: var(--aap-danger);
+  border-color: color-mix(in oklab, var(--aap-danger) 80%, #000);
+}
+.aap-toast__close {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.aap-toast__close:hover { background: rgba(255,255,255,0.12); color: #fff; }
