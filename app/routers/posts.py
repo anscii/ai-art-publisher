@@ -44,6 +44,7 @@ def post_to_resp(p: Post) -> PostResponse:
         image_ids=[pi.image_id for pi in ordered],
         seo=p.seo,
         variant_id=p.variant_id,
+        post_url=p.post_url,
     )
 
 
