@@ -222,7 +222,7 @@ async function loadSeries(reset) {
     document.getElementById('loadMoreBtn').classList.toggle('d-none', !hasMore);
     _updateSentinel(hasMore);
     if (!reset) _trimDomIfNeeded(container);
-    if (reset && !App.currentSeriesId) {
+    if (reset && !App.currentSeriesId && App.currentView === 'editor') {
       showView('list', { push: false });
     }
   } catch (e) {

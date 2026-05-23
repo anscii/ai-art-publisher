@@ -22,6 +22,14 @@ def test_queue_panel_shows_aap_page_chrome(page, live_server):
     assert page.locator(f"{_QUEUE_PANEL} .aap-page__icon").is_visible()
 
 
+def test_queue_panel_survives_reload(page, live_server):
+    """Reloading ?view=queue stays on queue panel, not redirected to list/editor."""
+    page.goto(f"{live_server}/?view=queue")
+    page.locator(_QUEUE_PANEL).wait_for(state="visible", timeout=5000)
+    assert page.locator(_QUEUE_PANEL).is_visible()
+    assert not page.locator("#seriesListPanel").is_visible()
+
+
 def test_queue_empty_or_table(page, live_server):
     """Queue panel renders either an .aap-table or the empty-state paragraph."""
     page.goto(live_server)
