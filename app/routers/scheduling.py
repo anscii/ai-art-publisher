@@ -11,6 +11,7 @@ from app.models import Post, PostImage
 from app.routers.settings import get_or_create_settings
 from app.scheduler import run_scheduled_posts
 from app.schemas import QueueItem
+from app.services.storage import get_public_base_url
 
 router = APIRouter(tags=["scheduling"])
 
@@ -28,7 +29,7 @@ def trigger_scheduler(request: Request, db: Session = Depends(get_db)):
 @router.get("/api/queue")
 def get_queue(db: Session = Depends(get_db)) -> list[QueueItem]:
     settings = get_or_create_settings(db)
-    base_url = settings.r2_public_base_url or ""
+    base_url = get_public_base_url(settings)
     posts = db.scalars(
         select(Post)
         .options(
