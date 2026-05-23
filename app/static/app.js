@@ -412,6 +412,7 @@ function showView(view, { push = true } = {}) {
     editor.classList.remove('d-none');
   } else if (view === 'queue') {
     queue.classList.remove('d-none');
+    refreshQueue();
   } else if (view === 'trash') {
     trash.classList.remove('d-none');
   } else if (view === 'collections') {

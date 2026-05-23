@@ -1329,3 +1329,323 @@ a:hover { color: var(--aap-accent); }
   margin-left: auto;
 }
 .aap-toast__close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* =====================================================================
+   SECONDARY PAGES (Collections, Queue, Trash, Stats, Settings)
+   ---------------------------------------------------------------------
+   These pages share a common header layout: icon tile + title + kicker +
+   right-side actions. Body content is page-specific.
+   ===================================================================== */
+
+.aap-page {
+  /* Apply to the outermost container of a secondary page. */
+  background: var(--aap-bg);
+  color: var(--aap-ink);
+  min-height: 100vh;
+}
+
+.aap-page__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 28px 18px;
+  border-bottom: 1px solid var(--aap-rule);
+}
+.aap-page__icon {
+  width: 38px; height: 38px;
+  border-radius: 8px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  display: grid; place-items: center;
+  color: var(--aap-accent);
+  flex-shrink: 0;
+}
+.aap-page__title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--aap-ink);
+  margin: 0;
+}
+.aap-page__kicker {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  color: var(--aap-ink-mute);
+  margin-top: 5px;
+}
+.aap-page__body {
+  padding: 24px 28px;
+}
+
+/* ---- Collections-specific ----------------------------------------- */
+
+/* Create row sits at the top: EN + RU + create button. */
+.aap-create-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  padding: 14px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+}
+
+/* Collection list row — view mode and edit mode share this base. */
+.aap-collection-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+}
+.aap-collection-row.is-editing {
+  /* Edit mode: EN input · RU input · Save button · meta · actions */
+  grid-template-columns: 1fr 1fr auto 1fr auto;
+}
+.aap-collection-row__name-en {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--aap-ink);
+}
+.aap-collection-row__name-ru {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--aap-ink-soft);
+  margin-top: 3px;
+}
+.aap-collection-row__counts {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--aap-ink-soft);
+}
+.aap-collection-row__edit-meta {
+  font-family: var(--aap-font-mono);
+  font-size: 12px;
+  color: var(--aap-ink-soft);
+}
+.aap-collection-row__edit-meta .aap-mute { color: var(--aap-ink-mute); }
+.aap-collection-row__actions { display: flex; gap: 4px; }
+
+/* Squarer icon button variant for row actions — slightly larger than
+   .aap-icon-btn, and supports an accent color via --btn-color. */
+.aap-icon-btn--row {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklab, var(--btn-color, var(--aap-ink-soft)) 35%, transparent);
+  background: transparent;
+  color: var(--btn-color, var(--aap-ink-soft));
+  display: inline-grid; place-items: center;
+  cursor: pointer;
+}
+.aap-icon-btn--row:hover {
+  background: color-mix(in oklab, var(--btn-color, var(--aap-ink-soft)) 10%, transparent);
+}
+
+/* ---- Table primitive (Queue, Stats) -------------------------------- */
+/* A shared table-as-grid container used by Queue and Stats. Each row
+   is a CSS grid with the same template as its head. Set the template
+   via `style="--cols: ..."` on the .aap-table; both head and rows
+   inherit it. This keeps the markup semantic-ish (header row + data
+   rows) while letting us mix mono / sans / inline pills per cell. */
+.aap-table {
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.aap-table__head,
+.aap-table__row {
+  display: grid;
+  grid-template-columns: var(--cols, 1fr);
+  gap: 14px;
+  padding: 12px 16px;
+  align-items: center;
+}
+.aap-table__head {
+  border-bottom: 1px solid var(--aap-rule);
+  font-family: var(--aap-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+}
+.aap-table__row {
+  border-bottom: 1px solid var(--aap-rule);
+  position: relative;
+}
+.aap-table__row:last-child { border-bottom: 0; }
+/* Right-aligned numeric cell — used in the Stats table. */
+.aap-num {
+  text-align: right;
+  font-family: var(--aap-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Square mini-thumb (40-ish px, used in Queue/Trash rows) ------- */
+/* Plain CSS gradient placeholder. Tint via `--thumb-color`. Replace
+   with an <img class="aap-mini-thumb"> when you have real assets. */
+.aap-mini-thumb {
+  width: 40px; height: 40px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in oklab, var(--thumb-color, #888) 60%, var(--aap-panel)) 0 8px,
+      color-mix(in oklab, var(--thumb-color, #888) 40%, var(--aap-panel)) 8px 16px);
+}
+.aap-mini-thumb--sm { width: 28px; height: 28px; }
+
+/* ---- Queue-specific ----------------------------------------------- */
+
+/* The Series cell uses thumb + name inline. */
+.aap-queue-series {
+  display: flex; align-items: center;
+  gap: 8px; min-width: 0;
+}
+.aap-queue-series__name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--aap-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aap-queue-title {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--aap-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aap-queue-when {
+  font-family: var(--aap-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--aap-ink-soft);
+}
+
+/* Platform pill: icon + label, panel-hi background, mono-ish. */
+.aap-platform-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: var(--aap-panel-hi);
+  border: 1px solid var(--aap-rule);
+  color: var(--aap-ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  justify-self: start;
+  line-height: 1;
+}
+
+/* Small in-row action button. Reuses .btn.aap-btn but smaller padding
+   and font; danger variant is also handled by .aap-btn-danger. */
+.btn.aap-btn--sm {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ---- Trash-specific ----------------------------------------------- */
+
+/* Section label — the small uppercase heading above each list. */
+.aap-section-label {
+  font-family: var(--aap-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--aap-ink-mute);
+  margin: 0 0 10px;
+}
+
+/* A single trashed item row: thumb · body · actions. */
+.aap-trash-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--aap-panel);
+  border: 1px solid var(--aap-rule);
+  border-radius: 6px;
+}
+.aap-trash-row__title {
+  font-family: var(--aap-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--aap-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aap-trash-row__meta {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--aap-ink-soft);
+  margin-top: 4px;
+}
+.aap-trash-row__meta .aap-mono {
+  font-size: 11px;
+  color: var(--aap-ink-soft);
+}
+.aap-trash-row__actions { display: flex; gap: 4px; }
+
+/* Restore / Delete buttons used in Trash rows. Both reuse .btn.aap-btn
+   with a color override. The "success" green is the same as the
+   --aap-dot-done token. */
+.btn.aap-btn-success {
+  color: var(--aap-dot-done);
+  border-color: color-mix(in oklab, var(--aap-dot-done) 35%, transparent);
+}
+.btn.aap-btn-success:hover {
+  background: color-mix(in oklab, var(--aap-dot-done) 10%, transparent);
+  color: var(--aap-dot-done);
+}
+
+/* ---- Stats-specific ----------------------------------------------- */
+
+/* The faint horizontal "bar" behind a stats row, sized to the row's
+   relative magnitude. Width set inline via `style="width: 64%"`.
+   Sits behind the cell text via position:absolute. */
+.aap-stats-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: color-mix(in oklab, var(--aap-accent) 10%, transparent);
+  pointer-events: none;
+}
+/* Stats cells use this so they sit above the bar. */
+.aap-stats-cell { position: relative; }
+.aap-stats-cell--ink   { font-size: 13px; font-weight: 500; color: var(--aap-ink); font-family: var(--aap-font-sans); }
+.aap-stats-cell--model { font-size: 13px; font-family: var(--aap-font-mono); color: var(--aap-accent);
+                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aap-stats-cell--num   { font-size: 13px; font-weight: 500; color: var(--aap-ink);
+                         font-family: var(--aap-font-mono); font-variant-numeric: tabular-nums;
+                         text-align: right; }
+.aap-stats-cell--num.is-empty { color: var(--aap-ink-mute); }
+
+/* The Total row at the bottom of the table — slightly emphasized. */
+.aap-stats-total {
+  display: grid;
+  grid-template-columns: var(--cols, 1fr);
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--aap-panel-hi);
+  border-top: 1px solid var(--aap-rule-strong);
+  align-items: center;
+}
+.aap-stats-total .aap-stats-cell--num,
+.aap-stats-total .aap-stats-cell--ink { font-weight: 700; }
