@@ -774,18 +774,26 @@ async function refreshTrash() {
       else showToast('Trash emptied', 'success');
       refreshTrash();
     });
+    const kicker = document.getElementById('trashKicker');
+    if (kicker) {
+      const parts = [];
+      if (data.images.length) parts.push(data.images.length + ' image' + (data.images.length !== 1 ? 's' : ''));
+      if (data.series.length) parts.push(data.series.length + ' series');
+      parts.push('auto-purged after 30 days');
+      kicker.textContent = parts.join(' · ');
+    }
     if (isEmpty) {
       content.replaceChildren(h('p', { cls: 'text-muted text-center py-4', text: 'Trash is empty' }));
       return;
     }
     const nodes = [];
-    if (data.series.length) {
-      nodes.push(h('h2', { cls: 'aap-section-label', text: 'Deleted series · ' + data.series.length }));
-      data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
-    }
     if (data.images.length) {
-      nodes.push(h('h2', { cls: 'aap-section-label' + (data.series.length ? ' mt-4' : ''), text: 'Deleted images · ' + data.images.length }));
+      nodes.push(h('h2', { cls: 'aap-section-label', text: 'Deleted images · ' + data.images.length }));
       data.images.forEach(i => nodes.push(_buildTrashImageItem(i)));
+    }
+    if (data.series.length) {
+      nodes.push(h('h2', { cls: 'aap-section-label' + (data.images.length ? ' mt-4' : ''), text: 'Deleted series · ' + data.series.length }));
+      data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
     }
     content.replaceChildren(...nodes);
   } catch (e) {
