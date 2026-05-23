@@ -198,7 +198,7 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         external_id = None
         _ch = (settings.telegram_channel_id or "").strip()
         _mid = result.get("message_id")
-        if _mid and _ch.startswith("@"):
+        if _mid is not None and _ch.startswith("@"):
             post_url_value = f"https://t.me/{_ch.lstrip('@')}/{_mid}"
     elif post.platform == "instagram":
         result = _do_instagram(post, settings)

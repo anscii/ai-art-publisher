@@ -161,7 +161,8 @@
     var PLAT = {instagram: 'IG', telegram: 'TG', pinterest: 'PIN', facebook: 'FB'};
 
     function fmtDate(iso) {
-      return new Date(iso + 'Z').toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+      var s = iso.charAt(iso.length - 1) === 'Z' ? iso : iso + 'Z';
+      return new Date(s).toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
     }
 
     function buildCard(post) {

@@ -46,7 +46,9 @@ def _setup(client, platform="telegram"):
 PT_BASE = "https://api.pinterest.com/v5"
 
 
-def _mock_settings(token="TOKEN", channel="@ch", base="https://pub.r2.dev", fb=False, pinterest=False):
+def _mock_settings(
+    token="TOKEN", channel="@ch", base="https://pub.r2.dev", fb=False, pinterest=False
+):
     s = MagicMock()
     s.telegram_bot_token = token
     s.telegram_channel_id = channel
@@ -309,7 +311,9 @@ def test_pinterest_service_create_board_api_error():
 @respx.mock
 def test_post_pinterest_success(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)
+    ):
         respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
         resp = client.post(f"/api/posts/{pid}/post")
     assert resp.status_code == 200
@@ -319,7 +323,9 @@ def test_post_pinterest_success(client):
 @respx.mock
 def test_post_pinterest_marks_post_posted(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)
+    ):
         respx.post(f"{PT_BASE}/pins").mock(return_value=httpx.Response(200, json={"id": "pin_001"}))
         client.post(f"/api/posts/{pid}/post")
     post = client.get(f"/api/posts/{pid}").json()
@@ -331,7 +337,9 @@ def test_post_pinterest_marks_post_posted(client):
 @respx.mock
 def test_post_pinterest_skipped_when_no_token(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=False)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=False)
+    ):
         resp = client.post(f"/api/posts/{pid}/post")
     assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
@@ -341,7 +349,9 @@ def test_post_pinterest_skipped_when_no_token(client):
 @respx.mock
 def test_post_pinterest_api_error_sets_failed(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)
+    ):
         respx.post(f"{PT_BASE}/pins").mock(
             return_value=httpx.Response(400, json={"message": "Invalid board"})
         )
@@ -417,3 +427,86 @@ def test_post_pinterest_fails_when_no_board_resolved(client):
         resp = client.post(f"/api/posts/{pid}/post")
     assert resp.json()["success"] is False
     assert "No board resolved" in resp.json()["message"]
+
+
+# ── Instagram permalink & Telegram post_url ───────────────────────────────────
+
+TELEGRAM_BASE = "https://api.telegram.org/botTOKEN"
+
+
+def _mock_ig_single_with_permalink(permalink_url="https://www.instagram.com/p/TEST/"):
+    """Like _mock_ig_single but also mocks the permalink GET."""
+    _mock_ig_single()
+    respx.get(f"{IG_BASE}/p1").mock(
+        return_value=httpx.Response(200, json={"permalink": permalink_url})
+    )
+
+
+@respx.mock
+def test_instagram_post_stores_permalink(client):
+    _, pid = _setup(client, "instagram")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        _mock_ig_single_with_permalink()
+        client.post(f"/api/posts/{pid}/post")
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["post_url"] == "https://www.instagram.com/p/TEST/"
+
+
+@respx.mock
+def test_instagram_permalink_fetch_failure_does_not_break_post(client):
+    _, pid = _setup(client, "instagram")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        _mock_ig_single()
+        respx.get(f"{IG_BASE}/p1").mock(side_effect=Exception("network error"))
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["post_url"] is None
+
+
+@respx.mock
+def test_telegram_post_stores_url_for_username_channel(client):
+    _, pid = _setup(client, "telegram")
+    with patch(
+        "app.routers.posts.get_or_create_settings",
+        return_value=_mock_settings(channel="@mychan"),
+    ):
+        respx.post(f"{TELEGRAM_BASE}/sendMediaGroup").mock(
+            return_value=httpx.Response(
+                200, json={"ok": True, "result": [{"message_id": 42, "chat_id": -100123}]}
+            )
+        )
+        client.post(f"/api/posts/{pid}/post")
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["post_url"] == "https://t.me/mychan/42"
+
+
+@respx.mock
+def test_telegram_post_url_none_for_numeric_channel(client):
+    _, pid = _setup(client, "telegram")
+    with patch(
+        "app.routers.posts.get_or_create_settings",
+        return_value=_mock_settings(channel="-100123456789"),
+    ):
+        respx.post(f"{TELEGRAM_BASE}/sendMediaGroup").mock(
+            return_value=httpx.Response(
+                200, json={"ok": True, "result": [{"message_id": 42, "chat_id": -100123456789}]}
+            )
+        )
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["post_url"] is None
+
+
+@respx.mock
+def test_telegram_post_url_none_when_no_message_id(client):
+    _, pid = _setup(client, "telegram")
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        respx.post(f"{TELEGRAM_BASE}/sendMediaGroup").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["post_url"] is None
