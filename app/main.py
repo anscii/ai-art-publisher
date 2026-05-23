@@ -14,6 +14,7 @@ from app.routers import backup as backup_router
 from app.routers import collections as collections_router
 from app.routers import generate as generate_router
 from app.routers import images as images_router
+from app.routers import landing as landing_router
 from app.routers import posts as posts_router
 from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
@@ -67,6 +68,7 @@ _PUBLIC_PATHS = frozenset(
         "/auth/login",
         "/auth/logout",
         "/landing",
+        "/api/landing/recent",
     }
 )
 
@@ -126,6 +128,7 @@ app.include_router(generate_router.variants_router)
 app.include_router(posts_router.router)
 app.include_router(scheduling_router.router)
 app.include_router(trash_router.router)
+app.include_router(landing_router.router)
 
 
 @app.get("/")
