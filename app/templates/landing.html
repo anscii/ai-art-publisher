@@ -189,6 +189,13 @@
       body.appendChild(meta);
       body.appendChild(title);
 
+      if (post.description) {
+        var desc = document.createElement('div');
+        desc.className = 'aap-sample-card__desc';
+        desc.textContent = post.description;
+        body.appendChild(desc);
+      }
+
       var art = document.createElement('article');
       art.className = 'aap-sample-card';
       art.appendChild(img);

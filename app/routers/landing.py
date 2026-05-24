@@ -19,6 +19,7 @@ class RecentPostCard(BaseModel):
     id: str
     platform: str
     title: str
+    description: str | None
     posted_at: datetime
     thumbnail_url: str | None
     post_url: str | None
@@ -62,6 +63,7 @@ def get_landing_recent(db: Session = Depends(get_db)) -> LandingRecentResponse:
                 id=p.id,
                 platform=p.platform,
                 title=p.title or p.title_ru or "",
+                description=p.description or None,
                 posted_at=p.posted_at,  # type: ignore[arg-type]
                 thumbnail_url=thumb,
                 post_url=p.post_url,

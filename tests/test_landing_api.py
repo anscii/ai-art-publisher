@@ -197,6 +197,29 @@ def test_landing_recent_title_ru_fallback(client, db):
     assert data["posts"][0]["title"] == "Лес"
 
 
+def test_landing_recent_description_included(client, db):
+    s = _series(db)
+    p = _post(db, s, status="posted")
+    p.description = "A hauntingly beautiful series of midnight forests."
+    db.commit()
+
+    resp = client.get("/api/landing/recent")
+    data = resp.json()
+    assert len(data["posts"]) == 1
+    assert data["posts"][0]["description"] == "A hauntingly beautiful series of midnight forests."
+
+
+def test_landing_recent_empty_description_is_null(client, db):
+    s = _series(db)
+    _post(db, s, status="posted")  # description="" by default
+    db.commit()
+
+    resp = client.get("/api/landing/recent")
+    data = resp.json()
+    assert len(data["posts"]) == 1
+    assert data["posts"][0]["description"] is None
+
+
 def test_landing_html_has_dispatches_ids(client):
     resp = client.get("/landing")
     assert resp.status_code == 200
