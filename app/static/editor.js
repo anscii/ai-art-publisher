@@ -67,15 +67,6 @@ function _updateSaveDescBtn() {
   btn.classList.toggle('btn-outline-primary', !dirty);
 }
 
-function _updateSaveStatusBtn() {
-  const btn = document.getElementById('saveStatusBtn');
-  if (!btn || !App.currentSeries) return;
-  const selected = document.querySelector('#aap-status-seg button.is-active')?.dataset.status;
-  const DISPLAY_TO_WRITE = { new: 'new', draft: 'draft', active: 'active', done: 'done' };
-  const currentWrite = DISPLAY_TO_WRITE[statusDisplay(App.currentSeries.status)];
-  const dirty = selected && selected !== currentWrite;
-  btn.classList.toggle('aap-btn-primary', !!dirty);
-}
 
 function _updateSaveDescBtn() {
   const btn = document.getElementById('saveDescBtn');
@@ -156,11 +147,11 @@ function renderEditor(series) {
   document.getElementById('editorPanel').replaceChildren(
     topbar,
     titleBlock,
+    buildStatusBar(series),
     buildImagesSection(series),
     buildActionBar(series.id),
     buildGenerateCard(series.id),
     buildDescriptionsCard(series),
-    buildStatusBar(series),
     buildPostsCard(series),
   );
 
@@ -186,6 +177,10 @@ async function saveTitle(seriesId) {
 }
 
 // ── Images section ───────────────────────────────────────────────────────────
+function _selGridCols() {
+  return window.matchMedia('(max-width: 600px)').matches ? 3 : 8;
+}
+
 function buildImagesSection(series) {
   const images = (series.images || []).filter(i => !i.deleted_at);
   const selected   = images.filter(i => _selectedImages.has(i.id));
@@ -194,8 +189,9 @@ function buildImagesSection(series) {
   const selGrid = h('div', { cls: 'aap-thumb-grid', id: 'selectedTray' });
   selected.forEach((img, idx) =>
     selGrid.appendChild(buildThumb(img, series.id, idx + 1)));
-  const rem = selected.length % 8;
-  const slots = rem > 0 ? 8 - rem : (selected.length === 0 ? 8 : 0);
+  const cols = _selGridCols();
+  const rem = selected.length % cols;
+  const slots = rem > 0 ? cols - rem : cols;
   for (let i = 0; i < slots; i++) {
     selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
   }
@@ -395,8 +391,10 @@ function _resortStrip() {
     }
   });
 
-  const rem = selGrid.querySelectorAll('[data-image-id]').length % 8;
-  const slotsNeeded = rem > 0 ? 8 - rem : 0;
+  const cols = _selGridCols();
+  const cnt = selGrid.querySelectorAll('[data-image-id]').length;
+  const rem = cnt % cols;
+  const slotsNeeded = rem > 0 ? cols - rem : cols;
   for (let i = 0; i < slotsNeeded; i++) {
     selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
   }
@@ -655,8 +653,17 @@ function initImageSortable(seriesId) {
     filter: '.aap-thumb-slot',
     forceFallback: true,
     fallbackTolerance: 4,
+    group: 'images',
     ...(touch ? { delay: 300, touchStartThreshold: 8 } : {}),
-    onEnd: async () => {
+    onEnd: async (evt) => {
+      if (evt.from !== evt.to) {
+        const imgId = evt.item.dataset.imageId;
+        if (imgId) {
+          if (evt.to === grid) _selectedImages.add(imgId);
+          else _selectedImages.delete(imgId);
+          _syncSelectionUI(seriesId);
+        }
+      }
       const selIds = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
       const libIds = lib ? [...lib.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId) : [];
       try {
@@ -1428,29 +1435,22 @@ function buildStatusBar(series) {
       });
       btn.classList.add('is-active');
       btn.style.setProperty('--seg-color', 'var(--aap-dot-' + display + ')');
-      _updateSaveStatusBtn();
+      saveStatus(series.id);
     });
     seg.appendChild(btn);
   });
 
-  const saveStatusBtn = h('button', { cls: 'btn aap-btn', id: 'saveStatusBtn',
-    text: '\u21b3 Save status' });
-  saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
-
   const deleteSeriesBtn = h('button', {
-    cls: 'btn aap-btn aap-btn-danger',
+    cls: 'aap-icon-btn aap-icon-btn--danger',
     title: 'Delete series',
     'aria-label': 'Delete series',
-    text: '\u00d7 Delete series',
-  });
+  }, h('i', { cls: 'bi bi-trash3' }));
   deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
 
-  return h('div', { cls: 'aap-status-bar mt-4' },
-    h('span', { cls: 'aap-field-label m-0', style: 'letter-spacing:.14em', text: 'Series status' }),
+  return h('div', { cls: 'aap-editor-action-row' },
     seg,
     h('div', { style: 'flex:1' }),
-    deleteSeriesBtn,
-    saveStatusBtn
+    deleteSeriesBtn
   );
 }
 
@@ -1461,7 +1461,6 @@ async function saveStatus(seriesId) {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, { status });
     App.currentSeries = updated;
     updateSeriesItem(updated);
-    _updateSaveStatusBtn();
     showToast('Status saved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }

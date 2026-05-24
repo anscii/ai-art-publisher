@@ -169,7 +169,7 @@ def test_reset_to_saved_restores_fields(page, live_server):
     page.locator("#generateFullBtn").click()
     page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
 
-    page.locator("button", has_text="Save").first.click()
+    page.locator("#saveDescBtn").click()
     page.locator("#toastContainer").get_by_text("Saved").wait_for(timeout=5000)
 
     saved_en = page.locator("#f_desc_en").input_value()
