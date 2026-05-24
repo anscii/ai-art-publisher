@@ -916,7 +916,10 @@ function _pushState() {
   if (App.currentSeriesId) p.set('series', label || App.currentSeriesId);
   if (statusStr !== _DEFAULT_STATUSES) p.set('status', statusStr);
   if (App.search) p.set('q', App.search);
-  if (App.activeCollection) p.set('collection', App.activeCollection);
+  if (App.activeCollection) {
+    const _ac = (App.collections || []).find(c => c.id === App.activeCollection);
+    p.set('collection', _ac ? _ac.name : App.activeCollection);
+  }
   if (App.limit !== 15) p.set('limit', String(App.limit));
   const url = p.toString() ? '?' + p.toString() : location.pathname;
   history.pushState({
@@ -924,6 +927,21 @@ function _pushState() {
     status: statusStr, q: App.search,
     collection: App.activeCollection, limit: App.limit,
   }, '', url);
+}
+
+async function _resolveCollectionParam(param) {
+  if (!param) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param)) return param;
+  const norm = param.toLowerCase();
+  let found = (App.collections || []).find(c => (c.name || '').toLowerCase() === norm);
+  if (found) return found.id;
+  try {
+    const data = await apiFetch('GET', '/api/collections');
+    App.collections = data;
+    _populateCollectionFilter();
+    found = data.find(c => (c.name || '').toLowerCase() === norm);
+    return found?.id || null;
+  } catch { return null; }
 }
 
 async function _resolveSeriesParam(param) {
@@ -959,7 +977,8 @@ async function _restoreFromUrl() {
   const p = new URLSearchParams(location.search);
   const view = p.get('view') || 'editor';
   const seriesParam = p.get('series') || null;
-  _syncFiltersFromState(p.get('status'), p.get('q'), p.get('collection'), parseInt(p.get('limit')) || null);
+  const _collId = await _resolveCollectionParam(p.get('collection'));
+  _syncFiltersFromState(p.get('status'), p.get('q'), _collId, parseInt(p.get('limit')) || null);
 
   showView(view, { push: false });
   await loadSeries(true);

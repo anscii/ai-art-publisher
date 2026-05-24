@@ -198,6 +198,8 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         external_id = None
         _ch = (settings.telegram_channel_id or "").strip()
         _mid = result.get("message_id")
+        # t.me deep links only work for public @-handle channels.
+        # Numeric IDs (e.g. -1001234567890) are private groups — no public URL.
         if _mid is not None and _ch.startswith("@"):
             post_url_value = f"https://t.me/{_ch.lstrip('@')}/{_mid}"
     elif post.platform == "instagram":

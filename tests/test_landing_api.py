@@ -202,3 +202,27 @@ def test_landing_html_has_dispatches_ids(client):
     assert resp.status_code == 200
     assert 'id="aap-dispatches-grid"' in resp.text
     assert 'id="aap-dispatches-meta"' in resp.text
+
+
+def test_landing_recent_skips_post_with_null_posted_at(client, db):
+    """Posts with status='posted' but posted_at=NULL must not appear (would crash Pydantic)."""
+    s = _series(db)
+    # null posted_at — simulates incomplete/corrupt post record
+    p = Post(
+        id=str(__import__("uuid").uuid4()),
+        series_id=s.id,
+        platform="instagram",
+        title="Null date",
+        description="",
+        tags="[]",
+        status="posted",
+        posted_at=None,
+    )
+    db.add(p)
+    db.commit()
+
+    resp = client.get("/api/landing/recent")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["posts"] == []
+    assert data["total_posted"] == 0

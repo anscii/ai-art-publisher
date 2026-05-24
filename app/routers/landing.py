@@ -37,14 +37,16 @@ def get_landing_recent(db: Session = Depends(get_db)) -> LandingRecentResponse:
     recent = db.scalars(
         select(Post)
         .options(selectinload(Post.post_images).selectinload(PostImage.image))
-        .where(Post.status == "posted", Post.deleted_at.is_(None))
+        .where(Post.status == "posted", Post.deleted_at.is_(None), Post.posted_at.isnot(None))
         .order_by(Post.posted_at.desc())
         .limit(4)
     ).all()
 
     total = (
         db.scalar(
-            select(func.count(Post.id)).where(Post.status == "posted", Post.deleted_at.is_(None))
+            select(func.count(Post.id)).where(
+                Post.status == "posted", Post.deleted_at.is_(None), Post.posted_at.isnot(None)
+            )
         )
         or 0
     )

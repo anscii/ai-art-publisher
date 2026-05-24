@@ -26,7 +26,9 @@ class TelegramService:
                 if not data.get("ok"):
                     return {"ok": False, "description": data.get("description", "Unknown error")}
                 result_msgs = data.get("result") or []
-                if result_msgs:
+                if result_msgs and last_message_id is None:
+                    # Capture first message of the first chunk only — that's the
+                    # canonical URL anchor for multi-chunk albums.
                     last_message_id = result_msgs[0].get("message_id")
         return {"ok": True, "message_id": last_message_id}
 

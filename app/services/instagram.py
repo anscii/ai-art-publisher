@@ -1,6 +1,9 @@
+import logging
 import time
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 BASE = "https://graph.instagram.com/v25.0"
 _POLL_INTERVAL = 3  # seconds between status checks
@@ -42,7 +45,8 @@ class InstagramService:
                 timeout=10,
             )
             return r.json().get("permalink")
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch Instagram permalink for %s: %s", media_id, exc)
             return None
 
     def _post_single(self, image_url: str, caption: str) -> dict:

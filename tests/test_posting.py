@@ -510,3 +510,31 @@ def test_telegram_post_url_none_when_no_message_id(client):
     assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
     assert post["post_url"] is None
+
+
+@respx.mock
+def test_telegram_multi_chunk_post_url_uses_first_chunk_message_id(client):
+    """For >10 images, post_url must anchor to the first chunk's first message."""
+    _, pid = _setup(client, "telegram")
+    # Route two separate sendMediaGroup calls with different message IDs
+    call_count = 0
+
+    def _side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        msg_id = 10 if call_count == 1 else 20
+        return httpx.Response(
+            200, json={"ok": True, "result": [{"message_id": msg_id, "chat_id": -100123}]}
+        )
+
+    respx.post(f"{TELEGRAM_BASE}/sendMediaGroup").mock(side_effect=_side_effect)
+
+    with patch(
+        "app.routers.posts.get_or_create_settings",
+        return_value=_mock_settings(channel="@mychan"),
+    ):
+        client.post(f"/api/posts/{pid}/post")
+
+    post = client.get(f"/api/posts/{pid}").json()
+    # Must use message_id=10 (first chunk), not 20 (last chunk)
+    assert post["post_url"] == "https://t.me/mychan/10"
