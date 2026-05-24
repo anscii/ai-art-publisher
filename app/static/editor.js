@@ -1,3 +1,14 @@
+// ── Textarea auto-grow ────────────────────────────────────────────────────────
+function _autoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+function _autoGrowDescTextareas() {
+  _autoGrow(document.getElementById('f_desc_en'));
+  _autoGrow(document.getElementById('f_desc_ru'));
+}
+
 // ── Generate card error UI ────────────────────────────────────────────────────
 function _updateGenErrorUI() {
   const errorDiv  = document.getElementById('genError');
@@ -161,6 +172,7 @@ function renderEditor(series) {
   }
   restoreDraft(series.id);
   _updateSaveDescBtn();
+  _autoGrowDescTextareas();
 }
 
 async function saveTitle(seriesId) {
@@ -920,8 +932,10 @@ function buildDescriptionsCard(series) {
 
   const descEn    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_en', rows: '5', 'aria-label': 'EN Instagram description' });
   descEn.value    = series.description_en || '';
+  descEn.addEventListener('input', () => _autoGrow(descEn));
   const descRu    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_ru', rows: '5', 'aria-label': 'RU description' });
   descRu.value    = series.description_ru || '';
+  descRu.addEventListener('input', () => _autoGrow(descRu));
   const tagsIg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_ig', 'aria-label': 'EN Instagram tags' });
   tagsIg.value    = (series.tags_instagram || []).join(' ');
   const tagsTg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_tg', 'aria-label': 'TG tags' });
@@ -1074,6 +1088,7 @@ function resetToSaved() {
     const isChosen = (s.ai_variants || [])[i]?.id === s.chosen_variant_id;
     btn.classList.toggle('is-active', isChosen);
   });
+  _autoGrowDescTextareas();
 }
 
 function applyVariant(idx) {
@@ -1118,6 +1133,7 @@ function applyVariant(idx) {
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     btn.classList.toggle('is-active', i === idx);
   });
+  _autoGrowDescTextareas();
 }
 
 async function saveDescription(seriesId) {

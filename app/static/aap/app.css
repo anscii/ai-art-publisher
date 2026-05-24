@@ -821,12 +821,14 @@ a:hover { color: var(--aap-accent); }
   border: 0;
   outline: none;
   resize: none;
+  overflow: hidden; /* suppress scrollbar during auto-grow */
   padding: 4px 6px;
   margin-left: -6px;
   font-family: var(--aap-font-sans);
   font-size: 13px;
   line-height: 1.6;
   color: var(--aap-ink);
+  min-height: calc(5 * 1.6 * 13px + 8px); /* ~5 rows even when empty */
 }
 .aap-lang-textarea:focus { background: var(--aap-panel-hi); border-radius: 3px; }
 .aap-lang-textarea--italic { font-style: italic; color: var(--aap-ink-soft); line-height: 1.55; }
@@ -1034,12 +1036,21 @@ a:hover { color: var(--aap-accent); }
    LIGHTBOX / IMAGE PREVIEW
    ===================================================================== */
 
+/* Lightbox modal: force true full-viewport sizing on mobile */
+#lightboxModal .modal-dialog,
+#lightboxModal .modal-content {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
 .aap-lightbox {
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: 100dvh;
   background: var(--aap-bg);
   color: var(--aap-ink);
+  overflow: hidden;
 }
 .aap-lightbox__top {
   display: flex;
@@ -1937,6 +1948,48 @@ a:hover { color: var(--aap-accent); }
 }
 
 /* ---- Responsive ----------------------------------------------------- */
+@media (max-width: 600px) {
+  /* Lightbox: compact bars so image + top + actions + filmstrip all fit */
+  .aap-lightbox__top {
+    padding: 6px 12px;
+  }
+  .aap-lightbox__kbd { display: none; }
+  .aap-lightbox__actions {
+    padding: 6px 10px;
+    gap: 5px;
+  }
+  .aap-lightbox__actions .btn.aap-btn {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  .aap-lightbox__actions-label { display: none; }
+  .aap-filmstrip {
+    padding: 6px 12px;
+  }
+  .aap-filmstrip__thumb {
+    width: 40px; height: 36px;
+  }
+
+  /* Stack the 2-step generate rail vertically; arrow makes no sense there */
+  .aap-rail {
+    grid-template-columns: 1fr;
+  }
+  .aap-rail__arrow { display: none; }
+
+  /* Bigger image thumbnails — 3 cols instead of 8 (~100px each on S23+) */
+  .aap-thumb-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Series title: 44px is enormous on phone */
+  .aap-title { font-size: 26px; }
+  .aap-title-block { padding: 16px 16px 14px; }
+  .aap-editor-topbar { padding: 10px 16px; }
+}
+@media (max-width: 768px) and (min-width: 601px) {
+  /* Tablet: slightly smaller title */
+  .aap-title { font-size: 32px; }
+}
 @media (max-width: 768px) {
   .aap-landing__top { padding: 12px 20px; }
   .aap-landing__hero {
