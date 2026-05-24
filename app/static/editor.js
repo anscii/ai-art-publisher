@@ -273,9 +273,6 @@ function buildThumb(img, seriesId, orderNum) {
     thumb.appendChild(h('span', { cls: 'aap-thumb__order' },
       String(orderNum).padStart(2, '0')));
   }
-  if (isSelected) {
-    thumb.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
-  }
   if (isPosted) {
     thumb.appendChild(h('span', { cls: 'aap-thumb__posted-tag', text: 'POSTED' }));
   }
@@ -379,14 +376,10 @@ function _resortStrip() {
       const badge = el.querySelector('.aap-thumb__order');
       if (badge) badge.textContent = String(selIdx).padStart(2, '0');
       selIdx++;
-      if (!el.querySelector('.aap-thumb__check')) {
-        el.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
-      }
       el.classList.add('is-selected');
       selGrid.appendChild(el);
     } else {
       el.classList.remove('is-selected');
-      el.querySelector('.aap-thumb__check')?.remove();
       libGrid.appendChild(el);
     }
   });
