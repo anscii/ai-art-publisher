@@ -43,16 +43,19 @@ app/
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
+    landing.py     — public API: RecentPostCard + LandingRecentResponse for landing dispatch grid
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
     telegram.py    — TelegramService.post_media_group()
     instagram.py   — InstagramService.post() (single + carousel)
   scheduler.py     — APScheduler background job (runs hourly, posts scheduled series)
-  static/          — app.js, editor.js, posting.js, settings.js
-  templates/       — index.html (Bootstrap 5.3 + SortableJS, dark theme)
+  static/
+    aap/           — AAP design system: tokens.css (CSS vars) + app.css (component styles)
+    app.js, editor.js, posting.js, settings.js, stats.js
+  templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 001_image_status.py, 002_soft_delete.py, 003_facebook_page.py, 004_variant_hint.py
+  versions/        — 21 migrations (001–021); latest: 021_post_url.py (Post.post_url field)
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -67,6 +70,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - **R2 public bucket** — images served directly from R2 URLs in the frontend (`<img src="https://pub-xxx.r2.dev/...">`). No proxy through the app server.
 - **APScheduler runs in-process** → `--workers 1` in production. Multiple workers would each start a scheduler and post duplicates.
 - **`auto_stop_machines = "suspend"`** in fly.toml — machine suspends between requests but wakes on demand; APScheduler keeps it alive between ticks.
+- **AAP design system** — `app/static/aap/tokens.css` (CSS custom properties) + `app/static/aap/app.css` (component styles). Replaces Bootstrap-only dark theme. Status display uses `STATUS_DISPLAY_GROUPS` / `statusDisplay()` / `activeDbStatuses()` in `app.js` (approved→draft, partial_posted→active in UI labels).
 - **No innerHTML in JS** — all DOM manipulation uses `createElement`/`textContent`/`setAttribute`. The `h()` helper in `app.js` enforces this. A security hook blocks writes containing `innerHTML`.
 - **Settings DB table** (`AppSettings`, id=1) — single-row config. Bootstrapped from env vars on first boot via `_bootstrap_settings()`.
 - **JSON fields** (`tags_instagram`, `tags_telegram`, `scheduled_targets`) are stored as JSON strings in SQLite. Deserialized in `series.py` helpers before returning to the API.
