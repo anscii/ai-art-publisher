@@ -192,6 +192,7 @@ class PostResponse(BaseModel):
     image_ids: list[str]
     seo: str | None = None
     variant_id: str | None = None
+    post_url: str | None = None
 
 
 class PostCreate(BaseModel):
@@ -339,6 +340,7 @@ class QueueItem(BaseModel):
     platform: str
     title: str
     scheduled_at: datetime
+    cover_url: str | None = None
 
 
 # ── Posting ───────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ from app.routers import backup as backup_router
 from app.routers import collections as collections_router
 from app.routers import generate as generate_router
 from app.routers import images as images_router
+from app.routers import landing as landing_router
 from app.routers import posts as posts_router
 from app.routers import scheduling as scheduling_router
 from app.routers import series as series_router
@@ -60,7 +61,15 @@ if _cfg.local_storage:
 _LANDING_HTML = (Path(__file__).parent / "templates" / "landing.html").read_text()
 
 _PUBLIC_PATHS = frozenset(
-    {"/health", "/internal/run-scheduler", "/internal/backup-db", "/auth/login", "/auth/logout"}
+    {
+        "/health",
+        "/internal/run-scheduler",
+        "/internal/backup-db",
+        "/auth/login",
+        "/auth/logout",
+        "/landing",
+        "/api/landing/recent",
+    }
 )
 
 
@@ -119,11 +128,17 @@ app.include_router(generate_router.variants_router)
 app.include_router(posts_router.router)
 app.include_router(scheduling_router.router)
 app.include_router(trash_router.router)
+app.include_router(landing_router.router)
 
 
 @app.get("/")
 async def index():
     return FileResponse("app/templates/index.html")
+
+
+@app.get("/landing")
+async def landing():
+    return HTMLResponse(_LANDING_HTML)
 
 
 @app.get("/health")

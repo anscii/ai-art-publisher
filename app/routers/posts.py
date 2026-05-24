@@ -44,6 +44,7 @@ def post_to_resp(p: Post) -> PostResponse:
         image_ids=[pi.image_id for pi in ordered],
         seo=p.seo,
         variant_id=p.variant_id,
+        post_url=p.post_url,
     )
 
 
@@ -191,12 +192,20 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
 
     platform = post.platform
 
+    post_url_value: str | None = None
     if post.platform == "telegram":
         result = _do_telegram(post, settings)
         external_id = None
+        _ch = (settings.telegram_channel_id or "").strip()
+        _mid = result.get("message_id")
+        # t.me deep links only work for public @-handle channels.
+        # Numeric IDs (e.g. -1001234567890) are private groups — no public URL.
+        if _mid is not None and _ch.startswith("@"):
+            post_url_value = f"https://t.me/{_ch.lstrip('@')}/{_mid}"
     elif post.platform == "instagram":
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
+        post_url_value = result.get("permalink")
         if result.get("ok"):
             try:
                 fb_result = _do_facebook(post, settings)
@@ -223,6 +232,7 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         post.status = "posted"
         post.posted_at = datetime.now(UTC)
         post.external_post_id = external_id
+        post.post_url = post_url_value
         post.error_message = ""
         db.commit()
         _auto_mark_images_posted(post.series, db)

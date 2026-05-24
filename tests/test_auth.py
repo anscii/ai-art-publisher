@@ -57,8 +57,8 @@ def test_root_no_auth_configured_returns_app(client):
 def test_root_unauthenticated_returns_landing(client, auth_config):
     resp = client.get("/", follow_redirects=False)
     assert resp.status_code == 200
-    # Landing page has the login modal, app HTML does not
-    assert "loginModal" in resp.text
+    # Landing page has the AAP sign-in card, app HTML does not
+    assert "aap-signin-card" in resp.text
 
 
 def test_root_with_session_cookie_returns_app(client, auth_config):

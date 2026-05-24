@@ -57,6 +57,29 @@ const App = {
   currentView: 'editor',
 };
 
+// Maps display-status names → DB status values they represent.
+// "draft" covers approved; "active" covers partial_posted.
+const STATUS_DISPLAY_GROUPS = {
+  new:    ['new'],
+  draft:  ['draft', 'approved'],
+  active: ['active', 'partial_posted'],
+  done:   ['done', 'posted'],
+  skip:   ['skip'],
+};
+
+function statusDisplay(dbStatus) {
+  for (const [display, dbValues] of Object.entries(STATUS_DISPLAY_GROUPS)) {
+    if (dbValues.includes(dbStatus)) return display;
+  }
+  return dbStatus;
+}
+
+function activeDbStatuses() {
+  const active = [...document.querySelectorAll('.aap-chip[data-status-group].is-active')]
+    .map(el => el.dataset.statusGroup);
+  return active.flatMap(g => STATUS_DISPLAY_GROUPS[g] || [g]);
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
   const opts = { method };
@@ -141,18 +164,6 @@ function formatDate(isoStr) {
          d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-const STATUS_COLOR = {
-  new: 'bg-info text-dark', draft: 'bg-warning text-dark',
-  approved: 'bg-primary', scheduled: 'bg-purple',
-  posted: 'bg-success', skip: 'bg-secondary',
-};
-
-function statusBadge(status) {
-  const frag = document.createDocumentFragment();
-  frag.appendChild(h('span', { cls: 'badge ' + (STATUS_COLOR[status] || 'bg-secondary'), text: status }));
-  return frag;
-}
-
 // ── Series list ───────────────────────────────────────────────────────────────
 let _sentinel = null;
 let _observer = null;
@@ -160,7 +171,7 @@ let _observer = null;
 function _updateSentinel(active) {
   if (!_sentinel) {
     _sentinel = h('div', { id: 'scrollSentinel', style: 'height:1px' });
-    const sidebar = document.getElementById('seriesSidebar');
+    const sidebar = document.getElementById('seriesListPanel');
     sidebar.insertBefore(_sentinel, document.getElementById('loadMoreBtn'));
     _observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && App.series.length < App.total) {
@@ -202,6 +213,8 @@ async function loadSeries(reset) {
     const data = await apiFetch('GET', '/api/series?' + q);
     App.series.push(...data.items);
     App.total = data.total;
+    const countEl = document.getElementById('seriesCount');
+    if (countEl) countEl.textContent = App.total + ' series';
     const container = document.getElementById('seriesItems');
     const visible = data.items.filter(s => (s.name || s.title) !== 'Unsorted' && s.id !== App.unsortedSeriesId);
     visible.forEach(s => container.appendChild(buildSeriesItem(s)));
@@ -209,12 +222,8 @@ async function loadSeries(reset) {
     document.getElementById('loadMoreBtn').classList.toggle('d-none', !hasMore);
     _updateSentinel(hasMore);
     if (!reset) _trimDomIfNeeded(container);
-    if (reset && !App.currentSeriesId && visible.length > 0) {
-      if (window.innerWidth >= 992) {
-        selectSeries(visible[0].id, { push: false });
-      } else {
-        showView('list', { push: false });
-      }
+    if (reset && !App.currentSeriesId && App.currentView === 'editor') {
+      showView('list', { push: false });
     }
   } catch (e) {
     showToast(e.message, 'danger');
@@ -229,43 +238,75 @@ async function loadMoreSeries() {
 }
 
 function buildSeriesItem(s) {
-  const name = s.name || s.title || s.original_folder_name || s.id.slice(0, 8);
-  let cover;
-  if (s.cover_url) {
-    cover = document.createElement('img');
-    cover.setAttribute('src', s.cover_url);
-    cover.setAttribute('width', '48');
-    cover.setAttribute('height', '40');
-    cover.className = 'rounded flex-shrink-0';
-    cover.style.cssText = 'width:48px;height:40px;object-fit:cover';
-    cover.loading = 'lazy';
+  const displayStatus = statusDisplay(s.status);
+  const dotVar = `var(--aap-dot-${displayStatus})`;
+  const name = s.name || s.title || s.original_folder_name || String(s.id).slice(0, 8);
+  const isSlug = !(s.name || s.title);
+
+  const thumb = s.cover_url
+    ? h('img', {
+        cls: 'aap-series-row__thumb-inner',
+        src: s.cover_url,
+        style: 'object-fit:cover',
+        loading: 'lazy',
+      })
+    : h('div', { cls: 'aap-series-row__thumb-inner' });
+
+  const postedCount = s.posted_count ?? 0;
+  const imageCount  = s.image_count  ?? 0;
+
+  const countsChildren = [h('span', {}, String(imageCount) + ' img')];
+  if (postedCount > 0) {
+    const pct = imageCount > 0 ? Math.round((postedCount / imageCount) * 100) : 0;
+    countsChildren.push(
+      h('span', { cls: 'aap-bar-mini' },
+        h('div', { cls: 'aap-bar-mini__fill', style: `width:${pct}%` })
+      ),
+      h('span', {}, `${postedCount}/${imageCount}`)
+    );
   } else {
-    const imgIcon = icon('bi bi-image text-muted');
-    imgIcon.style.fontSize = '14px';
-    cover = h('div', {
-      cls: 'rounded flex-shrink-0 bg-secondary d-flex align-items-center justify-content-center',
-      style: 'width:48px;height:40px',
-    }, imgIcon);
+    countsChildren.push(h('span', { cls: 'aap-mute' }, 'no posts yet'));
   }
 
-  const nameEl = h('div', { cls: 'text-truncate', style: 'font-size:13px;font-weight:500', text: name });
-  const badgesRow = h('div', { cls: 'd-flex gap-1 align-items-center flex-wrap' });
-  badgesRow.appendChild(statusBadge(s.status));
+  const metaChildren = [
+    h('span', {
+      cls: 'aap-status-pill',
+      style: `--pill-color:${dotVar}`,
+      text: displayStatus,
+    }),
+  ];
   if (s.collection_name) {
-    const cn = s.collection_name.length > 20 ? s.collection_name.slice(0, 19) + '…' : s.collection_name;
-    const tooltip = s.collection_name_ru ? s.collection_name + ' / ' + s.collection_name_ru : s.collection_name;
-    badgesRow.appendChild(h('span', { cls: 'badge bg-purple', style: 'font-size:10px', text: cn, title: tooltip }));
+    const label = s.collection_name.length > 22
+      ? s.collection_name.slice(0, 21) + '…'
+      : s.collection_name;
+    metaChildren.push(h('span', { cls: 'aap-collection-tag', text: '↪ ' + label }));
   }
-  badgesRow.appendChild(h('span', { cls: 'text-muted', style: 'font-size:11px', text: s.image_count + ' img' }));
-  const info = h('div', { cls: 'flex-grow-1 overflow-hidden' }, nameEl, badgesRow);
 
-  return h('div', {
-    cls: 'series-item d-flex align-items-start gap-2 p-2 border-bottom' +
-         (App.currentSeriesId === s.id ? ' bg-body-secondary' : ''),
+  return h('article', {
+    cls: 'aap-series-row',
     id: 'si-' + s.id,
     'data-id': s.id,
+    style: `--stripe-color:${dotVar};--pill-color:${dotVar}`,
     onclick: () => selectSeries(s.id),
-  }, cover, info);
+  },
+    h('div', { cls: 'aap-series-row__stripe' }),
+    h('div', { cls: 'aap-series-row__thumb' }, thumb),
+    h('div', { cls: 'aap-series-row__body' },
+      h('div', { cls: 'aap-series-row__meta' }, ...metaChildren),
+      h('div', {
+        cls: 'aap-series-row__title' + (isSlug ? ' is-slug' : ''),
+        text: name,
+      }),
+      h('div', { cls: 'aap-series-row__counts' }, ...countsChildren)
+    ),
+    h('div', { cls: 'aap-series-row__actions' },
+      h('button', {
+        cls: 'aap-icon-btn',
+        title: 'Open',
+        onclick: (e) => { e.stopPropagation(); selectSeries(s.id); },
+      }, '→')
+    )
+  );
 }
 
 function updateSeriesItem(s) {
@@ -284,8 +325,8 @@ function updateSeriesItem(s) {
 
 async function selectSeries(id, { push = true } = {}) {
   App.currentSeriesId = id;
-  document.querySelectorAll('.series-item').forEach(el => {
-    el.classList.toggle('bg-body-secondary', el.dataset.id === id);
+  document.querySelectorAll('.aap-series-row').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.id === String(id));
   });
   showView('editor', { push: false });
   await loadSeriesDetail(id);
@@ -330,10 +371,15 @@ async function createSeries() {
 }
 
 // ── Filter ────────────────────────────────────────────────────────────────────
+function onChipToggle(chip) {
+  chip.classList.toggle('is-active');
+  App.activeStatuses = new Set(activeDbStatuses());
+  loadSeries(true);
+  _pushState();
+}
+
 function onFilterChange() {
-  App.activeStatuses = new Set(
-    [...document.querySelectorAll('#statusFilterMenu input:checked')].map(el => el.value)
-  );
+  App.activeStatuses = new Set(activeDbStatuses());
   loadSeries(true);
   _pushState();
 }
@@ -351,79 +397,167 @@ function onSearchChange(val) {
 // ── View switching ────────────────────────────────────────────────────────────
 function showView(view, { push = true } = {}) {
   App.currentView = view;
-  const sidebar     = document.getElementById('seriesSidebar');
+  const listPanel   = document.getElementById('seriesListPanel');
   const editor      = document.getElementById('editorPanel');
   const queue       = document.getElementById('queuePanel');
   const trash       = document.getElementById('trashPanel');
   const collections = document.getElementById('collectionsPanel');
   const stats       = document.getElementById('statsPanel');
-  const back        = document.getElementById('backBtnRow');
-  const mobile      = window.innerWidth < 992;
-  const panels      = [editor, queue, trash, collections, stats];
 
-  if (!mobile) {
-    sidebar.classList.remove('d-none');
-    back.classList.add('d-none');
-    editor.classList.toggle('d-none', view !== 'editor' && view !== 'list');
-    queue.classList.toggle('d-none',  view !== 'queue');
-    trash.classList.toggle('d-none',  view !== 'trash');
-    if (collections) collections.classList.toggle('d-none', view !== 'collections');
-    if (stats) stats.classList.toggle('d-none', view !== 'stats');
-  } else if (view === 'list') {
-    sidebar.classList.remove('d-none');
-    panels.forEach(p => p?.classList.add('d-none'));
-    back.classList.add('d-none');
-  } else {
-    sidebar.classList.add('d-none');
-    back.classList.remove('d-none');
-    editor.classList.toggle('d-none', view !== 'editor');
-    queue.classList.toggle('d-none',  view !== 'queue');
-    trash.classList.toggle('d-none',  view !== 'trash');
-    if (collections) collections.classList.toggle('d-none', view !== 'collections');
-    if (stats) stats.classList.toggle('d-none', view !== 'stats');
+  [listPanel, editor, queue, trash, collections, stats].forEach(p => p && p.classList.add('d-none'));
+
+  if (view === 'list') {
+    listPanel.classList.remove('d-none');
+  } else if (view === 'editor') {
+    editor.classList.remove('d-none');
+  } else if (view === 'queue') {
+    queue.classList.remove('d-none');
+    refreshQueue();
+  } else if (view === 'trash') {
+    trash.classList.remove('d-none');
+    refreshTrash();
+  } else if (view === 'collections') {
+    collections && collections.classList.remove('d-none');
+    refreshCollections();
+  } else if (view === 'stats') {
+    stats && stats.classList.remove('d-none');
+    if (typeof refreshStats === 'function') refreshStats();
   }
-  if (view === 'queue') refreshQueue();
-  if (view === 'trash') refreshTrash();
-  if (view === 'collections') refreshCollections();
-  if (view === 'stats') refreshStats();
-  if (view !== 'editor' && view !== 'list') {
-    App.activeCollection = null;
-    const wrap = document.getElementById('collectionFilterWrap');
-    _populateCollectionFilter();
-  }
+
+  document.getElementById('navCollections')?.classList.toggle('is-active', view === 'collections');
+  document.getElementById('navQueue')?.classList.toggle('is-active', view === 'queue');
+  document.getElementById('navTrash')?.classList.toggle('is-active', view === 'trash');
+  document.getElementById('navStats')?.classList.toggle('is-active', view === 'stats');
+
   if (push) _pushState();
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
+function _platformIcon(platform) {
+  const cls = { instagram: 'bi bi-instagram', telegram: 'bi bi-telegram', pinterest: 'bi bi-pinterest' }[platform] || 'bi bi-circle';
+  return icon(cls);
+}
+
+let _activeQueueEditRow = null;
+
+function _openQueueEdit(postId, scheduledAt, dataRow) {
+  // Close any already-open edit row or post-edit form
+  if (_activeQueueEditRow) { _activeQueueEditRow.remove(); _activeQueueEditRow = null; }
+  document.querySelectorAll('[id^="queue-post-edit-"]').forEach(el => el.remove());
+
+  // Convert UTC ISO string to datetime-local value (YYYY-MM-DDTHH:MM, UTC)
+  function _toLocal(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    const p = n => String(n).padStart(2, '0');
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  }
+
+  const dtInput = Object.assign(document.createElement('input'), {
+    type: 'datetime-local', value: _toLocal(scheduledAt),
+    className: 'form-control aap-input aap-input--mono', style: 'width:220px',
+  });
+  const saveBtn   = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-primary', text: 'Save',   type: 'button' });
+  const cancelBtn = h('button', { cls: 'btn aap-btn aap-btn--sm',                 text: 'Cancel', type: 'button' });
+  const label     = h('div', { cls: 'aap-queue-edit-row__label', text: 'Reschedule · UTC' });
+  const editRow   = h('div', { cls: 'aap-queue-edit-row' },
+    h('div', {}, label, dtInput),
+    saveBtn, cancelBtn);
+
+  _activeQueueEditRow = editRow;
+  dataRow.after(editRow);
+  dtInput.focus();
+
+  cancelBtn.addEventListener('click', () => {
+    editRow.remove();
+    if (_activeQueueEditRow === editRow) _activeQueueEditRow = null;
+  });
+  saveBtn.addEventListener('click', async () => {
+    if (!dtInput.value) return;
+    saveBtn.disabled = true;
+    saveBtn.textContent = '…';
+    try {
+      await apiFetch('POST', '/api/posts/' + postId + '/schedule', { datetime_utc: dtInput.value + ':00Z' });
+      showToast('Rescheduled', 'success');
+      _activeQueueEditRow = null;
+      await refreshQueue();
+    } catch (e) {
+      showToast(e.message, 'danger');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  });
+}
+
+async function _openQueueEditPost(postId, seriesId, dataRow) {
+  // Toggle: click again to close
+  const formId = 'queue-post-edit-' + postId;
+  const existing = document.getElementById(formId);
+  if (existing) { existing.remove(); return; }
+  // Close any open reschedule row
+  if (_activeQueueEditRow) { _activeQueueEditRow.remove(); _activeQueueEditRow = null; }
+  try {
+    const [post, series] = await Promise.all([
+      apiFetch('GET', '/api/posts/' + postId),
+      apiFetch('GET', '/api/series/' + seriesId),
+    ]);
+    const imgMap = {};
+    (series.images || []).forEach(i => { if (!i.deleted_at) imgMap[i.id] = i.public_url; });
+    const form = buildEditPostForm(
+      post, imgMap, series,
+      () => document.getElementById(formId)?.remove(),
+      () => refreshQueue(),
+    );
+    form.id = formId;
+    dataRow.after(form);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
 async function refreshQueue() {
   const el = document.getElementById('queueContent');
   el.replaceChildren(h('div', { cls: 'text-center' }, h('div', { cls: 'spinner-border spinner-border-sm' })));
   try {
     const items = await apiFetch('GET', '/api/queue');
+    const kicker = document.getElementById('queueKicker');
+    if (kicker) kicker.textContent = items.length + ' post' + (items.length !== 1 ? 's' : '') + ' scheduled';
     if (!items.length) {
-      el.replaceChildren(h('p', { cls: 'text-muted', text: 'No scheduled posts.' }));
+      el.replaceChildren(h('p', { cls: 'aap-panel-head__meta text-center', style: 'padding:2rem 0', text: 'No scheduled posts.' }));
       return;
     }
-    const tbody = document.createElement('tbody');
+    const table = h('div', { cls: 'aap-table', style: '--cols: 180px 1fr 160px 120px 130px' });
+    table.appendChild(h('div', { cls: 'aap-table__head' },
+      h('span', { text: 'Series' }),
+      h('span', { text: 'Title' }),
+      h('span', { text: 'Datetime · UTC' }),
+      h('span', { text: 'Platform' }),
+      h('span', { text: 'Actions' })));
     items.forEach(item => {
-      const platformCell = h('td', null, h('span', { cls: 'badge bg-secondary', text: item.platform }));
-      const edit   = h('button', { cls: 'btn btn-xs btn-outline-secondary me-1', text: 'Edit',   onclick: () => selectSeries(item.series_id) });
-      const cancel = h('button', { cls: 'btn btn-xs btn-outline-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) });
-      tbody.appendChild(h('tr', null,
-        h('td', { text: item.series_name || item.series_id.slice(0, 8) }),
-        h('td', { text: item.title }),
-        h('td', { text: formatDate(item.scheduled_at) }),
-        platformCell,
-        h('td', null, edit, cancel)));
+      const platformPill = h('span', { cls: 'aap-platform-pill' },
+        _platformIcon(item.platform),
+        document.createTextNode(' ' + item.platform));
+      const thumbEl = item.cover_url
+        ? Object.assign(document.createElement('img'), {
+            src: item.cover_url, className: 'aap-mini-thumb aap-mini-thumb--sm',
+            style: 'object-fit:cover',
+          })
+        : h('span', { cls: 'aap-mini-thumb aap-mini-thumb--sm', style: '--thumb-color: hsl(210 30% 50%)' });
+      const seriesCell = h('div', { cls: 'aap-queue-series' },
+        thumbEl,
+        h('button', { cls: 'aap-queue-series__name aap-queue-series__name--link', text: item.series_name || item.series_id.slice(0, 8), onclick: () => selectSeries(item.series_id) }));
+      const dataRow = h('div', { cls: 'aap-table__row' },
+        seriesCell,
+        h('span', { cls: 'aap-queue-title', text: item.title }),
+        h('span', { cls: 'aap-queue-when', text: formatDate(item.scheduled_at) }),
+        platformPill,
+        h('div', { cls: 'd-flex align-items-center gap-1' },
+          (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Edit post', 'aria-label': 'Edit post' }, icon('bi bi-pencil')); b.addEventListener('click', () => _openQueueEditPost(item.post_id, item.series_id, dataRow)); return b; })(),
+          (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Reschedule', 'aria-label': 'Reschedule' }, icon('bi bi-calendar-plus')); b.addEventListener('click', () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow)); return b; })(),
+          h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) })));
+      table.appendChild(dataRow);
     });
-    el.replaceChildren(h('div', { cls: 'table-responsive' },
-      h('table', { cls: 'table table-sm table-hover align-middle' },
-        h('thead', null, h('tr', null,
-          h('th', { text: 'Series' }), h('th', { text: 'Title' }),
-          h('th', { text: 'Datetime (UTC)' }), h('th', { text: 'Platform' }), h('th'))),
-        tbody)));
+    el.replaceChildren(table);
   } catch (e) {
-    el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
+    el.replaceChildren(h('p', { cls: 'text-danger', text: e.message }));
   }
 }
 
@@ -445,15 +579,21 @@ async function refreshCollections() {
   try {
     App.collections = await apiFetch('GET', '/api/collections');
     _populateCollectionFilter();
+    const kicker = document.getElementById('collectionsKicker');
+    if (kicker) {
+      const total = App.collections.reduce((s, c) => s + (c.series_total || 0), 0);
+      kicker.textContent = App.collections.length + ' collection' + (App.collections.length !== 1 ? 's' : '')
+        + (total ? ' · ' + total + ' series' : '');
+    }
     if (!App.collections.length) {
-      el.replaceChildren(h('p', { cls: 'text-muted', text: 'No collections yet.' }));
+      el.replaceChildren(h('p', { cls: 'aap-panel-head__meta text-center', style: 'padding:2rem 0', text: 'No collections yet.' }));
       return;
     }
     const list = h('div', { cls: 'd-flex flex-column gap-2' });
     App.collections.forEach(c => list.appendChild(_buildCollectionItem(c)));
     el.replaceChildren(list);
   } catch (e) {
-    el.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
+    el.replaceChildren(h('p', { cls: 'text-danger', text: e.message }));
   }
 }
 
@@ -508,41 +648,18 @@ function _buildCollectionItem(c) {
   } else {
     countParts.push('0 series');
   }
+  const countText = countParts[0];
 
-  const nameEl = h('span', { cls: 'fw-medium', text: c.name });
-  const nameRuEl = c.name_ru ? h('span', { cls: 'text-muted small ms-1', text: '/ ' + c.name_ru }) : null;
-  const countEl = h('span', { cls: 'text-muted small ms-2', text: countParts[0] });
-
-  const filterBtn = h('button', { cls: 'btn btn-xs btn-outline-primary', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection' });
+  const filterBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Filter series by this collection', 'aria-label': 'Filter series by this collection', style: '--btn-color: var(--aap-accent)' });
   filterBtn.appendChild(icon('bi bi-funnel'));
   filterBtn.addEventListener('click', () => {
-    onCollectionFilterChange(c.id);
-    const wrap = document.getElementById('collectionFilterWrap');
+    App.activeCollection = c.id;
     _populateCollectionFilter();
+    showView('list');
+    loadSeries(true);
   });
 
-  const editBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  editBtn.appendChild(icon('bi bi-pencil'));
-  editBtn.addEventListener('click', () => {
-    const nameInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (EN)', style: 'width:160px' });
-    nameInput.value = c.name;
-    const nameRuInput = h('input', { type: 'text', cls: 'form-control form-control-sm', placeholder: 'Name (RU)', style: 'width:160px' });
-    nameRuInput.value = c.name_ru || '';
-    const saveBtn = h('button', { cls: 'btn btn-xs btn-primary ms-1', text: 'Save' });
-    saveBtn.addEventListener('click', async () => {
-      try {
-        await apiFetch('PATCH', '/api/collections/' + c.id, {
-          name: nameInput.value.trim(),
-          name_ru: nameRuInput.value.trim() || null,
-        });
-        showToast('Saved', 'success');
-        await refreshCollections();
-      } catch (e) { showToast(e.message, 'danger'); }
-    });
-    nameEl.replaceWith(h('span', { cls: 'd-flex gap-1 align-items-center' }, nameInput, nameRuInput, saveBtn));
-  });
-
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
+  const delBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Delete collection', style: '--btn-color: var(--aap-danger)' });
   delBtn.appendChild(icon('bi bi-trash'));
   delBtn.addEventListener('click', () => showConfirm('Delete collection "' + c.name + '"? Series will be unassigned.', async () => {
     try {
@@ -553,10 +670,48 @@ function _buildCollectionItem(c) {
     } catch (e) { showToast(e.message, 'danger'); }
   }));
 
-  return h('div', { cls: 'card' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-2' },
-      nameEl, nameRuEl, countEl,
-      h('div', { cls: 'ms-auto d-flex gap-1' }, filterBtn, editBtn, delBtn)));
+  const row = h('article', { cls: 'aap-collection-row' });
+
+  function renderView() {
+    row.classList.remove('is-editing');
+    const editBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Edit' });
+    editBtn.appendChild(icon('bi bi-pencil'));
+    editBtn.addEventListener('click', renderEdit);
+    row.replaceChildren(
+      h('div', null,
+        h('div', { cls: 'aap-collection-row__name-en', text: c.name }),
+        c.name_ru ? h('div', { cls: 'aap-collection-row__name-ru', text: c.name_ru }) : null),
+      h('div', { cls: 'aap-collection-row__counts', text: countText }),
+      h('div'),
+      h('div', { cls: 'aap-collection-row__actions' }, filterBtn, editBtn, delBtn));
+  }
+
+  function renderEdit() {
+    row.classList.add('is-editing');
+    const nameInput = h('input', { type: 'text', cls: 'form-control aap-input', 'aria-label': 'Name (EN)' });
+    nameInput.value = c.name;
+    const nameRuInput = h('input', { type: 'text', cls: 'form-control aap-input', 'aria-label': 'Name (RU)' });
+    nameRuInput.value = c.name_ru || '';
+    const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', type: 'button', style: 'padding:6px 12px;font-size:12px' });
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', async () => {
+      try {
+        await apiFetch('PATCH', '/api/collections/' + c.id, { name: nameInput.value.trim(), name_ru: nameRuInput.value.trim() || null });
+        showToast('Saved', 'success');
+        await refreshCollections();
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    const cancelBtn = h('button', { cls: 'aap-icon-btn--row', title: 'Cancel' });
+    cancelBtn.appendChild(icon('bi bi-x-lg'));
+    cancelBtn.addEventListener('click', renderView);
+    row.replaceChildren(
+      nameInput, nameRuInput, saveBtn,
+      h('div', { cls: 'aap-collection-row__edit-meta', text: countText }),
+      h('div', { cls: 'aap-collection-row__actions' }, filterBtn, cancelBtn, delBtn));
+  }
+
+  renderView();
+  return row;
 }
 
 async function createCollection() {
@@ -619,18 +774,26 @@ async function refreshTrash() {
       else showToast('Trash emptied', 'success');
       refreshTrash();
     });
+    const kicker = document.getElementById('trashKicker');
+    if (kicker) {
+      const parts = [];
+      if (data.images.length) parts.push(data.images.length + ' image' + (data.images.length !== 1 ? 's' : ''));
+      if (data.series.length) parts.push(data.series.length + ' series');
+      parts.push('auto-purged after 30 days');
+      kicker.textContent = parts.join(' · ');
+    }
     if (isEmpty) {
       content.replaceChildren(h('p', { cls: 'text-muted text-center py-4', text: 'Trash is empty' }));
       return;
     }
     const nodes = [];
-    if (data.series.length) {
-      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2', text: 'Deleted Series' }));
-      data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
-    }
     if (data.images.length) {
-      nodes.push(h('h6', { cls: 'text-muted small text-uppercase mb-2 mt-3', text: 'Deleted Images' }));
+      nodes.push(h('h2', { cls: 'aap-section-label', text: 'Deleted images · ' + data.images.length }));
       data.images.forEach(i => nodes.push(_buildTrashImageItem(i)));
+    }
+    if (data.series.length) {
+      nodes.push(h('h2', { cls: 'aap-section-label' + (data.images.length ? ' mt-4' : ''), text: 'Deleted series · ' + data.series.length }));
+      data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
     }
     content.replaceChildren(...nodes);
   } catch (e) {
@@ -639,9 +802,9 @@ async function refreshTrash() {
 }
 
 function _buildTrashSeriesItem(s) {
-  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
-  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  restoreBtn.appendChild(document.createTextNode('Restore'));
+  const restoreBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-success' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise'));
+  restoreBtn.appendChild(document.createTextNode(' Restore'));
   restoreBtn.addEventListener('click', async () => {
     _disableWithSpinner(restoreBtn);
     try {
@@ -651,9 +814,9 @@ function _buildTrashSeriesItem(s) {
     } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   });
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger' });
+  delBtn.appendChild(icon('bi bi-trash'));
+  delBtn.appendChild(document.createTextNode(' Delete'));
   delBtn.addEventListener('click', () => showConfirm(
     'Permanently delete this series and all its images?',
     async () => {
@@ -668,24 +831,22 @@ function _buildTrashSeriesItem(s) {
   const title = s.title || s.original_folder_name || s.id.slice(0, 8);
   const thumb = s.cover_url
     ? Object.assign(document.createElement('img'), {
-        src: s.cover_url, className: 'rounded flex-shrink-0',
-        width: 48, height: 42,
-        style: 'width:48px;height:42px;object-fit:cover',
+        src: s.cover_url, className: 'aap-mini-thumb',
+        style: 'object-fit:cover',
       })
-    : h('div', { cls: 'bg-secondary rounded flex-shrink-0', style: 'width:48px;height:42px' });
-  return h('div', { cls: 'card mb-2' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
-      thumb,
-      h('div', { cls: 'flex-grow-1 overflow-hidden' },
-        h('div', { cls: 'fw-medium text-truncate', text: title }),
-        h('div', { cls: 'text-muted small', text: s.image_count + ' images · deleted ' + _timeAgo(s.deleted_at) })),
-      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+    : h('span', { cls: 'aap-mini-thumb' });
+  return h('article', { cls: 'aap-trash-row' },
+    thumb,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-trash-row__title', text: title }),
+      h('div', { cls: 'aap-trash-row__meta', text: s.image_count + ' images · deleted ' + _timeAgo(s.deleted_at) })),
+    h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn));
 }
 
 function _buildTrashImageItem(i) {
-  const restoreBtn = h('button', { cls: 'btn btn-xs btn-outline-success me-1' });
-  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  restoreBtn.appendChild(document.createTextNode('Restore'));
+  const restoreBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-success' });
+  restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise'));
+  restoreBtn.appendChild(document.createTextNode(' Restore'));
   restoreBtn.addEventListener('click', async () => {
     _disableWithSpinner(restoreBtn);
     try {
@@ -695,9 +856,9 @@ function _buildTrashImageItem(i) {
     } catch (e) { showToast(e.message, 'danger'); }
     refreshTrash();
   });
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger' });
+  delBtn.appendChild(icon('bi bi-trash'));
+  delBtn.appendChild(document.createTextNode(' Delete'));
   delBtn.addEventListener('click', () => showConfirm('Permanently delete this image?', async () => {
     _disableWithSpinner(delBtn);
     try {
@@ -707,19 +868,19 @@ function _buildTrashImageItem(i) {
     refreshTrash();
   }));
   const thumb = Object.assign(document.createElement('img'), {
-    src: i.public_url, className: 'rounded flex-shrink-0',
-    width: 48, height: 42,
-    style: 'width:48px;height:42px;object-fit:cover',
+    src: i.public_url, className: 'aap-mini-thumb',
+    style: 'object-fit:cover',
   });
-  return h('div', { cls: 'card mb-2' },
-    h('div', { cls: 'card-body py-2 px-3 d-flex align-items-center gap-3' },
-      thumb,
-      h('div', { cls: 'flex-grow-1 overflow-hidden' },
-        h('div', { cls: 'fw-medium text-truncate small', text: i.original_filename }),
-        h('div', { cls: 'text-muted small', text: 'from "' + i.series_title + '" · deleted ' + _timeAgo(i.deleted_at) })),
-      h('div', { cls: 'd-flex gap-1 flex-shrink-0' }, restoreBtn, delBtn)));
+  return h('article', { cls: 'aap-trash-row' },
+    thumb,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-trash-row__title', text: i.original_filename }),
+      h('div', { cls: 'aap-trash-row__meta' },
+        document.createTextNode('from '),
+        h('span', { cls: 'aap-mono', text: i.series_title }),
+        document.createTextNode(' · deleted ' + _timeAgo(i.deleted_at)))),
+    h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn));
 }
-
 function _timeAgo(iso) {
   const secs = Math.floor((Date.now() - new Date(iso + 'Z')) / 1000);
   if (secs < 60) return 'just now';
@@ -755,7 +916,10 @@ function _pushState() {
   if (App.currentSeriesId) p.set('series', label || App.currentSeriesId);
   if (statusStr !== _DEFAULT_STATUSES) p.set('status', statusStr);
   if (App.search) p.set('q', App.search);
-  if (App.activeCollection) p.set('collection', App.activeCollection);
+  if (App.activeCollection) {
+    const _ac = (App.collections || []).find(c => c.id === App.activeCollection);
+    p.set('collection', _ac ? _ac.name : App.activeCollection);
+  }
   if (App.limit !== 15) p.set('limit', String(App.limit));
   const url = p.toString() ? '?' + p.toString() : location.pathname;
   history.pushState({
@@ -763,6 +927,21 @@ function _pushState() {
     status: statusStr, q: App.search,
     collection: App.activeCollection, limit: App.limit,
   }, '', url);
+}
+
+async function _resolveCollectionParam(param) {
+  if (!param) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param)) return param;
+  const norm = param.toLowerCase();
+  let found = (App.collections || []).find(c => (c.name || '').toLowerCase() === norm);
+  if (found) return found.id;
+  try {
+    const data = await apiFetch('GET', '/api/collections');
+    App.collections = data;
+    _populateCollectionFilter();
+    found = data.find(c => (c.name || '').toLowerCase() === norm);
+    return found?.id || null;
+  } catch { return null; }
 }
 
 async function _resolveSeriesParam(param) {
@@ -783,8 +962,10 @@ function _syncFiltersFromState(status, q, collection, limit) {
   App.search = q || '';
   App.activeCollection = collection || null;
   App.limit = limit || 15;
-  document.querySelectorAll('#statusFilterMenu input').forEach(cb => {
-    cb.checked = App.activeStatuses.has(cb.value);
+  document.querySelectorAll('.aap-chip[data-status-group]').forEach(chip => {
+    const dbVals = STATUS_DISPLAY_GROUPS[chip.dataset.statusGroup] || [];
+    const active = dbVals.some(v => App.activeStatuses.has(v));
+    chip.classList.toggle('is-active', active);
   });
   document.getElementById('limitSel').value = String(App.limit);
   const searchEl = document.getElementById('seriesSearch');
@@ -796,11 +977,12 @@ async function _restoreFromUrl() {
   const p = new URLSearchParams(location.search);
   const view = p.get('view') || 'editor';
   const seriesParam = p.get('series') || null;
-  _syncFiltersFromState(p.get('status'), p.get('q'), p.get('collection'), parseInt(p.get('limit')) || null);
+  const _collId = await _resolveCollectionParam(p.get('collection'));
+  _syncFiltersFromState(p.get('status'), p.get('q'), _collId, parseInt(p.get('limit')) || null);
 
   showView(view, { push: false });
   await loadSeries(true);
-  if (seriesParam) {
+  if (seriesParam && view === 'editor') {
     const seriesId = await _resolveSeriesParam(seriesParam);
     if (seriesId) await selectSeries(seriesId, { push: false });
   }
@@ -808,30 +990,31 @@ async function _restoreFromUrl() {
   _pushState();
 }
 
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('aap-theme', next);
+  document.documentElement.setAttribute('data-theme', next);
+  document.documentElement.setAttribute('data-bs-theme', next);
+  const icon = document.getElementById('aap-theme-icon');
+  if (icon) icon.textContent = next === 'dark' ? '☀' : '☾';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('aap-theme', next);
+  document.documentElement.setAttribute('data-theme', next);
+  document.documentElement.setAttribute('data-bs-theme', next);
+  const icon = document.getElementById('aap-theme-icon');
+  if (icon) icon.textContent = next === 'dark' ? '☀' : '☾';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
   initLightbox();
-  const filterBtn  = document.getElementById('filterBtn');
-  const filterMenu = document.getElementById('statusFilterMenu');
-  filterBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const open = filterMenu.classList.contains('show');
-    if (!open) {
-      const r = filterBtn.getBoundingClientRect();
-      filterMenu.style.position = 'fixed';
-      filterMenu.style.top      = r.bottom + 'px';
-      filterMenu.style.left     = 'auto';
-      filterMenu.style.right    = (window.innerWidth - r.right) + 'px';
-    }
-    filterMenu.classList.toggle('show');
-    filterBtn.setAttribute('aria-expanded', String(!open));
-  });
-  document.addEventListener('click', () => {
-    filterMenu.classList.remove('show');
-    filterBtn.setAttribute('aria-expanded', 'false');
-  });
 
   const collFilterBtn  = document.getElementById('collectionFilterBtn');
   const collFilterMenu = document.getElementById('collectionFilterMenu');
@@ -861,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _syncFiltersFromState(s.status, s.q, s.collection, s.limit);
     showView(s.view || 'editor', { push: false });
     await loadSeries(true);
-    if (s.series) await selectSeries(s.series, { push: false });
+    if (s.series && (s.view === 'editor' || !s.view)) await selectSeries(s.series, { push: false });
   });
 
   setInterval(() => {
@@ -870,12 +1053,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (d.desc_en || d.desc_ru || d.title)
       localStorage.setItem('draft_' + App.currentSeriesId, JSON.stringify(d));
   }, 30000);
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 992) {
-      document.getElementById('seriesSidebar').classList.remove('d-none');
-      document.getElementById('backBtnRow').classList.add('d-none');
-    }
-  });
 
   await _restoreFromUrl();
 });

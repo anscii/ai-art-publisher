@@ -1,0 +1,62 @@
+/* =====================================================================
+   AI Art Publisher — Design tokens
+   ---------------------------------------------------------------------
+   Drop this file at the top of your stylesheet chain, BEFORE bootstrap
+   overrides and before app.css. Everything else reads from these vars.
+
+   Theme switch: set `data-theme="dark"` on <html> (or <body>) to flip.
+   The default (no attribute) is the light theme.
+   ===================================================================== */
+
+/* ---- Fonts ---------------------------------------------------------- */
+/* Load these in <head> with:
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+*/
+
+:root {
+  --aap-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --aap-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Light theme (default) --------------------------------------- */
+  --aap-bg:         #ebe9e3;  /* page background — warm bone */
+  --aap-panel:      #fafaf7;  /* card / surface */
+  --aap-panel-hi:   #f1efe9;  /* secondary surface (chips, hover) */
+  --aap-rule:       rgba(20, 20, 18, 0.08);   /* hairline border */
+  --aap-rule-strong:rgba(20, 20, 18, 0.20);   /* stronger border (focus, primary) */
+  --aap-ink:        #0e0e10;  /* primary text */
+  --aap-ink-soft:   rgba(14, 14, 16, 0.66);
+  --aap-ink-mute:   rgba(14, 14, 16, 0.42);
+  --aap-accent:     #b8501f;  /* burnt orange — primary action / brand */
+  --aap-accent-ink: #fafaf7;  /* text on accent fills */
+  --aap-field-bg:   #ffffff;  /* inputs and editable surfaces */
+
+  /* Status dots — used as 7px circles, NOT as background fills.
+     Keep "done" hidden in the default list view. */
+  --aap-dot-new:    #3a6cd4;
+  --aap-dot-draft:  #9c7322;
+  --aap-dot-active: #b8501f;
+  --aap-dot-done:   #377a3e;
+  --aap-danger:     #c9614a;
+}
+
+[data-theme="dark"] {
+  --aap-bg:         #08080a;
+  --aap-panel:      #0f1013;
+  --aap-panel-hi:   #15171b;
+  --aap-rule:       rgba(255, 255, 255, 0.06);
+  --aap-rule-strong:rgba(255, 255, 255, 0.14);
+  --aap-ink:        #f0f0f3;
+  --aap-ink-soft:   rgba(240, 240, 243, 0.62);
+  --aap-ink-mute:   rgba(240, 240, 243, 0.36);
+  --aap-accent:     #e6864a;
+  --aap-accent-ink: #1b1209;
+  --aap-field-bg:   #0a0b0e;
+
+  --aap-dot-new:    #7aa5ff;
+  --aap-dot-draft:  #e0a84b;
+  --aap-dot-active: #e6864a;
+  --aap-dot-done:   #62b76b;
+  --aap-danger:     #e0735c;
+}

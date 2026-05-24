@@ -1,6 +1,9 @@
+import logging
 import time
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 BASE = "https://graph.instagram.com/v25.0"
 _POLL_INTERVAL = 3  # seconds between status checks
@@ -33,7 +36,21 @@ class InstagramService:
             time.sleep(_POLL_INTERVAL)
         return f"Instagram container not ready after {_POLL_TIMEOUT}s"
 
+    def _fetch_permalink(self, client: httpx.Client, media_id: str) -> str | None:
+        """Fetch the permalink URL for a published media item. Returns None on failure."""
+        try:
+            r = client.get(
+                f"{BASE}/{media_id}",
+                params={"fields": "permalink", "access_token": self._token},
+                timeout=10,
+            )
+            return r.json().get("permalink")
+        except Exception as exc:
+            logger.warning("Failed to fetch Instagram permalink for %s: %s", media_id, exc)
+            return None
+
     def _post_single(self, image_url: str, caption: str) -> dict:
+        permalink: str | None = None
         with httpx.Client(timeout=60) as client:
             resp = client.post(
                 f"{BASE}/{self._user_id}/media",
@@ -60,9 +77,11 @@ class InstagramService:
                     "ok": False,
                     "description": data2.get("error", {}).get("message", "Publish failed"),
                 }
-        return {"ok": True, "media_id": data2["id"]}
+            permalink = self._fetch_permalink(client, data2["id"])
+        return {"ok": True, "media_id": data2["id"], "permalink": permalink}
 
     def _post_carousel(self, image_urls: list[str], caption: str) -> dict:
+        permalink: str | None = None
         with httpx.Client(timeout=60) as client:
             child_ids = []
             for url in image_urls:
@@ -108,4 +127,5 @@ class InstagramService:
                     "ok": False,
                     "description": d2.get("error", {}).get("message", "Publish failed"),
                 }
-        return {"ok": True, "media_id": d2["id"]}
+            permalink = self._fetch_permalink(client, d2["id"])
+        return {"ok": True, "media_id": d2["id"], "permalink": permalink}
