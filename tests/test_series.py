@@ -97,6 +97,38 @@ def test_get_or_create_unsorted_idempotent(client):
     assert len(unsorted_entries) == 1
 
 
+def test_list_item_posted_count(client):
+    """SeriesListItem.posted_count must reflect images with status='posted'."""
+    sid = client.post("/api/series", json={"title": "Counts"}).json()["id"]
+
+    # Register two images
+    img1 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "img/a.jpg", "original_filename": "a.jpg"},
+    ).json()["id"]
+    img2 = client.post(
+        f"/api/series/{sid}/images/register",
+        json={"r2_key": "img/b.jpg", "original_filename": "b.jpg"},
+    ).json()["id"]
+
+    # Before any posting: posted_count == 0, "no posts yet" path
+    row = next(s for s in client.get("/api/series").json()["items"] if s["id"] == sid)
+    assert row["image_count"] == 2
+    assert row["posted_count"] == 0
+
+    # Mark one image as posted
+    client.patch(f"/api/images/{img1}/status", json={"status": "posted"})
+
+    row = next(s for s in client.get("/api/series").json()["items"] if s["id"] == sid)
+    assert row["posted_count"] == 1
+
+    # Mark second as posted
+    client.patch(f"/api/images/{img2}/status", json={"status": "posted"})
+
+    row = next(s for s in client.get("/api/series").json()["items"] if s["id"] == sid)
+    assert row["posted_count"] == 2
+
+
 def _register_image(client, series_id, key="images/test.jpg"):
     return client.post(
         f"/api/series/{series_id}/images/register",

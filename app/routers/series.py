@@ -128,6 +128,7 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
         collection_number=s.collection_number,
         created_at=s.created_at,
         image_count=len(active),
+        posted_count=sum(1 for i in active if i.status == "posted"),
         cover_url=cover_url,
     )
 

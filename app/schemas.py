@@ -277,6 +277,7 @@ class SeriesListItem(BaseModel):
     collection_number: str | None
     created_at: datetime
     image_count: int
+    posted_count: int
     cover_url: str | None
 
 
