@@ -72,6 +72,40 @@ def test_queue_returns_correct_fields(client):
     assert item["scheduled_at"] is not None
 
 
+def test_queue_cover_url_populated_when_r2_configured(client):
+    """cover_url uses the first PostImage's r2_key + r2_public_base_url."""
+    client.put("/api/settings", json={"r2_public_base_url": "https://example.r2.dev"})
+    _, pid = _make_post(client)
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    client.post(f"/api/posts/{pid}/schedule", json={"datetime_utc": future})
+    data = client.get("/api/queue").json()
+    assert len(data) == 1
+    assert data[0]["cover_url"] == "https://example.r2.dev/images/x.jpg"
+
+
+def test_queue_cover_url_none_without_r2(client):
+    """cover_url is None when r2_public_base_url is not configured."""
+    _, pid = _make_post(client)
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    client.post(f"/api/posts/{pid}/schedule", json={"datetime_utc": future})
+    data = client.get("/api/queue").json()
+    assert len(data) == 1
+    assert data[0]["cover_url"] is None
+
+
+def test_queue_cover_url_local_storage(client, monkeypatch):
+    """cover_url uses /uploads prefix when local_storage=True."""
+    from app.config import AppConfig
+
+    monkeypatch.setattr(AppConfig, "local_storage", True)
+    _, pid = _make_post(client)
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    client.post(f"/api/posts/{pid}/schedule", json={"datetime_utc": future})
+    data = client.get("/api/queue").json()
+    assert len(data) == 1
+    assert data[0]["cover_url"] == "/uploads/images/x.jpg"
+
+
 def test_cancel_non_scheduled_returns_400(client):
     _, pid = _make_post(client)
     resp = client.delete(f"/api/posts/{pid}/schedule")

@@ -17,6 +17,9 @@ def test_edit_title(page, live_server):
     title_input.wait_for()
     title_input.fill("E2E Test Series")
     title_input.press("Tab")
+    # Navigate back to list to verify the updated title appears there
+    page.locator(".aap-brand").click()
+    page.locator("#seriesListPanel").wait_for(state="visible", timeout=5000)
     page.locator("#seriesItems").get_by_text("E2E Test Series").wait_for(timeout=5000)
     assert page.locator("#seriesItems").get_by_text("E2E Test Series").is_visible()
 

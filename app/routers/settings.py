@@ -1,7 +1,8 @@
 import json
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -198,9 +199,20 @@ def _test_openrouter(key: str) -> dict:
 
 
 @stats_router.get("/ai", response_model=AIStatsResponse)
-def get_ai_stats(db: Session = Depends(get_db)):
+def get_ai_stats(
+    db: Session = Depends(get_db),
+    range: str = Query("all", pattern="^(all|week)$"),
+):
+    since: datetime | None = None
+    if range == "week":
+        since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+
+    base_q = db.query(AIVariant)
+    if since is not None:
+        base_q = base_q.filter(AIVariant.generated_at >= since)
+
     generated = (
-        db.query(
+        base_q.with_entities(
             AIVariant.provider,
             AIVariant.model,
             func.count().label("count"),
@@ -210,12 +222,12 @@ def get_ai_stats(db: Session = Depends(get_db)):
         .order_by(func.count().desc())
         .all()
     )
-    chosen_raw = (
-        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
-        .join(Series, Series.chosen_variant_id == AIVariant.id)
-        .group_by(AIVariant.provider, AIVariant.model)
-        .all()
+    chosen_q = db.query(AIVariant.provider, AIVariant.model, func.count().label("count")).join(
+        Series, Series.chosen_variant_id == AIVariant.id
     )
+    if since is not None:
+        chosen_q = chosen_q.filter(AIVariant.generated_at >= since)
+    chosen_raw = chosen_q.group_by(AIVariant.provider, AIVariant.model).all()
     chosen_map: dict[tuple[str, str], int] = {
         (r.provider, r.model): cast(int, r.count) for r in chosen_raw
     }

@@ -1,3 +1,14 @@
+// ── Textarea auto-grow ────────────────────────────────────────────────────────
+function _autoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+function _autoGrowDescTextareas() {
+  _autoGrow(document.getElementById('f_desc_en'));
+  _autoGrow(document.getElementById('f_desc_ru'));
+}
+
 // ── Generate card error UI ────────────────────────────────────────────────────
 function _updateGenErrorUI() {
   const errorDiv  = document.getElementById('genError');
@@ -58,39 +69,98 @@ function _updateSaveDescBtn() {
 
 function _updateSaveStatusBtn() {
   const btn = document.getElementById('saveStatusBtn');
-  const sel = document.getElementById('statusSelect');
-  if (!btn || !sel || !App.currentSeries) return;
-  const dirty = sel.value !== App.currentSeries.status;
+  if (!btn || !App.currentSeries) return;
+  const selected = document.querySelector('#aap-status-seg button.is-active')?.dataset.status;
+  const DISPLAY_TO_WRITE = { new: 'new', draft: 'draft', active: 'active', done: 'done' };
+  const currentWrite = DISPLAY_TO_WRITE[statusDisplay(App.currentSeries.status)];
+  const dirty = selected && selected !== currentWrite;
+  btn.classList.toggle('aap-btn-primary', !!dirty);
+}
+
+function _updateSaveDescBtn() {
+  const btn = document.getElementById('saveDescBtn');
+  if (!btn || !App.currentSeries) return;
+  const s = App.currentSeries;
+  const dirty =
+    (document.getElementById('editorTitle')?.value?.trim() ?? '') !== (s.name ?? '') ||
+    (document.getElementById('f_pub_title')?.value?.trim() ?? '') !== (s.title ?? '') ||
+    (document.getElementById('f_pub_title_ru')?.value?.trim() ?? '') !== (s.title_ru ?? '') ||
+    (document.getElementById('f_desc_en')?.value ?? '') !== (s.description_en ?? '') ||
+    (document.getElementById('f_desc_ru')?.value ?? '') !== (s.description_ru ?? '') ||
+    (document.getElementById('f_tags_ig')?.value?.trim() ?? '') !== (s.tags_instagram ?? []).join(' ') ||
+    (document.getElementById('f_tags_tg')?.value?.trim() ?? '') !== (s.tags_telegram ?? []).join(' ') ||
+    (App.activeVariantId != null && App.activeVariantId !== (s.chosen_variant_id ?? null));
   btn.classList.toggle('btn-primary', dirty);
   btn.classList.toggle('btn-outline-primary', !dirty);
 }
+
 
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
   _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
   App.activeVariantId = series.chosen_variant_id || null;
 
+  const slug = series.original_folder_name || String(series.id).slice(0, 12);
+  const displayStatus = statusDisplay(series.status);
+  const dotVar = 'var(--aap-dot-' + displayStatus + ')';
+
+  const topbar = h('header', { cls: 'aap-editor-topbar' },
+    h('button', {
+      cls: 'aap-icon-btn',
+      type: 'button',
+      title: 'Back to list',
+      onclick: () => showView('list'),
+    }, '←'),
+    h('div', { cls: 'aap-editor-topbar__slug', text: slug }),
+    h('div', { style: 'flex:1' }),
+    h('span', { cls: 'aap-save-indicator' },
+      h('span', { cls: 'aap-dot aap-dot--' + displayStatus }),
+      document.createTextNode(' auto-saved')
+    )
+  );
+
   const titleInput = h('input', {
-    type: 'text', cls: 'form-control form-control-sm fw-semibold',
-    id: 'editorTitle', placeholder: 'Series name (internal)...',
+    type: 'text',
+    cls: 'aap-title',
+    id: 'editorTitle',
+    placeholder: 'Series title…',
+    'aria-label': 'Series title',
   });
   titleInput.value = series.name || series.title || '';
   titleInput.addEventListener('blur', () => saveTitle(series.id));
+  titleInput.addEventListener('input', _updateSaveDescBtn);
 
-  const titleRow = h('div', { cls: 'd-flex align-items-center gap-2 mb-2' }, titleInput);
-  if (series.original_folder_name) {
-    const note = h('span', { cls: 'text-muted small text-truncate flex-shrink-1', style: 'max-width:180px', text: series.original_folder_name });
-    note.title = series.original_folder_name;
-    titleRow.appendChild(note);
-  }
+  const collPicker = buildCollectionPicker(series);
+  const imageCount = (series.images || []).filter(i => !i.deleted_at).length;
+  const selCount = _selectedImages.size;
+  const countMeta = h('span', {
+    cls: 'aap-mono',
+    style: 'font-size:11px;color:var(--aap-ink-mute)',
+    text: '· ' + imageCount + ' images' + (selCount > 0 ? ' · ' + selCount + ' selected' : ''),
+  });
+
+  const titleBlock = h('section', { cls: 'aap-title-block' },
+    h('div', { cls: 'aap-title-block__meta' },
+      h('span', { cls: 'aap-dot aap-dot--' + displayStatus, style: 'width:8px;height:8px' }),
+      h('span', {
+        cls: 'aap-status-label',
+        style: '--status-color:' + dotVar,
+        text: displayStatus,
+      }),
+      collPicker,
+      countMeta
+    ),
+    titleInput
+  );
 
   document.getElementById('editorPanel').replaceChildren(
-    titleRow,
-    buildCollectionPicker(series),
-    buildImagesCard(series),
-    buildDescriptionsCard(series),
+    topbar,
+    titleBlock,
+    buildImagesSection(series),
+    buildActionBar(series.id),
     buildGenerateCard(series.id),
-    buildActionsCard(series),
+    buildDescriptionsCard(series),
+    buildStatusBar(series),
     buildPostsCard(series),
   );
 
@@ -101,8 +171,8 @@ function renderEditor(series) {
     if (chosen && hintEl) hintEl.value = chosen.hint || '';
   }
   restoreDraft(series.id);
-  document.getElementById('editorTitle')?.addEventListener('input', _updateSaveDescBtn);
   _updateSaveDescBtn();
+  _autoGrowDescTextareas();
 }
 
 async function saveTitle(seriesId) {
@@ -115,97 +185,139 @@ async function saveTitle(seriesId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-// ── Images card ───────────────────────────────────────────────────────────────
-function buildImagesCard(series) {
-  const addBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  addBtn.appendChild(icon('bi bi-plus'));
-  addBtn.appendChild(document.createTextNode(' Add'));
-  addBtn.addEventListener('click', () => addImages(series.id));
+// ── Images section ───────────────────────────────────────────────────────────
+function buildImagesSection(series) {
+  const images = (series.images || []).filter(i => !i.deleted_at);
+  const selected   = images.filter(i => _selectedImages.has(i.id));
+  const unselected = images.filter(i => !_selectedImages.has(i.id));
 
-  const headerLabel = h('span', { cls: 'small fw-medium', id: 'imagesCardLabel' });
-  headerLabel.appendChild(icon('bi bi-images me-1'));
-  headerLabel.appendChild(document.createTextNode(_imagesCountLabel(series.images.length)));
-
-  const strip = h('div', { id: 'imageStrip', cls: 'd-flex gap-2', style: 'min-height:160px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px' });
-  if (!series.images.length) {
-    strip.appendChild(h('span', { cls: 'text-muted small align-self-center p-2', text: 'No images yet' }));
-  } else {
-    const _group = s => _selectedImages.has(s.id) ? 0 : s.status === 'posted' ? 2 : s.status === 'skip' ? 3 : 1;
-    [...series.images].sort((a, b) => _group(a) - _group(b))
-      .forEach(img => strip.appendChild(buildThumb(img, series.id)));
+  const selGrid = h('div', { cls: 'aap-thumb-grid', id: 'selectedTray' });
+  selected.forEach((img, idx) =>
+    selGrid.appendChild(buildThumb(img, series.id, idx + 1)));
+  const rem = selected.length % 8;
+  const slots = rem > 0 ? 8 - rem : (selected.length === 0 ? 8 : 0);
+  for (let i = 0; i < slots; i++) {
+    selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
   }
 
-  const selAllBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Select all', 'aria-label': 'Select all images' });
-  selAllBtn.appendChild(icon('bi bi-check2-all'));
+  const libGrid = h('div', { cls: 'aap-thumb-grid mt-3', id: 'libraryGrid' });
+  unselected.forEach((img, idx) =>
+    libGrid.appendChild(buildThumb(img, series.id, selected.length + idx + 1)));
+
+  const addBtn = h('button', { cls: 'btn aap-btn', style: 'font-size:12px' },
+    icon('bi bi-plus me-1'), document.createTextNode('Add images'));
+  addBtn.addEventListener('click', () => addImages(series.id));
+
+  const selAllBtn = h('button', { cls: 'btn aap-btn', title: 'Select all', 'aria-label': 'Select all' },
+    icon('bi bi-check2-all me-1'), document.createTextNode('All'));
   selAllBtn.addEventListener('click', () => _selectAll(series.id));
 
-  const invertBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Invert selection', 'aria-label': 'Invert image selection' });
-  invertBtn.appendChild(icon('bi bi-arrow-left-right'));
-  invertBtn.addEventListener('click', () => _invertSelection(series.id));
-
-  const deselBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary', title: 'Deselect all', 'aria-label': 'Deselect all images' });
-  deselBtn.appendChild(icon('bi bi-x-circle'));
+  const deselBtn = h('button', { cls: 'btn aap-btn', title: 'Deselect all', 'aria-label': 'Deselect all' },
+    icon('bi bi-x-circle me-1'), document.createTextNode('None'));
   deselBtn.addEventListener('click', () => _deselectAll(series.id));
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex justify-content-between align-items-center py-2' },
-      headerLabel,
-      h('div', { cls: 'd-flex gap-1 align-items-center' }, selAllBtn, invertBtn, deselBtn, addBtn)),
-    h('div', { cls: 'card-body p-2' }, strip, buildActionBar(series.id)));
-}
-
-function _imagesCountLabel(total) {
-  const sel = _selectedImages.size;
-  return sel > 0
-    ? 'Images (' + sel + ' selected / ' + total + ')'
-    : 'Images (' + total + ')';
+  return h('section', { cls: 'px-4 pt-4 pb-2' },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent',
+        text: '\u2191 In this post \u00b7 story order' }),
+      h('span', { cls: 'aap-panel-head__meta', text: 'drag to reorder' })
+    ),
+    h('div', { cls: 'aap-selected-tray mt-2' }, selGrid),
+    h('div', { cls: 'aap-panel-head mt-4' },
+      h('span', { cls: 'aap-panel-head__label aap-panel-head__label--mute',
+        id: 'imagesCardLabel',
+        text: 'Library \u00b7 ' + unselected.length + ' unselected' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('div', { cls: 'd-flex gap-2' }, selAllBtn, deselBtn, addBtn)
+    ),
+    libGrid
+  );
 }
 
 function _refreshImagesHeader(total) {
   const el = document.getElementById('imagesCardLabel');
   if (!el) return;
-  el.replaceChildren(icon('bi bi-images me-1'), document.createTextNode(_imagesCountLabel(total)));
+  el.textContent = 'Library \u00b7 ' + (total - _selectedImages.size) + ' unselected';
 }
 
-function buildThumb(img, seriesId) {
-  const imgEl = document.createElement('img');
-  imgEl.setAttribute('src', img.public_url);
-  imgEl.setAttribute('width', '160');
-  imgEl.setAttribute('height', '140');
-  imgEl.className = 'rounded';
-  imgEl.style.cssText = 'width:160px;height:140px;object-fit:cover';
-  imgEl.loading = 'lazy';
-  imgEl.setAttribute('draggable', 'false');
-  imgEl.style.cursor = 'zoom-in';
-  imgEl.addEventListener('click', e => {
-    e.stopPropagation();
-    const strip = document.getElementById('imageStrip');
-    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-    const images = thumbs.map(el => ({
-      id: el.dataset.imageId,
-      public_url: el.querySelector('img').getAttribute('src'),
-      status: el.dataset.imageStatus || 'pending',
-    }));
-    const idx = thumbs.findIndex(el => el.dataset.imageId === img.id);
-    openLightbox(images, idx >= 0 ? idx : 0);
-  });
+function buildThumb(img, seriesId, orderNum) {
+  const isSelected = _selectedImages.has(img.id);
+  const isPosted   = img.status === 'posted';
+  const isSkipped  = img.status === 'skip';
+  const hue = [...img.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
 
-  const menuBtn = h('button', { cls: 'btn btn-xs btn-dark opacity-75', text: '⋯', 'aria-label': 'Image options' });
+  let cls = 'aap-thumb';
+  if (isSelected) cls += ' is-selected';
+  if (isPosted)   cls += ' is-posted';
+  if (isSkipped)  cls += ' is-skipped';
+
+  const thumb = h('div', {
+    cls,
+    'data-image-id': img.id,
+    'data-image-status': img.status,
+    style: '--thumb-color: hsl(' + hue + ' 35% 40%)',
+  });
+  thumb.style.position = 'relative';
+
+  if (img.public_url) {
+    const imgEl = document.createElement('img');
+    imgEl.setAttribute('src', img.public_url);
+    imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:inherit;cursor:zoom-in';
+    imgEl.loading = 'lazy';
+    imgEl.setAttribute('draggable', 'false');
+    imgEl.addEventListener('click', e => {
+      e.stopPropagation();
+      const allImgs = _getAllThumbImages();
+      openLightbox(allImgs, allImgs.findIndex(im => im.id === img.id));
+    });
+    thumb.appendChild(imgEl);
+  }
+
+  if (orderNum != null) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__order' },
+      String(orderNum).padStart(2, '0')));
+  }
+  if (isSelected) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
+  }
+  if (isPosted) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__posted-tag', text: 'POSTED' }));
+  }
+  if (isSkipped) {
+    thumb.appendChild(h('span', { cls: 'aap-thumb__overlay-label', text: 'SKIPPED' }));
+  }
+  thumb.appendChild(h('span', { cls: 'aap-thumb__drag', text: '\u22ee\u22ee' }));
+
+  const statusBtn = h('button', {
+    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-0 border-0 bg-transparent',
+    style: 'line-height:1;width:22px;height:22px;z-index:2',
+    'data-select-btn': img.id,
+    'aria-label': isSelected ? 'Deselect image' : 'Select image',
+    'aria-pressed': String(isSelected),
+  });
+  statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
+  statusBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _toggleSelection(img.id, img.status, seriesId);
+  });
+  thumb.appendChild(statusBtn);
+
+  const menuBtn = h('button', {
+    cls: 'btn btn-xs btn-dark opacity-75 position-absolute top-0 end-0 m-1',
+    'aria-label': 'Image options',
+  });
+  menuBtn.appendChild(document.createTextNode('\u22ef'));
   menuBtn.setAttribute('data-bs-toggle', 'dropdown');
   menuBtn.addEventListener('click', e => e.stopPropagation());
-
   const dropItems = document.createElement('ul');
   dropItems.className = 'dropdown-menu dropdown-menu-end';
-
-  // "Move to" header + items
-  const hdr = document.createElement('li');
-  hdr.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
-  dropItems.appendChild(hdr);
+  const hdr2 = document.createElement('li');
+  hdr2.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
+  dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
   const divLi = document.createElement('li');
   divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
   dropItems.appendChild(divLi);
-
   const delLi = document.createElement('li');
   const delA = h('a', { cls: 'dropdown-item small text-danger', href: '#' });
   delA.appendChild(icon('bi bi-trash me-1'));
@@ -213,34 +325,19 @@ function buildThumb(img, seriesId) {
   delA.addEventListener('click', e => { e.preventDefault(); deleteImage(img.id); });
   delLi.appendChild(delA);
   dropItems.appendChild(delLi);
+  thumb.appendChild(h('div', { cls: 'position-absolute top-0 end-0' },
+    h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
 
-  const gripEl = h('div', { cls: 'thumb-grip position-absolute' });
-  gripEl.appendChild(icon('bi bi-grip-vertical'));
+  return thumb;
+}
 
-  const statusBtn = h('button', {
-    cls: 'btn btn-xs position-absolute top-0 start-0 m-1 p-1 border-0 bg-transparent',
-    style: 'line-height:1',
-    'data-select-btn': img.id,
-    'aria-label': _selectedImages.has(img.id) ? 'Deselect image' : 'Select image',
-    'aria-pressed': String(_selectedImages.has(img.id)),
-  });
-  statusBtn.appendChild(icon(_selectIcon(img.id, img.status)));
-  statusBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    _toggleSelection(img.id, img.status, seriesId);
-  });
-
-  const isSelected = _selectedImages.has(img.id);
-  const outerCls = 'position-relative flex-shrink-0' +
-    (img.status === 'posted' ? ' thumb-posted' : '') +
-    (img.status === 'skip' ? ' thumb-skip' : '') +
-    (isSelected ? ' thumb-selected' : '');
-  return h('div', { cls: outerCls, 'data-image-id': img.id, 'data-image-status': img.status },
-    imgEl,
-    statusBtn,
-    gripEl,
-    h('div', { cls: 'position-absolute top-0 end-0 m-1' },
-      h('div', { cls: 'dropdown' }, menuBtn, dropItems)));
+function _getAllThumbImages() {
+  const sel = [...document.querySelectorAll('#selectedTray [data-image-id]')];
+  const lib = [...document.querySelectorAll('#libraryGrid [data-image-id]')];
+  const imgById = Object.fromEntries(
+    (App.currentSeries?.images ?? []).map(i => [i.id, i])
+  );
+  return [...sel, ...lib].map(el => imgById[el.dataset.imageId]).filter(Boolean);
 }
 
 function _selectIcon(imgId, status) {
@@ -259,7 +356,7 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
     btn.setAttribute('aria-label', isNowSelected ? 'Deselect image' : 'Select image');
   }
   const thumb = document.querySelector('[data-image-id="' + imgId + '"]');
-  if (thumb) thumb.classList.toggle('thumb-selected', isNowSelected);
+  if (thumb) thumb.classList.toggle('is-selected', isNowSelected);
   _resortStrip();
   const total = App.currentSeries?.images?.length ?? 0;
   _refreshImagesHeader(total);
@@ -268,31 +365,53 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
 }
 
 function _resortStrip() {
-  const strip = document.getElementById('imageStrip');
-  if (!strip) return;
-  const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-  if (!thumbs.length) return;
-  const _g = el => {
-    if (_selectedImages.has(el.dataset.imageId)) return 0;
-    const s = el.dataset.imageStatus || 'pending';
-    return s === 'posted' ? 2 : s === 'skip' ? 3 : 1;
-  };
-  thumbs
-    .map((el, i) => ({ el, g: _g(el), i }))
-    .sort((a, b) => a.g - b.g || a.i - b.i)
-    .forEach(({ el }) => strip.appendChild(el));
+  const selGrid = document.getElementById('selectedTray');
+  const libGrid = document.getElementById('libraryGrid');
+  if (!selGrid || !libGrid) return;
+
+  selGrid.querySelectorAll('.aap-thumb-slot').forEach(s => s.remove());
+  const allThumbs = [
+    ...selGrid.querySelectorAll('[data-image-id]'),
+    ...libGrid.querySelectorAll('[data-image-id]'),
+  ];
+  if (!allThumbs.length) return;
+
+  let selIdx = 1;
+  allThumbs.forEach(el => {
+    const id = el.dataset.imageId;
+    if (_selectedImages.has(id)) {
+      const badge = el.querySelector('.aap-thumb__order');
+      if (badge) badge.textContent = String(selIdx).padStart(2, '0');
+      selIdx++;
+      if (!el.querySelector('.aap-thumb__check')) {
+        el.appendChild(h('span', { cls: 'aap-thumb__check', text: '\u2713' }));
+      }
+      el.classList.add('is-selected');
+      selGrid.appendChild(el);
+    } else {
+      el.classList.remove('is-selected');
+      el.querySelector('.aap-thumb__check')?.remove();
+      libGrid.appendChild(el);
+    }
+  });
+
+  const rem = selGrid.querySelectorAll('[data-image-id]').length % 8;
+  const slotsNeeded = rem > 0 ? 8 - rem : 0;
+  for (let i = 0; i < slotsNeeded; i++) {
+    selGrid.appendChild(h('div', { cls: 'aap-thumb-slot' }, '+'));
+  }
 }
 
 function _syncSelectionUI(seriesId) {
-  const strip = document.getElementById('imageStrip');
-  if (strip) {
-    strip.querySelectorAll('[data-image-id]').forEach(thumb => {
-      const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus || 'pending';
-      thumb.classList.toggle('thumb-selected', _selectedImages.has(id));
-      const btn = thumb.querySelector('[data-select-btn]');
-      if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
-    });
-  }
+  [
+    ...document.querySelectorAll('#selectedTray [data-image-id]'),
+    ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+  ].forEach(thumb => {
+    const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus || 'pending';
+    thumb.classList.toggle('is-selected', _selectedImages.has(id));
+    const btn = thumb.querySelector('[data-select-btn]');
+    if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
+  });
   _resortStrip();
   _refreshImagesHeader((App.currentSeries?.images ?? []).length);
   _refreshActionBar(seriesId);
@@ -442,34 +561,31 @@ async function _getOrCacheUnsorted() {
 
 // ── Action bar ────────────────────────────────────────────────────────────────
 function buildActionBar(seriesId) {
-  const bar = h('div', { id: 'imageActionBar', cls: 'd-flex align-items-center gap-2 flex-wrap mt-2 pt-2 border-top' });
-  if (_selectedImages.size === 0) { bar.classList.add('d-none'); return bar; }
+  const bar = h('div', { id: 'imageActionBar', cls: 'aap-action-bar mx-4' });
+  if (_selectedImages.size === 0) { bar.style.display = 'none'; return bar; }
 
-  bar.appendChild(h('span', { cls: 'small text-muted', text: _selectedImages.size + ' selected' }));
+  bar.appendChild(h('span', { cls: 'aap-action-bar__count' },
+    h('strong', {}, String(_selectedImages.size)),
+    document.createTextNode(' selected')
+  ));
+  bar.appendChild(h('span', { cls: 'aap-divider-v' }));
 
-  // Move to dropdown
-  const moveBtn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-  moveBtn.appendChild(icon('bi bi-box-arrow-right me-1'));
-  moveBtn.appendChild(document.createTextNode('Move to…'));
+  const moveBtn = h('button', { cls: 'btn aap-btn' },
+    icon('bi bi-box-arrow-right me-1'), document.createTextNode('\u2197 Move to\u2026'));
   moveBtn.setAttribute('data-bs-toggle', 'dropdown');
+  const moveDrop = document.createElement('ul');
+  moveDrop.className = 'dropdown-menu';
+  buildMoveToItems(null, seriesId, true).forEach(li => moveDrop.appendChild(li));
+  bar.appendChild(h('div', { cls: 'dropdown' }, moveBtn, moveDrop));
 
-  const moveDropItems = document.createElement('ul');
-  moveDropItems.className = 'dropdown-menu';
-  buildMoveToItems(null, seriesId, true).forEach(li => moveDropItems.appendChild(li));
-
-  bar.appendChild(h('div', { cls: 'dropdown' }, moveBtn, moveDropItems));
-
-  // Skip / Unskip — shown based on what's selected
   const statusMap = new Map((App.currentSeries?.images ?? []).map(i => [i.id, i.status]));
-  const toSkip        = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
-  const toUnskip      = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
-  const toMarkPosted  = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toSkip         = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
+  const toUnskip       = [..._selectedImages].filter(id => statusMap.get(id) === 'skip');
+  const toMarkPosted   = [..._selectedImages].filter(id => { const s = statusMap.get(id); return s && s !== 'skip' && s !== 'posted'; });
   const toUnmarkPosted = [..._selectedImages].filter(id => statusMap.get(id) === 'posted');
 
-  const _mkStatusAction = (label, iconCls, ids, newStatus) => {
-    const btn = h('button', { cls: 'btn btn-xs btn-outline-secondary' });
-    btn.appendChild(icon(iconCls + ' me-1'));
-    btn.appendChild(document.createTextNode(label));
+  const _mkAction = (label, ids, newStatus) => {
+    const btn = h('button', { cls: 'btn aap-btn', text: label });
     btn.addEventListener('click', async () => {
       try {
         await Promise.all(ids.map(id => apiFetch('PATCH', '/api/images/' + id + '/status', { status: newStatus })));
@@ -481,20 +597,16 @@ function buildActionBar(seriesId) {
     return btn;
   };
 
-  if (toSkip.length > 0)        bar.appendChild(_mkStatusAction('Skip',          'bi bi-eye-slash',          toSkip,        'skip'));
-  if (toUnskip.length > 0)     bar.appendChild(_mkStatusAction('Unskip',         'bi bi-eye',               toUnskip,      'pending'));
-  if (toMarkPosted.length > 0) bar.appendChild(_mkStatusAction('Mark posted',    'bi bi-check-circle-fill', toMarkPosted,  'posted'));
-  if (toUnmarkPosted.length > 0) bar.appendChild(_mkStatusAction('Unmark posted','bi bi-circle',            toUnmarkPosted,'pending'));
+  if (toSkip.length > 0)         bar.appendChild(_mkAction('\u25cc Skip',         toSkip,         'skip'));
+  if (toUnskip.length > 0)       bar.appendChild(_mkAction('\u21ba Unskip',       toUnskip,       'pending'));
+  if (toMarkPosted.length > 0)   bar.appendChild(_mkAction('\u2713 Mark posted',  toMarkPosted,   'posted'));
+  if (toUnmarkPosted.length > 0) bar.appendChild(_mkAction('\u21ba Unmark posted',toUnmarkPosted, 'pending'));
 
-  // Delete selected
-  const delBtn = h('button', { cls: 'btn btn-xs btn-outline-danger' });
-  delBtn.appendChild(icon('bi bi-trash me-1'));
-  delBtn.appendChild(document.createTextNode('Delete'));
+  const delBtn = h('button', { cls: 'btn aap-btn aap-btn-danger', text: '\u00d7 Delete' });
   delBtn.addEventListener('click', () => {
     showConfirm('Delete ' + _selectedImages.size + ' image(s)?', async () => {
       try {
-        const toDelete = [..._selectedImages];
-        await Promise.all(toDelete.map(id => apiFetch('DELETE', '/api/images/' + id)));
+        await Promise.all([..._selectedImages].map(id => apiFetch('DELETE', '/api/images/' + id)));
         const updated = await apiFetch('GET', '/api/series/' + seriesId);
         App.currentSeries = updated;
         renderEditor(updated);
@@ -503,11 +615,9 @@ function buildActionBar(seriesId) {
     });
   });
   bar.appendChild(delBtn);
+  bar.appendChild(h('div', { style: 'flex:1' }));
 
-  // Save (persist selection as queued)
-  const saveBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
-  saveBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveBtn.appendChild(document.createTextNode('Save'));
+  const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', text: '\u21b3 Save' });
   saveBtn.addEventListener('click', async () => {
     try {
       const updated = await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
@@ -517,39 +627,49 @@ function buildActionBar(seriesId) {
     } catch (e) { showToast(e.message, 'danger'); }
   });
   bar.appendChild(saveBtn);
-
   return bar;
 }
 
 function _refreshActionBar(seriesId) {
   const old = document.getElementById('imageActionBar');
-  if (old) old.replaceWith(buildActionBar(seriesId));
+  if (!old) return;
+  old.replaceWith(buildActionBar(seriesId));
 }
 
 let _sortable = null;
+let _sortableLib = null;
 let _lightboxImages = [];
 let _lightboxIdx    = 0;
 let _lightboxOpen   = false;
 
 function initImageSortable(seriesId) {
-  const strip = document.getElementById('imageStrip');
-  if (!strip) return;
-  if (_sortable) { _sortable.destroy(); _sortable = null; }
+  const grid = document.getElementById('selectedTray');
+  const lib  = document.getElementById('libraryGrid');
+  if (!grid) return;
+  if (_sortable)    { _sortable.destroy();    _sortable    = null; }
+  if (_sortableLib) { _sortableLib.destroy(); _sortableLib = null; }
   const touch = window.matchMedia('(pointer: coarse)').matches;
-  _sortable = Sortable.create(strip, {
+  const opts = (container) => ({
     animation: 150,
     ghostClass: 'sortable-ghost',
-    ...(touch
-      ? { delay: 300, forceFallback: true, touchStartThreshold: 8 }
-      : { handle: '.thumb-grip', touchStartThreshold: 4 }),
+    filter: '.aap-thumb-slot',
+    forceFallback: true,
+    fallbackTolerance: 4,
+    ...(touch ? { delay: 300, touchStartThreshold: 8 } : {}),
     onEnd: async () => {
-      const ids = [...strip.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
+      const selIds = [...grid.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId);
+      const libIds = lib ? [...lib.querySelectorAll('[data-image-id]')].map(el => el.dataset.imageId) : [];
       try {
-        await apiFetch('PUT', '/api/series/' + seriesId + '/images/reorder', { image_ids: ids });
+        await apiFetch('PUT', '/api/series/' + seriesId + '/images/reorder', { image_ids: [...selIds, ...libIds] });
       } catch (e) { showToast('Reorder failed: ' + e.message, 'danger'); }
     },
   });
-  if (touch) strip.addEventListener('contextmenu', e => e.preventDefault());
+  _sortable = Sortable.create(grid, opts(grid));
+  if (lib) _sortableLib = Sortable.create(lib, opts(lib));
+  if (touch) {
+    grid.addEventListener('contextmenu', e => e.preventDefault());
+    if (lib) lib.addEventListener('contextmenu', e => e.preventDefault());
+  }
 }
 
 function initLightbox() {
@@ -577,12 +697,10 @@ function initLightbox() {
     try {
       const updated = await apiFetch('PATCH', '/api/images/' + img.id + '/status', { status: newStatus });
       _lightboxImages[_lightboxIdx] = { ...img, status: newStatus };
-      // preserve frontend selection across re-render; remove patched image if it became skip/posted
       const savedSelection = new Set(_selectedImages);
       if (newStatus === 'skip' || newStatus === 'posted') savedSelection.delete(img.id);
       App.currentSeries = updated;
       renderEditor(updated);
-      // restore selection (renderEditor re-inits from DB queued; we override with saved)
       _selectedImages = savedSelection;
       _lightboxRender();
     } catch (err) { showToast(err.message, 'danger'); }
@@ -591,13 +709,16 @@ function initLightbox() {
   document.getElementById('lightboxQueueBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
     if (img.status === 'posted') return;
-    const seriesId = App.currentSeriesId;
-    _toggleSelection(img.id, img.status, seriesId);
+    _toggleSelection(img.id, img.status, App.currentSeriesId);
     _lightboxRender();
   });
   document.getElementById('lightboxSkipBtn').addEventListener('click', () => {
     const img = _lightboxImages[_lightboxIdx];
     _lightboxPatch(img.status === 'skip' ? 'pending' : 'skip');
+  });
+  document.getElementById('lightboxMarkPostedBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    if (img.status !== 'posted') _lightboxPatch('posted');
   });
   document.getElementById('lightboxDeleteBtn').addEventListener('click', async () => {
     const img = _lightboxImages[_lightboxIdx];
@@ -615,6 +736,12 @@ function initLightbox() {
       showToast('Moved to Trash', 'success');
     } catch (err) { showToast(err.message, 'danger'); }
   });
+  document.getElementById('lightboxFilmstrip').addEventListener('click', e => {
+    const thumb = e.target.closest('[data-filmstrip-idx]');
+    if (!thumb) return;
+    _lightboxIdx = parseInt(thumb.dataset.filmstripIdx, 10);
+    _lightboxRender();
+  });
 }
 
 function openLightbox(images, startIdx) {
@@ -627,26 +754,41 @@ function openLightbox(images, startIdx) {
 
 function _lightboxRender() {
   const img = _lightboxImages[_lightboxIdx];
+
   document.getElementById('lightboxImg').setAttribute('src', img.public_url);
   document.getElementById('lightboxImg').setAttribute('alt', 'Image ' + (_lightboxIdx + 1));
-  document.getElementById('lightboxCounter').textContent =
-    (_lightboxIdx + 1) + ' / ' + _lightboxImages.length;
+
+  const counter = document.getElementById('lightboxCounter');
+  const muteSpan = h('span', { cls: 'aap-mute' }, '/ ' + _lightboxImages.length);
+  counter.replaceChildren(
+    document.createTextNode((_lightboxIdx + 1) + ' '),
+    muteSpan
+  );
+
   const single = _lightboxImages.length <= 1;
   document.getElementById('lightboxPrev').classList.toggle('invisible', single);
   document.getElementById('lightboxNext').classList.toggle('invisible', single);
 
+  const selBadge = document.getElementById('lightboxSelectedBadge');
+  if (selBadge) selBadge.classList.toggle('d-none', !_selectedImages.has(img.id));
+
+  const label = document.getElementById('lightboxActionsLabel');
+  if (label) label.textContent = 'image ' + String(_lightboxIdx + 1).padStart(2, '0');
+
   const qBtn = document.getElementById('lightboxQueueBtn');
   const isSelected = _selectedImages.has(img.id);
-  qBtn.replaceChildren(icon(isSelected ? 'bi bi-check-circle-fill me-1' : 'bi bi-circle me-1'),
-    document.createTextNode(isSelected ? 'Deselect' : 'Select'));
+  qBtn.textContent = isSelected ? '✓ Deselect' : '+ Select';
+  qBtn.classList.toggle('aap-btn-selected', isSelected);
   qBtn.setAttribute('aria-label', isSelected ? 'Deselect image' : 'Select image');
   qBtn.disabled = img.status === 'posted';
 
   const sBtn = document.getElementById('lightboxSkipBtn');
   const isSkip = img.status === 'skip';
-  sBtn.replaceChildren(icon(isSkip ? 'bi bi-eye me-1' : 'bi bi-eye-slash me-1'),
-    document.createTextNode(isSkip ? 'Unskip' : 'Skip'));
+  sBtn.textContent = isSkip ? '↺ Unskip' : '◌ Skip';
   sBtn.setAttribute('aria-label', isSkip ? 'Unskip image' : 'Skip image');
+
+  const mpBtn = document.getElementById('lightboxMarkPostedBtn');
+  if (mpBtn) mpBtn.classList.toggle('d-none', img.status === 'posted');
 
   const moveMenu = document.getElementById('lightboxMoveMenu');
   if (moveMenu) {
@@ -661,6 +803,33 @@ function _lightboxRender() {
         _lightboxRender();
       }
     }).forEach(li => moveMenu.appendChild(li));
+  }
+
+  // Filmstrip
+  const strip = document.getElementById('lightboxFilmstrip');
+  if (strip) {
+    strip.replaceChildren(
+      ..._lightboxImages.map((im, i) => {
+        const hue = [...im.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+        const btn = h('button', {
+          cls: 'aap-filmstrip__thumb' + (i === _lightboxIdx ? ' is-current' : ''),
+          type: 'button',
+          style: '--thumb-color: hsl(' + hue + ' 35% 40%)',
+          'data-filmstrip-idx': String(i),
+        },
+          h('span', { cls: 'aap-filmstrip__thumb-num' },
+            String(i + 1).padStart(2, '0'))
+        );
+        if (im.public_url) {
+          const fImg = document.createElement('img');
+          fImg.src = im.public_url;
+          fImg.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0';
+          btn.style.position = 'relative';
+          btn.insertBefore(fImg, btn.firstChild);
+        }
+        return btn;
+      })
+    );
   }
 }
 
@@ -726,165 +895,170 @@ async function deleteVariant(variantId) {
 // ── Descriptions card ─────────────────────────────────────────────────────────
 function buildDescriptionsCard(series) {
   const variants = series.ai_variants || [];
-  const hasContent = !!(
-    variants.length ||
-    series.title || series.title_ru ||
-    series.description_en || series.description_ru ||
-    (series.tags_instagram || []).length ||
-    (series.tags_telegram || []).length
-  );
-  const bodyId = 'descBody-' + series.id;
-  const variantBtns = h('div', { cls: 'd-flex gap-1 flex-wrap mb-2' });
+
+  const variantRow = h('div', { cls: 'aap-variant-row' });
   if (!variants.length) {
-    variantBtns.appendChild(h('p', { cls: 'text-muted small mb-2', text: 'No AI variants yet.' }));
+    variantRow.appendChild(h('span', { cls: 'aap-panel-head__meta', text: 'No AI variants yet.' }));
   } else {
     variants.forEach((v, i) => {
-      const btn = h('button', {
-        cls: 'btn btn-xs ' + (v.id === series.chosen_variant_id ? 'btn-primary' : 'btn-outline-secondary'),
+      const isChosen  = v.id === series.chosen_variant_id;
+      const isPartial = !v.title;
+      const pill = h('button', {
+        cls: 'aap-variant' + (isChosen ? ' is-active' : ''),
+        type: 'button',
         'data-variant-idx': String(i),
         onclick: () => applyVariant(i),
-      });
-      const isPartialV = !v.title;
-      btn.appendChild(document.createTextNode('V' + (variants.length - i) + ' '));
-      btn.appendChild(h('span', { cls: 'opacity-75', style: 'font-size:12px', text: isPartialV ? `(draft) ${v.model}` : v.model }));
-      const delBtn = h('button', {
-        cls: 'btn btn-xs btn-outline-danger px-1',
-        title: 'Delete variant',
-        onclick: (e) => { e.stopPropagation(); deleteVariant(v.id); },
-        style: v.used_in_posts ? 'display:none' : '',
-      });
-      delBtn.appendChild(document.createTextNode('×'));
-      variantBtns.appendChild(h('span', { style: 'display:inline-flex;gap:2px;align-items:center' }, btn, delBtn));
+      },
+        h('span', { cls: 'aap-variant__label', text: 'V' + (variants.length - i) }),
+        h('span', { cls: 'aap-variant__model',
+          text: (isPartial ? '(draft) ' : '') + (v.model || '') }),
+        h('span', { cls: 'aap-variant__x', text: '\u00d7' })
+      );
+      pill.querySelector('.aap-variant__x').setAttribute('title', 'Delete variant');
+      if (v.used_in_posts) {
+        pill.querySelector('.aap-variant__x').style.display = 'none';
+      } else {
+        pill.querySelector('.aap-variant__x').addEventListener('click', e => {
+          e.stopPropagation();
+          deleteVariant(v.id);
+        });
+      }
+      variantRow.appendChild(pill);
     });
   }
+  const addPill = h('button', { cls: 'aap-variant-add', type: 'button', text: '\uff0b Generate' });
+  addPill.addEventListener('click', () => document.getElementById('generateBtn')?.click());
+  variantRow.appendChild(addPill);
 
-  const descEn = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_en', rows: '4' });
-  descEn.value = series.description_en || '';
-  const descRu = h('textarea', { cls: 'form-control form-control-sm', id: 'f_desc_ru', rows: '4' });
-  descRu.value = series.description_ru || '';
-  const tagsIg = h('textarea', { cls: 'form-control form-control-sm', id: 'f_tags_ig', rows: '2' });
-  tagsIg.value = (series.tags_instagram || []).join(' ');
-  const tagsTg = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_tags_tg' });
-  tagsTg.value = (series.tags_telegram || []).join(' ');
-
-  const pubTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title', placeholder: 'Publication title (pre-fills new posts)' });
-  pubTitle.value = series.title || '';
-  const pubTitleRu = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pub_title_ru', placeholder: 'Publication title RU (pre-fills Telegram posts)' });
+  const descEn    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_en', rows: '5', 'aria-label': 'EN Instagram description' });
+  descEn.value    = series.description_en || '';
+  descEn.addEventListener('input', () => _autoGrow(descEn));
+  const descRu    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_ru', rows: '5', 'aria-label': 'RU description' });
+  descRu.value    = series.description_ru || '';
+  descRu.addEventListener('input', () => _autoGrow(descRu));
+  const tagsIg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_ig', 'aria-label': 'EN Instagram tags' });
+  tagsIg.value    = (series.tags_instagram || []).join(' ');
+  const tagsTg    = h('input', { type: 'text', cls: 'aap-tag-input', id: 'f_tags_tg', 'aria-label': 'TG tags' });
+  tagsTg.value    = (series.tags_telegram || []).join(' ');
+  const pubTitle  = h('input', { type: 'text', cls: 'aap-lang-card__title', id: 'f_pub_title', placeholder: 'Publication title EN', 'aria-label': 'EN title' });
+  pubTitle.value  = series.title || '';
+  const pubTitleRu = h('input', { type: 'text', cls: 'aap-lang-card__title', id: 'f_pub_title_ru', placeholder: 'Publication title RU', 'aria-label': 'RU title' });
   pubTitleRu.value = series.title_ru || '';
 
-  const _chosenVariant = series.chosen_variant_id
+  const _cv  = series.chosen_variant_id
     ? (series.ai_variants || []).find(v => v.id === series.chosen_variant_id)
     : null;
-  const _chosenArch = _chosenVariant?.archive_metadata || {};
+  const _arch = _cv?.archive_metadata || {};
 
-  const igSeo = h('textarea', { cls: 'form-control form-control-sm', id: 'f_instagram_seo', rows: '2' });
-  igSeo.value = _chosenVariant?.instagram_seo || '';
-  const pinTitle = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_title' });
-  pinTitle.value = _chosenVariant?.pinterest_title || '';
-  const pinDesc = h('textarea', { cls: 'form-control form-control-sm', id: 'f_pin_desc', rows: '2' });
-  pinDesc.value = _chosenVariant?.pinterest_description || '';
-  const pinBoard = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_pin_board' });
-  pinBoard.value = _chosenVariant?.pinterest_board || '';
-  const archWorld = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_world', placeholder: 'comma-separated' });
-  archWorld.value = (_chosenArch.world_keywords || []).join(', ');
-  const archVisual = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_visual', placeholder: 'comma-separated' });
-  archVisual.value = (_chosenArch.visual_keywords || []).join(', ');
-  const archMood = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'f_arch_mood', placeholder: 'comma-separated' });
-  archMood.value = (_chosenArch.mood_keywords || []).join(', ');
-
-  const saveBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveDescBtn' });
-  saveBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveBtn.appendChild(document.createTextNode('Save'));
-  saveBtn.addEventListener('click', () => saveDescription(series.id));
-
-  const resetBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary ms-2' });
-  resetBtn.appendChild(icon('bi bi-arrow-counterclockwise me-1'));
-  resetBtn.appendChild(document.createTextNode('Reset'));
-  resetBtn.addEventListener('click', resetToSaved);
-
-  const mkField = (lbl, ctrl) => h('div', { cls: 'col-12 col-lg-6' },
-    h('label', { cls: 'form-label small mb-0', text: lbl }), ctrl);
+  const igSeo    = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_instagram_seo' });
+  igSeo.value    = _cv?.instagram_seo || '';
+  const pinTitle = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_pin_title' });
+  pinTitle.value = _cv?.pinterest_title || '';
+  const pinDesc  = h('textarea', { cls: 'form-control aap-input', id: 'f_pin_desc', rows: '2' });
+  pinDesc.value  = _cv?.pinterest_description || '';
+  const pinBoard = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_pin_board' });
+  pinBoard.value = _cv?.pinterest_board || '';
+  const archWorld  = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_world',  placeholder: 'comma-separated' });
+  archWorld.value  = (_arch.world_keywords  || []).join(', ');
+  const archVisual = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_visual', placeholder: 'comma-separated' });
+  archVisual.value = (_arch.visual_keywords || []).join(', ');
+  const archMood   = h('input', { type: 'text', cls: 'form-control aap-input', id: 'f_arch_mood',   placeholder: 'comma-separated' });
+  archMood.value   = (_arch.mood_keywords   || []).join(', ');
 
   const boardChips = h('div', { cls: 'mt-1 d-flex flex-wrap gap-1' });
-  const _fillBoardChips = boards => {
-    boards.forEach(name => {
-      const chip = h('button', { type: 'button', cls: 'btn btn-outline-secondary btn-sm py-0 px-2', style: 'font-size:0.7rem' });
-      chip.appendChild(document.createTextNode(name));
-      chip.addEventListener('click', () => { pinBoard.value = name; });
-      boardChips.appendChild(chip);
-    });
-  };
+  const _fillBoards = boards => boards.forEach(name => {
+    const chip = h('button', { type: 'button', cls: 'aap-chip',
+      style: 'padding:3px 8px;font-size:11px', text: name });
+    chip.addEventListener('click', () => { pinBoard.value = name; });
+    boardChips.appendChild(chip);
+  });
   if (_pinterestBoardsCache) {
-    _fillBoardChips(_pinterestBoardsCache);
+    _fillBoards(_pinterestBoardsCache);
   } else {
-    apiFetch('GET', '/api/settings/pinterest/boards').then(data => {
-      _pinterestBoardsCache = data.boards || [];
-      _fillBoardChips(_pinterestBoardsCache);
-    }).catch(e => console.warn('Failed to load Pinterest boards:', e));
+    apiFetch('GET', '/api/settings/pinterest/boards').then(d => {
+      _pinterestBoardsCache = d.boards || [];
+      _fillBoards(_pinterestBoardsCache);
+    }).catch(() => {});
   }
 
-  const form = h('div', { cls: 'row g-2' },
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title EN (pre-fills posts)' }), pubTitle),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Publication title RU (pre-fills Telegram posts)' }), pubTitleRu),
-    mkField('Description EN (Instagram & FB Page)', descEn),
-    mkField('Description RU (Telegram)', descRu),
-    mkField('Instagram & FB Page tags', tagsIg),
-    h('div', { cls: 'col-12 col-lg-6' }, h('label', { cls: 'form-label small mb-0', text: 'Telegram tags' }), tagsTg),
-    mkField('Pinterest title', pinTitle),
-    h('div', { cls: 'col-12 col-lg-6' },
-      h('label', { cls: 'form-label small mb-0', text: 'Pinterest board' }),
-      pinBoard,
-      boardChips,
+  const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', id: 'saveDescBtn' },
+    icon('bi bi-floppy me-1'), document.createTextNode('Save'));
+  saveBtn.addEventListener('click', () => saveDescription(series.id));
+
+  const resetBtn = h('button', { cls: 'btn aap-btn ms-2' },
+    icon('bi bi-arrow-counterclockwise me-1'), document.createTextNode('Reset'));
+  resetBtn.addEventListener('click', resetToSaved);
+
+  const chosenIdx = _cv ? variants.indexOf(_cv) : -1;
+  const variantCount = variants.length + ' variants'
+    + (chosenIdx >= 0 ? ' \u00b7 V' + (variants.length - chosenIdx) + ' active' : '');
+
+  const section = h('section', { cls: 'px-4 pb-4', id: 'descBody-' + series.id },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label', text: 'Descriptions' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('span', { cls: 'aap-panel-head__meta', text: variantCount })
     ),
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Pinterest description' }), pinDesc),
-    h('div', { cls: 'col-12' }, saveBtn, resetBtn));
+    variantRow,
+    h('div', { cls: 'row g-3 mt-2' },
+      h('div', { cls: 'col-md-6' },
+        h('div', { cls: 'aap-card aap-lang-card' },
+          h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+            h('span', { cls: 'aap-lang-badge', text: 'EN' }),
+            h('span', { cls: 'aap-panel-head__meta', text: 'publication' })
+          ),
+          pubTitle,
+          h('label', { cls: 'aap-field-label', text: 'Instagram & FB' }), descEn,
+          h('label', { cls: 'aap-field-label mt-3', text: 'Tags' }), tagsIg
+        )
+      ),
+      h('div', { cls: 'col-md-6' },
+        h('div', { cls: 'aap-card aap-lang-card' },
+          h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+            h('span', { cls: 'aap-lang-badge', text: 'RU' }),
+            h('span', { cls: 'aap-panel-head__meta', text: 'publication' })
+          ),
+          pubTitleRu,
+          h('label', { cls: 'aap-field-label', text: 'Telegram' }), descRu,
+          h('label', { cls: 'aap-field-label mt-3', text: 'Tags' }), tagsTg
+        )
+      )
+    ),
+    h('div', { cls: 'aap-card mt-3' },
+      h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+        h('span', { cls: 'aap-pin-mark', text: 'P' }),
+        h('span', { cls: 'aap-composer__title', text: 'Pinterest' })
+      ),
+      h('div', { cls: 'row g-3 mb-3' },
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Title' }), pinTitle),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Board' }), pinBoard, boardChips)
+      ),
+      h('label', { cls: 'aap-field-label', text: 'Description' }), pinDesc
+    ),
+    h('div', { cls: 'aap-card mt-3' },
+      h('div', { cls: 'd-flex align-items-center gap-2 mb-3' },
+        h('span', { style: 'color:var(--aap-accent);font-size:12px', text: '\u25be' }),
+        h('span', { cls: 'aap-composer__title', text: 'Semantic layer' }),
+        h('span', { cls: 'aap-auto-badge', text: 'auto' })
+      ),
+      h('div', { cls: 'row g-3' },
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Instagram discovery' }), igSeo),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'World keywords' }), archWorld),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Visual keywords' }), archVisual),
+        h('div', { cls: 'col-md-6' },
+          h('label', { cls: 'aap-field-label', text: 'Mood keywords' }), archMood)
+      )
+    ),
+    h('div', { cls: 'mt-3' }, saveBtn, resetBtn)
+  );
 
-  form.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
-
-  const semDetails = document.createElement('details');
-  semDetails.className = 'mt-2';
-  const semSummary = document.createElement('summary');
-  semSummary.className = 'small text-muted';
-  semSummary.textContent = 'Semantic Layer';
-  semDetails.appendChild(semSummary);
-  const semGrid = h('div', { cls: 'row g-2 mt-1' },
-    h('div', { cls: 'col-12' }, h('label', { cls: 'form-label small mb-0', text: 'Instagram discovery' }), igSeo),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: world keywords' }), archWorld),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: visual keywords' }), archVisual),
-    h('div', { cls: 'col-12 col-lg-4' }, h('label', { cls: 'form-label small mb-0', text: 'Archive: mood keywords' }), archMood));
-  semDetails.appendChild(semGrid);
-
-  const chevron = icon('bi bi-chevron-' + (hasContent ? 'up' : 'down'));
-  const toggleBtn = h('button', {
-    'data-bs-toggle': 'collapse',
-    'data-bs-target': '#' + bodyId,
-    cls: 'btn btn-xs btn-link p-0 ms-auto border-0 text-body',
-    title: 'Toggle descriptions',
-    'aria-label': 'Toggle descriptions',
-    'aria-expanded': String(hasContent),
-    'aria-controls': bodyId,
-  });
-  toggleBtn.appendChild(chevron);
-
-  const bodyEl = h('div', { cls: 'collapse' + (hasContent ? ' show' : ''), id: bodyId },
-    h('div', { cls: 'card-body p-2' }, variantBtns, form, semDetails));
-  bodyEl.addEventListener('show.bs.collapse', () => {
-    chevron.className = 'bi bi-chevron-up';
-    toggleBtn.setAttribute('aria-expanded', 'true');
-  });
-  bodyEl.addEventListener('hide.bs.collapse', () => {
-    chevron.className = 'bi bi-chevron-down';
-    toggleBtn.setAttribute('aria-expanded', 'false');
-  });
-
-  const headerLabel = h('span', { cls: 'small fw-medium d-flex align-items-center w-100' });
-  headerLabel.appendChild(icon('bi bi-card-text me-1'));
-  headerLabel.appendChild(document.createTextNode('Descriptions'));
-  headerLabel.appendChild(toggleBtn);
-
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2' }, headerLabel),
-    bodyEl);
+  section.addEventListener('input', _debounce(_updateSaveDescBtn, 150));
+  return section;
 }
 
 function resetToSaved() {
@@ -912,9 +1086,9 @@ function resetToSaved() {
   _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
     const isChosen = (s.ai_variants || [])[i]?.id === s.chosen_variant_id;
-    btn.classList.toggle('btn-primary', isChosen);
-    btn.classList.toggle('btn-outline-secondary', !isChosen);
+    btn.classList.toggle('is-active', isChosen);
   });
+  _autoGrowDescTextareas();
 }
 
 function applyVariant(idx) {
@@ -957,9 +1131,9 @@ function applyVariant(idx) {
   App.activeVariantId = v.id;
   _updateSaveDescBtn();
   document.querySelectorAll('[data-variant-idx]').forEach((btn, i) => {
-    btn.classList.toggle('btn-primary', i === idx);
-    btn.classList.toggle('btn-outline-secondary', i !== idx);
+    btn.classList.toggle('is-active', i === idx);
   });
+  _autoGrowDescTextareas();
 }
 
 async function saveDescription(seriesId) {
@@ -1003,102 +1177,140 @@ async function saveDescription(seriesId) {
 
 function _restoreSelectionAfterRender(savedSel, seriesId) {
   _selectedImages = savedSel;
-  (App.currentSeries?.images ?? []).forEach(img => {
-    const isSelected = savedSel.has(img.id);
-    const btn = document.querySelector('[data-select-btn="' + img.id + '"]');
-    if (btn) btn.replaceChildren(icon(_selectIcon(img.id, img.status)));
-    const thumb = document.querySelector('[data-image-id="' + img.id + '"]');
-    if (thumb) thumb.classList.toggle('thumb-selected', isSelected);
+  [
+    ...document.querySelectorAll('#selectedTray [data-image-id]'),
+    ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+  ].forEach(thumb => {
+    const id = thumb.dataset.imageId, st = thumb.dataset.imageStatus;
+    thumb.classList.toggle('is-selected', savedSel.has(id));
+    const btn = thumb.querySelector('[data-select-btn]');
+    if (btn) btn.replaceChildren(icon(_selectIcon(id, st)));
   });
-  const strip = document.getElementById('imageStrip');
-  if (strip) {
-    const thumbs = [...strip.querySelectorAll('[data-image-id]')];
-    const _grp = el => {
-      const id = el.dataset.imageId, st = el.dataset.imageStatus;
-      return savedSel.has(id) ? 0 : st === 'posted' ? 2 : st === 'skip' ? 3 : 1;
-    };
-    thumbs.sort((a, b) => _grp(a) - _grp(b)).forEach(t => strip.appendChild(t));
-  }
-  const bar = document.getElementById('imageActionBar');
-  if (bar) bar.replaceWith(buildActionBar(seriesId));
+  _resortStrip();
+  _refreshActionBar(seriesId);
   _refreshImagesHeader((App.currentSeries?.images ?? []).length);
 }
 
 // ── Generate card ─────────────────────────────────────────────────────────────
 function buildGenerateCard(seriesId) {
-  const hintInput = h('input', { type: 'text', cls: 'form-control form-control-sm', id: 'genHint', placeholder: 'e.g. this is a fox spirit...' });
+  const hintInput = h('input', {
+    type: 'text', cls: 'form-control aap-input', id: 'genHint',
+    placeholder: 'e.g. astronaut on lost space station sees a Hand. Outside.',
+  });
+
   const provSel = document.createElement('select');
-  provSel.className = 'form-select form-select-sm'; provSel.id = 'genProvider'; provSel.style.width = '120px';
-  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']].forEach(([val, lbl]) => {
-    const o = document.createElement('option'); o.value = val; o.textContent = lbl; provSel.appendChild(o);
+  provSel.className = 'form-select aap-input'; provSel.id = 'genProvider';
+  [['', 'Default'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'],
+   ['google', 'Google'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter']
+  ].forEach(([val, lbl]) => {
+    const o = document.createElement('option'); o.value = val; o.textContent = lbl;
+    provSel.appendChild(o);
   });
   if (App.generateProvider != null) provSel.value = App.generateProvider;
+
   const modelSel = document.createElement('select');
-  modelSel.className = 'form-select form-select-sm'; modelSel.id = 'genModel'; modelSel.style.width = '200px';
+  modelSel.className = 'form-select aap-input'; modelSel.id = 'genModel';
   buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
   if (App.generateModel) modelSel.value = App.generateModel;
+
   provSel.addEventListener('change', () => {
     App.generateProvider = provSel.value;
     buildProviderModelSelect(modelSel, provSel.value, { withDefault: true });
   });
   modelSel.addEventListener('change', () => { App.generateModel = modelSel.value; });
-  const numVariantsInput = h('input', { type: 'number', cls: 'form-control form-control-sm', id: 'genNumVariants', min: '1', max: '5', value: String(App.generateNumVariants || 1), style: 'width:60px' });
-  numVariantsInput.addEventListener('change', () => { App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 3; });
 
-  const langEn = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary active', id: 'genLangEn', text: 'EN' });
-  const langRu = h('button', { type: 'button', cls: 'btn btn-sm btn-outline-secondary', id: 'genLangRu', text: 'RU' });
+  const numVariantsInput = h('input', {
+    type: 'number', cls: 'form-control aap-input', id: 'genNumVariants',
+    min: '1', max: '5',
+    value: String(App.generateNumVariants || 1),
+    style: 'width:60px',
+  });
+  numVariantsInput.addEventListener('change', () => {
+    App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 1;
+  });
+
+  const langEn = h('button', { type: 'button', cls: 'is-active', id: 'genLangEn', 'data-lang': 'EN', text: 'EN' });
+  const langRu = h('button', { type: 'button', id: 'genLangRu', 'data-lang': 'RU', text: 'RU' });
   const _setLang = lang => {
     App.generateLanguage = lang;
-    langEn.classList.toggle('active', lang === 'en');
-    langRu.classList.toggle('active', lang === 'ru');
+    langEn.classList.toggle('is-active', lang === 'en');
+    langRu.classList.toggle('is-active', lang === 'ru');
   };
   langEn.addEventListener('click', () => _setLang('en'));
   langRu.addEventListener('click', () => _setLang('ru'));
   if (!App.generateLanguage) App.generateLanguage = 'en';
   _setLang(App.generateLanguage);
-  const langToggle = h('div', { cls: 'btn-group btn-group-sm' }, langEn, langRu);
-
-  const genBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'generateBtn' });
-  genBtn.appendChild(icon('bi bi-robot me-1'));
-  genBtn.appendChild(document.createTextNode('Generate Drafts'));
-  genBtn.addEventListener('click', () => generateDrafts(seriesId));
-
-  const genFullBtn = h('button', { cls: 'btn btn-sm btn-outline-success', id: 'generateFullBtn' });
-  genFullBtn.appendChild(icon('bi bi-stars me-1'));
-  genFullBtn.appendChild(document.createTextNode('Generate Full'));
-  genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
-  const imgLabel = h('label', { cls: 'd-flex align-items-center gap-1 small text-muted', style: 'cursor:pointer' });
-  imgLabel.appendChild(imgCheck);
-  imgLabel.appendChild(document.createTextNode(' Include images'));
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-robot me-1'));
-  headerLabel.appendChild(document.createTextNode('AI Generation'));
+  const genBtn = h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn' },
+    document.createTextNode('\u2736 Generate '),
+    numVariantsInput,
+    document.createTextNode(' drafts')
+  );
+  genBtn.addEventListener('click', () => generateDrafts(seriesId));
+
+  const genFullBtn = h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
+  genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const errorBadge = h('a', { cls: 'ms-auto small text-warning d-none', id: 'genErrorBadge', style: 'cursor:pointer' });
   errorBadge.setAttribute('data-bs-toggle', 'collapse');
   errorBadge.setAttribute('href', '#genErrorLog');
-
   const errorList = h('ul', { cls: 'list-group list-group-flush', id: 'genErrorList' });
   const errorLog  = h('div', { cls: 'collapse', id: 'genErrorLog' }, errorList);
   const errorDiv  = h('div', { cls: 'alert alert-danger small py-1 px-2 mt-2 mb-0 d-none', id: 'genError' });
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header py-2 d-flex align-items-center' }, headerLabel, errorBadge),
-    h('div', { cls: 'card-body p-2' },
-      h('div', { cls: 'd-flex gap-2 flex-wrap align-items-end' },
-        h('div', { cls: 'flex-grow-1' }, h('label', { cls: 'form-label small mb-0', text: 'Hint' }), hintInput),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Provider' }), provSel),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Model' }), modelSel),
-        h('div', null, h('label', { cls: 'form-label small mb-0', text: 'Variants' }), numVariantsInput),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: 'Language' }), langToggle),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genBtn),
-        h('div', null, h('label', { cls: 'form-label small mb-0 d-block', text: ' ' }), genFullBtn),
-        h('div', { cls: 'align-self-end pb-1' }, imgLabel)),
-      errorDiv,
-      errorLog));
+  return h('section', { cls: 'px-4 pb-4' },
+    h('div', { cls: 'aap-card aap-card--gen' },
+      h('div', { cls: 'aap-panel-head' },
+        h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent', text: '\u2736 Generate' }),
+        h('span', { cls: 'aap-panel-head__rule' }),
+        errorBadge
+      ),
+      h('div', null,
+        h('label', { cls: 'aap-field-label', text: 'Hint' }),
+        h('div', { cls: 'aap-hint-input' },
+          h('span', { cls: 'aap-hint-input__prompt', text: '\u203a' }),
+          hintInput
+        )
+      ),
+      h('div', { cls: 'row g-2 mt-3' },
+        h('div', { cls: 'col' },
+          h('label', { cls: 'aap-field-label', text: 'Provider' }), provSel),
+        h('div', { cls: 'col' },
+          h('label', { cls: 'aap-field-label', text: 'Model' }), modelSel),
+        h('div', { cls: 'col-auto', style: 'width:110px' },
+          h('label', { cls: 'aap-field-label', text: 'Language' }),
+          h('div', { cls: 'aap-seg' }, langEn, langRu)
+        )
+      ),
+      h('div', { cls: 'aap-rail' },
+        h('div', { cls: 'aap-step aap-step--active' },
+          h('div', { cls: 'aap-step__head' },
+            h('span', { cls: 'aap-step__num', text: '1' }),
+            h('span', { cls: 'aap-step__title', text: 'Draft descriptions' })
+          ),
+          h('p', { cls: 'aap-step__body', text: 'Produces EN drafts to choose from.' }),
+          genBtn,
+          h('label', {
+            cls: 'd-flex align-items-center gap-2 mt-2',
+            style: 'font-size:11px;color:var(--aap-ink-soft)',
+          }, imgCheck, document.createTextNode(' include images as context'))
+        ),
+        h('div', { cls: 'aap-rail__arrow', text: '\u2192' }),
+        h('div', { cls: 'aap-step' },
+          h('div', { cls: 'aap-step__head' },
+            h('span', { cls: 'aap-step__num aap-step__num--outline', text: '2' }),
+            h('span', { cls: 'aap-step__title', text: 'Fill the rest' })
+          ),
+          h('p', { cls: 'aap-step__body',
+            text: 'From chosen draft: translate, write TG & Pinterest, derive tags + semantics.' }),
+          genFullBtn
+        )
+      ),
+      errorDiv, errorLog
+    )
+  );
 }
 
 async function generateDrafts(seriesId) {
@@ -1115,12 +1327,12 @@ async function generateDrafts(seriesId) {
   }
   let selectedImageIds = null;
   if (includeImages && _selectedImages.size > 0) {
-    const strip = document.getElementById('imageStrip');
-    selectedImageIds = strip
-      ? [...strip.querySelectorAll('[data-image-id]')]
-          .map(el => el.dataset.imageId)
-          .filter(id => _selectedImages.has(id))
-          .slice(0, 3)
+    const orderedThumbIds = [
+      ...document.querySelectorAll('#selectedTray [data-image-id]'),
+      ...document.querySelectorAll('#libraryGrid [data-image-id]'),
+    ].map(el => el.dataset.imageId);
+    selectedImageIds = orderedThumbIds.length > 0
+      ? orderedThumbIds.filter(id => _selectedImages.has(id)).slice(0, 3)
       : [..._selectedImages].slice(0, 3);
   }
   try {
@@ -1188,44 +1400,63 @@ async function generateFull(seriesId) {
 }
 
 // ── Actions card ──────────────────────────────────────────────────────────────
-function buildActionsCard(series) {
-  const statusSel = document.createElement('select');
-  statusSel.className = 'form-select form-select-sm'; statusSel.id = 'statusSelect'; statusSel.style.width = '140px';
-  ['new', 'draft', 'approved', 'posted', 'skip'].forEach(s => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s;
-    if (s === series.status) o.selected = true;
-    statusSel.appendChild(o);
-  });
-  if (!['new', 'draft', 'approved', 'posted', 'skip'].includes(series.status)) {
-    const o = document.createElement('option'); o.value = series.status; o.textContent = series.status; o.selected = true;
-    statusSel.appendChild(o);
-  }
-  const saveStatusBtn = h('button', { cls: 'btn btn-sm btn-outline-primary', id: 'saveStatusBtn' });
-  saveStatusBtn.appendChild(icon('bi bi-floppy me-1'));
-  saveStatusBtn.appendChild(document.createTextNode('Save status'));
-  saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
-  statusSel.addEventListener('change', _updateSaveStatusBtn);
+function buildStatusBar(series) {
+  const displayStatus = statusDisplay(series.status);
+  const STATUS_SEG = [
+    { display: 'new',    dbWrite: 'new',    dotCls: 'aap-dot--new' },
+    { display: 'draft',  dbWrite: 'draft',  dotCls: 'aap-dot--draft' },
+    { display: 'active', dbWrite: 'active', dotCls: 'aap-dot--active' },
+    { display: 'done',   dbWrite: 'done',   dotCls: 'aap-dot--done' },
+  ];
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-gear me-1'));
-  headerLabel.appendChild(document.createTextNode('Series'));
+  const seg = h('div', { cls: 'aap-status-seg', id: 'aap-status-seg' });
+  STATUS_SEG.forEach(({ display, dbWrite, dotCls }) => {
+    const isActive = display === displayStatus;
+    const btn = h('button', {
+      type: 'button',
+      cls: isActive ? 'is-active' : '',
+      'data-status': dbWrite,
+    },
+      h('span', { cls: 'aap-dot ' + dotCls }),
+      document.createTextNode(' ' + display.charAt(0).toUpperCase() + display.slice(1))
+    );
+    if (isActive) btn.style.setProperty('--seg-color', 'var(--aap-dot-' + display + ')');
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => {
+        b.classList.remove('is-active');
+        b.style.removeProperty('--seg-color');
+      });
+      btn.classList.add('is-active');
+      btn.style.setProperty('--seg-color', 'var(--aap-dot-' + display + ')');
+      _updateSaveStatusBtn();
+    });
+    seg.appendChild(btn);
+  });
+
+  const saveStatusBtn = h('button', { cls: 'btn aap-btn', id: 'saveStatusBtn',
+    text: '\u21b3 Save status' });
+  saveStatusBtn.addEventListener('click', () => saveStatus(series.id));
 
   const deleteSeriesBtn = h('button', {
-    cls: 'btn btn-xs btn-outline-danger ms-auto',
+    cls: 'btn aap-btn aap-btn-danger',
     title: 'Delete series',
     'aria-label': 'Delete series',
+    text: '\u00d7 Delete series',
   });
-  deleteSeriesBtn.appendChild(icon('bi bi-trash'));
   deleteSeriesBtn.addEventListener('click', () => deleteSeries(series.id));
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex align-items-center py-2' }, headerLabel, deleteSeriesBtn),
-    h('div', { cls: 'card-body p-2' },
-      h('div', { cls: 'd-flex gap-2 align-items-center' }, statusSel, saveStatusBtn)));
+  return h('div', { cls: 'aap-status-bar mt-4' },
+    h('span', { cls: 'aap-field-label m-0', style: 'letter-spacing:.14em', text: 'Series status' }),
+    seg,
+    h('div', { style: 'flex:1' }),
+    deleteSeriesBtn,
+    saveStatusBtn
+  );
 }
 
 async function saveStatus(seriesId) {
-  const status = document.getElementById('statusSelect')?.value;
+  const status = document.querySelector('#aap-status-seg button.is-active')?.dataset.status;
+  if (!status) return;
   try {
     const updated = await apiFetch('PUT', '/api/series/' + seriesId, { status });
     App.currentSeries = updated;
@@ -1242,9 +1473,7 @@ async function deleteSeries(seriesId) {
     App.currentSeriesId = null;
     App.currentSeries = null;
     document.getElementById('si-' + seriesId)?.remove();
-    document.getElementById('editorPanel').replaceChildren(
-      h('p', { cls: 'text-muted text-center mt-5 d-none d-lg-block', text: 'Select a series to edit' })
-    );
+    showView('list');
     showToast('Moved to Trash', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }
@@ -1450,15 +1679,12 @@ const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', post
 function buildPostsCard(series) {
   const imgMap = {};
   series.images.forEach(i => { if (!i.deleted_at) imgMap[i.id] = i.public_url; });
+  const activePosts = (series.posts || []).filter(p => !p.deleted_at);
+  const scheduled   = activePosts.filter(p => p.status === 'scheduled').length;
+  const published   = activePosts.filter(p => p.status === 'posted').length;
 
-  const headerLabel = h('span', { cls: 'small fw-medium' });
-  headerLabel.appendChild(icon('bi bi-send me-1'));
-  headerLabel.appendChild(document.createTextNode('Posts'));
-
-  const newPostBtn = h('button', { cls: 'btn btn-xs btn-outline-primary' });
-  newPostBtn.appendChild(icon('bi bi-plus me-1'));
-  newPostBtn.appendChild(document.createTextNode('New post'));
-
+  const newPostBtn = h('button', { cls: 'btn aap-btn' },
+    icon('bi bi-plus me-1'), document.createTextNode('New post'));
   const formWrap = h('div', { cls: 'd-none' });
   newPostBtn.addEventListener('click', () => {
     if (formWrap.classList.contains('d-none')) {
@@ -1473,75 +1699,106 @@ function buildPostsCard(series) {
   });
 
   const postList = h('div', { cls: 'd-flex flex-column gap-2' });
-  const activePosts = (series.posts || []).filter(p => !p.deleted_at);
   if (!activePosts.length) {
-    postList.appendChild(h('p', { cls: 'text-muted small mb-0', text: 'No posts yet.' }));
+    postList.appendChild(h('p', { cls: 'aap-mute', style: 'font-size:13px;padding:0 0 8px',
+      text: 'No posts yet.' }));
   } else {
     activePosts.forEach(p => postList.appendChild(buildPostRow(p, imgMap, series)));
   }
 
-  return h('div', { cls: 'card mb-3' },
-    h('div', { cls: 'card-header d-flex align-items-center justify-content-between py-2' }, headerLabel, newPostBtn),
-    h('div', { cls: 'card-body p-2' }, formWrap, postList));
+  return h('section', { cls: 'px-4 py-4' },
+    h('div', { cls: 'aap-panel-head' },
+      h('span', { cls: 'aap-panel-head__label', text: 'Posts' }),
+      h('span', { cls: 'aap-panel-head__rule' }),
+      h('span', { cls: 'aap-panel-head__meta',
+        text: scheduled + ' scheduled \u00b7 ' + published + ' published' }),
+      newPostBtn
+    ),
+    formWrap,
+    postList
+  );
 }
 
 function buildPostRow(post, imgMap, series) {
-  const platIcon = icon((POST_PLATFORM_ICON[post.platform] || 'bi bi-send') + ' me-1');
-  const statusBadgeEl = h('span', { cls: 'badge ' + (POST_STATUS_COLOR[post.status] || 'bg-secondary') + ' ms-1', text: post.status });
-  const titleEl = h('span', { cls: 'small text-truncate flex-grow-1', text: post.title || '(no title)', style: 'max-width:180px' });
+  const PLAT_ICON = {
+    telegram:  'bi bi-telegram',
+    instagram: 'bi bi-instagram',
+    facebook:  'bi bi-facebook',
+    pinterest: 'bi bi-pinterest',
+  };
+  const STATUS_COLOR_MAP = {
+    draft:     'var(--aap-ink-mute)',
+    scheduled: 'var(--aap-dot-active)',
+    posted:    'var(--aap-dot-done)',
+    failed:    'var(--aap-danger)',
+  };
 
-  const timeEl = post.posted_at
-    ? h('span', { cls: 'text-muted small', text: formatDate(post.posted_at) })
-    : post.scheduled_at
-      ? h('span', { cls: 'text-purple small' }, icon('bi bi-clock me-1'), document.createTextNode(formatDate(post.scheduled_at)))
-      : null;
-
-  const thumbs = h('div', { cls: 'd-flex gap-1 flex-wrap' });
-  (post.image_ids || []).slice(0, 3).forEach(id => {
-    if (imgMap[id]) {
-      const img = document.createElement('img');
-      img.setAttribute('src', imgMap[id]);
-      img.style.cssText = 'width:28px;height:24px;object-fit:cover;border-radius:2px';
-      thumbs.appendChild(img);
-    }
+  const hue = [...post.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+  const thumbDiv = h('div', {
+    cls: 'aap-post-row__thumb',
+    style: '--thumb-color: hsl(' + hue + ' 40% 40%)',
   });
+  if (post.image_ids?.length && imgMap[post.image_ids[0]]) {
+    const img2 = document.createElement('img');
+    img2.src = imgMap[post.image_ids[0]];
+    img2.style.cssText = 'width:100%;height:100%;object-fit:cover';
+    thumbDiv.appendChild(img2);
+  }
 
-  const actions = h('div', { cls: 'd-flex gap-1 flex-shrink-0' });
+  const platIconCls = PLAT_ICON[post.platform] || 'bi bi-send';
+  const platEl = h('div', { cls: 'aap-post-row__channels' },
+    icon(platIconCls + ' me-1'));
+  const timeEl = post.posted_at
+    ? h('span', { cls: 'aap-post-row__when', text: formatDate(post.posted_at) })
+    : post.scheduled_at
+      ? h('span', { cls: 'aap-post-row__when',
+          style: 'color:var(--aap-dot-active)', text: formatDate(post.scheduled_at) })
+      : null;
+  if (timeEl) platEl.appendChild(timeEl);
 
-  const viewBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'View post content', 'aria-label': 'View post content' });
-  viewBtn.appendChild(icon('bi bi-eye'));
+  const statusEl = h('span', {
+    cls: 'aap-post-row__status',
+    style: '--status-color: ' + (STATUS_COLOR_MAP[post.status] || 'var(--aap-ink-mute)'),
+  },
+    h('span', { cls: 'aap-dot' }),
+    document.createTextNode(' ' + post.status)
+  );
+
+  const actions = h('div', { cls: 'aap-post-row__actions' });
+
+  const viewBtn = h('button', { cls: 'aap-icon-btn', title: 'View post content', 'aria-label': 'View post content' },
+    icon('bi bi-eye'));
   viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
   actions.appendChild(viewBtn);
 
   if (post.status !== 'posted') {
-    const postNowBtn = h('button', { cls: 'btn btn-sm btn-outline-info', title: 'Post now', 'aria-label': 'Post now' });
-    postNowBtn.appendChild(icon('bi bi-send'));
+    const postNowBtn = h('button', { cls: 'aap-icon-btn', title: 'Post now', 'aria-label': 'Post now' },
+      icon('bi bi-send'));
     postNowBtn.addEventListener('click', () => postNow(post.id));
     actions.appendChild(postNowBtn);
   }
 
   if (post.status === 'draft' || post.status === 'failed') {
-    const schedBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Schedule', 'aria-label': 'Schedule post' });
-    schedBtn.appendChild(icon('bi bi-calendar-plus'));
+    const schedBtn = h('button', { cls: 'aap-icon-btn', title: 'Schedule', 'aria-label': 'Schedule' },
+      icon('bi bi-calendar-plus'));
     schedBtn.addEventListener('click', () => {
       const pickerId = 'sched-picker-' + post.id;
       const existing = document.getElementById(pickerId);
       if (existing) { existing.remove(); return; }
-      const dtInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm', style: 'width:200px' });
-      // Pre-fill with current scheduled_at or +1h from now
+      const dtInput = h('input', { type: 'datetime-local', cls: 'form-control aap-input', style: 'width:200px' });
       const base = post.scheduled_at
         ? new Date(post.scheduled_at.endsWith('Z') ? post.scheduled_at : post.scheduled_at + 'Z')
         : new Date(Date.now() + 3600000);
       dtInput.value = base.toISOString().slice(0, 16);
-      const okBtn = h('button', { cls: 'btn btn-sm btn-primary', text: 'Schedule' });
+      const okBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', text: 'Schedule' });
       okBtn.addEventListener('click', async () => {
         if (!dtInput.value) return;
         await schedulePost(post.id, new Date(dtInput.value).toISOString());
         picker.remove();
       });
-      const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', text: 'Cancel' });
+      const cancelBtn = h('button', { cls: 'btn aap-btn', text: 'Cancel' });
       cancelBtn.addEventListener('click', () => picker.remove());
-      const picker = h('div', { id: pickerId, cls: 'border rounded p-2 mb-1 bg-body-tertiary d-flex align-items-center gap-2 flex-wrap' },
+      const picker = h('div', { id: pickerId, cls: 'aap-card mt-2 d-flex align-items-center gap-2 flex-wrap' },
         dtInput, okBtn, cancelBtn);
       rowWrap.after(picker);
     });
@@ -1549,42 +1806,48 @@ function buildPostRow(post, imgMap, series) {
   }
 
   if (post.status === 'scheduled') {
-    const cancelBtn = h('button', { cls: 'btn btn-sm btn-outline-warning', title: 'Cancel schedule', 'aria-label': 'Cancel schedule' });
-    cancelBtn.appendChild(icon('bi bi-x-circle'));
+    const cancelBtn = h('button', { cls: 'aap-icon-btn', title: 'Cancel schedule', 'aria-label': 'Cancel schedule' },
+      icon('bi bi-x-circle'));
     cancelBtn.addEventListener('click', () => cancelPostSchedule(post.id));
     actions.appendChild(cancelBtn);
   }
 
   if (post.status !== 'posted') {
-    const editBtn = h('button', { cls: 'btn btn-sm btn-outline-secondary', title: 'Edit post', 'aria-label': 'Edit post' });
-    editBtn.appendChild(icon('bi bi-pencil'));
+    const editBtn = h('button', { cls: 'aap-icon-btn', title: 'Edit', 'aria-label': 'Edit post' },
+      icon('bi bi-pencil'));
     editBtn.addEventListener('click', () => {
       const existing = document.getElementById('edit-form-' + post.id);
       if (existing) { existing.remove(); return; }
-      const form = buildEditPostForm(post, imgMap, series, () => {
-        const el = document.getElementById('edit-form-' + post.id);
-        if (el) el.remove();
-      });
+      const form = buildEditPostForm(post, imgMap, series,
+        () => document.getElementById('edit-form-' + post.id)?.remove());
       form.id = 'edit-form-' + post.id;
       rowWrap.after(form);
     });
     actions.appendChild(editBtn);
 
-    const delBtn = h('button', { cls: 'btn btn-sm btn-outline-danger', title: 'Delete post', 'aria-label': 'Delete post' });
-    delBtn.appendChild(icon('bi bi-trash'));
+    const delBtn = h('button', { cls: 'aap-icon-btn', title: 'Delete', 'aria-label': 'Delete post' },
+      icon('bi bi-trash'));
     delBtn.addEventListener('click', () => deletePost(post.id));
     actions.appendChild(delBtn);
   }
 
-  const info = h('div', { cls: 'd-flex align-items-center gap-1 flex-grow-1 overflow-hidden' },
-    platIcon, titleEl, statusBadgeEl, timeEl ? timeEl : null);
-
-  const rowWrap = h('div', { cls: 'p-1 border rounded d-flex align-items-center gap-2', 'data-post-row': post.id, 'data-post-status': post.status },
-    thumbs, info, actions);
+  const rowWrap = h('article', {
+    cls: 'aap-post-row',
+    'data-post-row': post.id,
+    'data-post-status': post.status,
+  },
+    thumbDiv,
+    h('div', { cls: 'min-w-0' },
+      h('div', { cls: 'aap-post-row__title', text: post.title || '(no title)' }),
+      platEl
+    ),
+    statusEl,
+    actions
+  );
   return rowWrap;
 }
 
-function buildEditPostForm(post, imgMap, series, onClose) {
+function buildEditPostForm(post, imgMap, series, onClose, onSave) {
   const allImages = series.images.filter(i => !i.deleted_at);
   const { grid: imgGrid, selected: _sel } = _buildImageSelector(allImages, post.image_ids || [], imgMap);
 
@@ -1641,7 +1904,7 @@ function buildEditPostForm(post, imgMap, series, onClose) {
       });
       showToast('Post updated', 'success');
       onClose();
-      await loadSeriesDetail(series.id);
+      if (onSave) { await onSave(); } else { await loadSeriesDetail(series.id); }
     } catch (e) { showToast(e.message, 'danger'); saveBtn.disabled = false; }
   });
 
