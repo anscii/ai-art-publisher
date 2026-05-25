@@ -1910,10 +1910,10 @@ function buildEditPostForm(post, imgMap, series, onClose, onSave) {
 
 function buildCreatePostForm(series, imgMap, onClose) {
   const allImages = series.images.filter(i => !i.deleted_at);
-  // Seed from current strip selection; fall back to all images if nothing selected
+  // Seed from current strip selection; empty if nothing selected (user must pick explicitly)
   const initialSel = _selectedImages.size > 0
     ? allImages.filter(i => _selectedImages.has(i.id)).map(i => i.id)
-    : allImages.map(i => i.id);
+    : [];
   const { grid: imgGrid, selected: _selectedPostImages } = _buildImageSelector(allImages, initialSel, imgMap);
 
   // Platform checkboxes
@@ -1958,40 +1958,72 @@ function buildCreatePostForm(series, imgMap, onClose) {
 
   const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2', id: 'pf_sched' });
 
-  // Save button
-  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
-  saveBtn.appendChild(icon('bi bi-send me-1'));
-  saveBtn.appendChild(document.createTextNode('Save post(s)'));
-  saveBtn.addEventListener('click', async () => {
+  // ── Shared payload builder ────────────────────────────────────────────────
+  function _buildCreatePayload() {
     const platforms = [];
     if (tgCheck.checked) platforms.push('telegram');
     if (igCheck.checked) platforms.push('instagram');
     if (ptCheck.checked) platforms.push('pinterest');
-    if (!platforms.length) { showToast('Select at least one platform', 'danger'); return; }
-    if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return; }
+    if (!platforms.length) { showToast('Select at least one platform', 'danger'); return null; }
+    if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return null; }
     const imageIds = allImages.filter(i => _selectedPostImages.has(i.id)).map(i => i.id);
-    const schedVal = schedInput.value ? new Date(schedInput.value).toISOString() : null;
+    return {
+      platforms,
+      title: titleInput.value.trim(),
+      title_ru: titleRuInput.value.trim(),
+      description_telegram: descTgInput.value,
+      description_other: descOtherInput.value,
+      tags_telegram: tagsTgInput.value.split(/\s+/).filter(Boolean),
+      tags_other: tagsOtherInput.value.split(/\s+/).filter(Boolean),
+      collection_line: collLineInput.value.trim() || null,
+      collection_line_ru: collLineRuInput.value.trim() || null,
+      image_ids: imageIds,
+      scheduled_at: schedInput.value ? new Date(schedInput.value).toISOString() : null,
+    };
+  }
+
+  // ── Save post(s) ──────────────────────────────────────────────────────────
+  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
+  saveBtn.appendChild(icon('bi bi-save me-1'));
+  saveBtn.appendChild(document.createTextNode('Save post(s)'));
+  saveBtn.addEventListener('click', async () => {
+    const payload = _buildCreatePayload();
+    if (!payload) return;
+    saveBtn.disabled = true;
     try {
-      saveBtn.disabled = true;
-      await apiFetch('POST', '/api/series/' + series.id + '/posts', {
-        platforms,
-        title: titleInput.value.trim(),
-        title_ru: titleRuInput.value.trim(),
-        description_telegram: descTgInput.value,
-        description_other: descOtherInput.value,
-        tags_telegram: tagsTgInput.value.split(/\s+/).filter(Boolean),
-        tags_other: tagsOtherInput.value.split(/\s+/).filter(Boolean),
-        collection_line: collLineInput.value.trim() || null,
-        collection_line_ru: collLineRuInput.value.trim() || null,
-        image_ids: imageIds,
-        scheduled_at: schedVal,
-      });
-      showToast(platforms.length + ' post(s) created', 'success');
+      const posts = await apiFetch('POST', '/api/series/' + series.id + '/posts', payload);
+      showToast(posts.length + ' post(s) created', 'success');
       onClose();
       await loadSeriesDetail(series.id);
     } catch (e) {
       showToast(e.message, 'danger');
       saveBtn.disabled = false;
+    }
+  });
+
+  // ── Save & send ───────────────────────────────────────────────────────────
+  const saveAndSendBtn = h('button', { cls: 'btn btn-sm btn-success me-1' });
+  saveAndSendBtn.appendChild(icon('bi bi-send-fill me-1'));
+  saveAndSendBtn.appendChild(document.createTextNode('Save & send'));
+  saveAndSendBtn.addEventListener('click', async () => {
+    const payload = _buildCreatePayload();
+    if (!payload) return;
+    saveAndSendBtn.disabled = true;
+    try {
+      const posts = await apiFetch('POST', '/api/series/' + series.id + '/posts', payload);
+      const results = await Promise.all(posts.map(async p => {
+        try {
+          return await apiFetch('POST', '/api/posts/' + p.id + '/post');
+        } catch (e) {
+          return { success: false, message: e.message };
+        }
+      }));
+      results.forEach(r => showToast(r.success ? r.message : 'Error: ' + r.message, r.success ? 'success' : 'danger'));
+      onClose();
+      await loadSeriesDetail(series.id);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      saveAndSendBtn.disabled = false;
     }
   });
 
@@ -2011,7 +2043,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     enBlock, ruBlock,
     h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule (optional)' }),
     schedInput,
-    h('div', null, saveBtn, cancelBtn));
+    h('div', null, saveBtn, saveAndSendBtn, cancelBtn));
 }
 
 // ── Draft restore ─────────────────────────────────────────────────────────────
@@ -2098,32 +2130,35 @@ function showPostContent(post, imgMap, series) {
     );
   }
 
-  // Platform link (below caption)
-  if (post.external_post_id) {
-    if (post.platform === 'pinterest') {
-      const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
-      sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
-        ...pinIds.map((pid, i) =>
-          h('a', {
-            href: 'https://www.pinterest.com/pin/' + pid + '/',
-            target: '_blank',
-            cls: 'btn btn-sm btn-outline-secondary'
-          }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
-        )
-      ));
-    } else {
-      const hrefs = {
-        instagram: 'https://www.instagram.com/p/' + post.external_post_id + '/',
-        facebook: 'https://www.facebook.com/' + post.external_post_id,
-      };
-      const href = hrefs[post.platform];
-      if (href) {
-        sections.push(h('div', { cls: 'mt-2' },
-          h('a', { href, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
-            icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
-        ));
-      }
-    }
+  // Platform link (below caption).
+  // Pinterest uses external_post_id (comma-separated pin IDs) since each pin gets
+  // its own URL. All other platforms use post_url (the canonical permalink saved at
+  // post time — correct for Instagram and Telegram). Fallback to a constructed
+  // Facebook URL when post_url is absent (legacy posts pre-permalink storage).
+  if (post.platform === 'pinterest' && post.external_post_id) {
+    const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
+    sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
+      ...pinIds.map((pid, i) =>
+        h('a', {
+          href: 'https://www.pinterest.com/pin/' + pid + '/',
+          target: '_blank',
+          cls: 'btn btn-sm btn-outline-secondary'
+        }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
+      )
+    ));
+  } else if (post.post_url) {
+    sections.push(h('div', { cls: 'mt-2' },
+      h('a', { href: post.post_url, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
+        icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
+    ));
+  } else if (post.platform === 'facebook' && post.external_post_id) {
+    sections.push(h('div', { cls: 'mt-2' },
+      h('a', {
+        href: 'https://www.facebook.com/' + post.external_post_id,
+        target: '_blank',
+        cls: 'btn btn-sm btn-outline-secondary'
+      }, icon('bi bi-box-arrow-up-right me-1'), 'View on facebook')
+    ));
   }
 
   if (post.error_message) {

@@ -10,7 +10,7 @@ class DeepSeekProvider(OpenAIProvider):
     def __init__(self, api_key: str):
         self._client = _openai.OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-    def _call_api(self, model: str, messages: list[Any]) -> Any:
+    def _call_api(self, model: str, messages: list[Any], response_format: Any = None) -> Any:
         return self._client.chat.completions.create(
             model=model, messages=messages, max_tokens=MAX_OUTPUT_TOKENS, temperature=1.0
         )
