@@ -24,10 +24,24 @@ class OpenAIProvider(AIProvider):
     def __init__(self, api_key: str):
         self._client = _openai.OpenAI(api_key=api_key)
 
-    def _call_api(self, model: str, messages: list[Any]) -> Any:
-        return self._client.chat.completions.create(
-            model=model, messages=messages, max_completion_tokens=MAX_OUTPUT_TOKENS, temperature=1.0
+    def _call_api(self, model: str, messages: list[Any], response_format: Any = None) -> Any:
+        kwargs: dict[str, Any] = dict(
+            model=model,
+            messages=messages,
+            max_completion_tokens=MAX_OUTPUT_TOKENS,
+            temperature=1.0,
         )
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+        return self._client.chat.completions.create(**kwargs)
+
+    def _step1_response_format(self, num_variants: int, language: str) -> Any:
+        """Return a response_format for step-1 calls; None means no constraint."""
+        return None
+
+    def _step2_response_format(self, language: str) -> Any:
+        """Return a response_format for step-2 calls; None means no constraint."""
+        return None
 
     def generate_variants(
         self,
@@ -60,7 +74,7 @@ class OpenAIProvider(AIProvider):
                 model,
                 json.dumps(messages, ensure_ascii=False),
             )
-        resp = self._call_api(model, messages)
+        resp = self._call_api(model, messages, self._step1_response_format(num_variants, language))
         text = resp.choices[0].message.content
         assert text is not None
         logger.debug("openai response | model=%s | text=%s", model, text)
@@ -95,7 +109,7 @@ class OpenAIProvider(AIProvider):
                 language,
                 json.dumps(messages, ensure_ascii=False),
             )
-        resp = self._call_api(model, messages)
+        resp = self._call_api(model, messages, self._step2_response_format(language))
         text = resp.choices[0].message.content
         assert text is not None
         logger.debug("openai expand response | model=%s | text=%s", model, text)
