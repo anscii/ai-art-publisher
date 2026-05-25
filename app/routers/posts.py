@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_config
 from app.database import get_db
+from app.enums import Platform
 from app.models import AIVariant, Post, PostImage, Series
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
@@ -20,15 +21,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["posts"])
 
-VALID_PLATFORMS = {"telegram", "instagram", "facebook", "pinterest"}
-
 
 def post_to_resp(p: Post) -> PostResponse:
     ordered = sorted(p.post_images, key=lambda pi: pi.order_index)
     return PostResponse(
         id=p.id,
         series_id=p.series_id,
-        platform=p.platform,
+        platform=Platform(p.platform),
         title=p.title,
         title_ru=p.title_ru,
         description=p.description,
@@ -58,7 +57,7 @@ def _image_urls(post: Post, base_url: str) -> list[str]:
 
 def _build_caption(post: Post) -> str:
     tags = " ".join(json.loads(post.tags))
-    if post.platform == "telegram":
+    if post.platform == Platform.telegram:
         title = post.title_ru or post.title
         coll_line = post.collection_line_ru or post.collection_line
         parts = [title, coll_line, post.description, tags]
@@ -165,9 +164,9 @@ def _auto_mark_images_posted(series: Series, db: Session) -> None:
         if p.status != "posted" or p.deleted_at is not None:
             continue
         ids = {pi.image_id for pi in p.post_images}
-        if p.platform == "telegram":
+        if p.platform == Platform.telegram:
             telegram_ids.update(ids)
-        elif p.platform in ("instagram", "pinterest"):
+        elif p.platform in (Platform.instagram, Platform.pinterest):
             visual_ids.update(ids)
     both = telegram_ids & visual_ids
     if not both:
@@ -193,7 +192,7 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
     platform = post.platform
 
     post_url_value: str | None = None
-    if post.platform == "telegram":
+    if post.platform == Platform.telegram:
         result = _do_telegram(post, settings)
         external_id = None
         _ch = (settings.telegram_channel_id or "").strip()
@@ -202,7 +201,7 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         # Numeric IDs (e.g. -1001234567890) are private groups — no public URL.
         if _mid is not None and _ch.startswith("@"):
             post_url_value = f"https://t.me/{_ch.lstrip('@')}/{_mid}"
-    elif post.platform == "instagram":
+    elif post.platform == Platform.instagram:
         result = _do_instagram(post, settings)
         external_id = result.get("media_id")
         post_url_value = result.get("permalink")
@@ -219,10 +218,10 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
                     )
             except Exception as exc:
                 logger.warning("Facebook auto-post exception for %s: %s", post.id, exc)
-    elif post.platform == "facebook":
+    elif post.platform == Platform.facebook:
         result = _do_facebook(post, settings)
         external_id = result.get("post_id")
-    elif post.platform == "pinterest":
+    elif post.platform == Platform.pinterest:
         result = _do_pinterest(post, settings, db)
         external_id = ",".join(result.get("pin_ids") or []) or None
     else:
@@ -283,10 +282,6 @@ def create_posts(
     if not s or s.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Series not found")
 
-    invalid = set(body.platforms) - VALID_PLATFORMS
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid platforms: {invalid}")
-
     # Validate image IDs belong to this series
     valid_ids = {img.id for img in s.images if img.deleted_at is None}
     bad = set(body.image_ids) - valid_ids
@@ -297,7 +292,7 @@ def create_posts(
 
     created = []
     for platform in body.platforms:
-        if platform == "telegram":
+        if platform == Platform.telegram:
             description = body.description_telegram
             tags = json.dumps(body.tags_telegram)
         else:
@@ -305,7 +300,9 @@ def create_posts(
             tags = json.dumps(body.tags_other)
 
         post_seo = (
-            chosen_variant.instagram_seo if chosen_variant and platform != "telegram" else None
+            chosen_variant.instagram_seo
+            if chosen_variant and platform != Platform.telegram
+            else None
         )
 
         p = Post(

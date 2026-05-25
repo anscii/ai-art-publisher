@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
+from app.enums import Platform
 from app.models import Post, PostImage
 from app.routers.settings import get_or_create_settings
 from app.services.storage import get_public_base_url
@@ -38,7 +39,12 @@ def get_landing_recent(db: Session = Depends(get_db)) -> LandingRecentResponse:
     recent = db.scalars(
         select(Post)
         .options(selectinload(Post.post_images).selectinload(PostImage.image))
-        .where(Post.status == "posted", Post.deleted_at.is_(None), Post.posted_at.isnot(None))
+        .where(
+            Post.status == "posted",
+            Post.deleted_at.is_(None),
+            Post.posted_at.isnot(None),
+            Post.platform == Platform.instagram,
+        )
         .order_by(Post.posted_at.desc())
         .limit(4)
     ).all()

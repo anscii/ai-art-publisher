@@ -79,7 +79,8 @@ def test_create_post_invalid_platform(client):
             "image_ids": [img_id],
         },
     )
-    assert resp.status_code == 400
+    # Pydantic rejects unknown platform values at parse time
+    assert resp.status_code == 422
 
 
 def test_create_post_image_not_in_series(client):
