@@ -2130,32 +2130,35 @@ function showPostContent(post, imgMap, series) {
     );
   }
 
-  // Platform link (below caption)
-  if (post.external_post_id) {
-    if (post.platform === 'pinterest') {
-      const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
-      sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
-        ...pinIds.map((pid, i) =>
-          h('a', {
-            href: 'https://www.pinterest.com/pin/' + pid + '/',
-            target: '_blank',
-            cls: 'btn btn-sm btn-outline-secondary'
-          }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
-        )
-      ));
-    } else {
-      const hrefs = {
-        instagram: 'https://www.instagram.com/p/' + post.external_post_id + '/',
-        facebook: 'https://www.facebook.com/' + post.external_post_id,
-      };
-      const href = hrefs[post.platform];
-      if (href) {
-        sections.push(h('div', { cls: 'mt-2' },
-          h('a', { href, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
-            icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
-        ));
-      }
-    }
+  // Platform link (below caption).
+  // Pinterest uses external_post_id (comma-separated pin IDs) since each pin gets
+  // its own URL. All other platforms use post_url (the canonical permalink saved at
+  // post time — correct for Instagram and Telegram). Fallback to a constructed
+  // Facebook URL when post_url is absent (legacy posts pre-permalink storage).
+  if (post.platform === 'pinterest' && post.external_post_id) {
+    const pinIds = post.external_post_id.split(',').map(s => s.trim()).filter(Boolean);
+    sections.push(h('div', { cls: 'd-flex flex-wrap gap-2 mt-2' },
+      ...pinIds.map((pid, i) =>
+        h('a', {
+          href: 'https://www.pinterest.com/pin/' + pid + '/',
+          target: '_blank',
+          cls: 'btn btn-sm btn-outline-secondary'
+        }, icon('bi bi-box-arrow-up-right me-1'), 'Pin ' + (i + 1))
+      )
+    ));
+  } else if (post.post_url) {
+    sections.push(h('div', { cls: 'mt-2' },
+      h('a', { href: post.post_url, target: '_blank', cls: 'btn btn-sm btn-outline-secondary' },
+        icon('bi bi-box-arrow-up-right me-1'), 'View on ' + post.platform)
+    ));
+  } else if (post.platform === 'facebook' && post.external_post_id) {
+    sections.push(h('div', { cls: 'mt-2' },
+      h('a', {
+        href: 'https://www.facebook.com/' + post.external_post_id,
+        target: '_blank',
+        cls: 'btn btn-sm btn-outline-secondary'
+      }, icon('bi bi-box-arrow-up-right me-1'), 'View on facebook')
+    ));
   }
 
   if (post.error_message) {
