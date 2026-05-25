@@ -82,3 +82,39 @@ def test_cancel_schedule(page, live_server, tmp_path):
     page.locator("#confirmModal").wait_for(state="visible", timeout=3000)
     page.locator("#confirmOkBtn").click()
     page.locator("#toastContainer").get_by_text("Schedule cancelled").wait_for(timeout=5000)
+
+
+def test_save_and_send_posts_immediately(page, live_server, tmp_path):
+    """Save & send creates posts and immediately executes them in one click."""
+    png_path = tmp_path / "test.png"
+    png_path.write_bytes(_TINY_PNG)
+
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    with page.expect_file_chooser() as fc:
+        page.get_by_role("button", name="Add images").click()
+    fc.value.set_files(str(png_path))
+
+    page.locator("[data-image-id]").wait_for(timeout=20000)
+    page.locator("[data-select-btn]").first.click()
+    page.locator(".aap-thumb.is-selected").wait_for(timeout=8000)
+
+    # Open new post form, select telegram only
+    page.get_by_role("button", name="New post").click()
+    for plat_id in ["pf_ig", "pf_pt"]:
+        cb = page.locator(f"#{plat_id}")
+        if cb.is_checked():
+            cb.uncheck()
+    tg_cb = page.locator("#pf_tg")
+    if not tg_cb.is_checked():
+        tg_cb.check()
+
+    page.locator("#pf_title").fill("Save and Send Test Post")
+
+    # Click Save & send — should create + immediately post in one click
+    page.get_by_role("button", name="Save & send").click()
+
+    # Fake posting responds with "[FAKE] Posted to telegram"
+    page.locator("#toastContainer").get_by_text("[FAKE]").wait_for(timeout=15000)
