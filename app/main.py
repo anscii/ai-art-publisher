@@ -82,7 +82,7 @@ async def basic_auth(request: Request, call_next):
     if request.url.path in _PUBLIC_PATHS:
         return await call_next(request)
 
-    if request.url.path.startswith("/static/landing/"):
+    if request.url.path.startswith("/static/"):
         return await call_next(request)
 
     authenticated = is_authenticated(request, cfg)
@@ -95,11 +95,15 @@ async def basic_auth(request: Request, call_next):
     if authenticated:
         return await call_next(request)
 
-    return Response(
-        content="Unauthorized",
-        status_code=401,
-        headers={"WWW-Authenticate": 'Basic realm="AI Art Publisher"'},
-    )
+    # API paths: return 401 + Basic challenge (curl/programmatic access).
+    # All other paths: redirect to landing so browsers show the login form.
+    if request.url.path.startswith("/api/"):
+        return Response(
+            content="Unauthorized",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="AI Art Publisher"'},
+        )
+    return Response(status_code=303, headers={"Location": "/"})
 
 
 @app.middleware("http")
