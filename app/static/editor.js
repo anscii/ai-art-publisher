@@ -1910,10 +1910,10 @@ function buildEditPostForm(post, imgMap, series, onClose, onSave) {
 
 function buildCreatePostForm(series, imgMap, onClose) {
   const allImages = series.images.filter(i => !i.deleted_at);
-  // Seed from current strip selection; fall back to all images if nothing selected
+  // Seed from current strip selection; empty if nothing selected (user must pick explicitly)
   const initialSel = _selectedImages.size > 0
     ? allImages.filter(i => _selectedImages.has(i.id)).map(i => i.id)
-    : allImages.map(i => i.id);
+    : [];
   const { grid: imgGrid, selected: _selectedPostImages } = _buildImageSelector(allImages, initialSel, imgMap);
 
   // Platform checkboxes
@@ -1958,40 +1958,72 @@ function buildCreatePostForm(series, imgMap, onClose) {
 
   const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2', id: 'pf_sched' });
 
-  // Save button
-  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
-  saveBtn.appendChild(icon('bi bi-send me-1'));
-  saveBtn.appendChild(document.createTextNode('Save post(s)'));
-  saveBtn.addEventListener('click', async () => {
+  // ── Shared payload builder ────────────────────────────────────────────────
+  function _buildCreatePayload() {
     const platforms = [];
     if (tgCheck.checked) platforms.push('telegram');
     if (igCheck.checked) platforms.push('instagram');
     if (ptCheck.checked) platforms.push('pinterest');
-    if (!platforms.length) { showToast('Select at least one platform', 'danger'); return; }
-    if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return; }
+    if (!platforms.length) { showToast('Select at least one platform', 'danger'); return null; }
+    if (!_selectedPostImages.size) { showToast('Select at least one image', 'danger'); return null; }
     const imageIds = allImages.filter(i => _selectedPostImages.has(i.id)).map(i => i.id);
-    const schedVal = schedInput.value ? new Date(schedInput.value).toISOString() : null;
+    return {
+      platforms,
+      title: titleInput.value.trim(),
+      title_ru: titleRuInput.value.trim(),
+      description_telegram: descTgInput.value,
+      description_other: descOtherInput.value,
+      tags_telegram: tagsTgInput.value.split(/\s+/).filter(Boolean),
+      tags_other: tagsOtherInput.value.split(/\s+/).filter(Boolean),
+      collection_line: collLineInput.value.trim() || null,
+      collection_line_ru: collLineRuInput.value.trim() || null,
+      image_ids: imageIds,
+      scheduled_at: schedInput.value ? new Date(schedInput.value).toISOString() : null,
+    };
+  }
+
+  // ── Save post(s) ──────────────────────────────────────────────────────────
+  const saveBtn = h('button', { cls: 'btn btn-sm btn-primary me-1' });
+  saveBtn.appendChild(icon('bi bi-save me-1'));
+  saveBtn.appendChild(document.createTextNode('Save post(s)'));
+  saveBtn.addEventListener('click', async () => {
+    const payload = _buildCreatePayload();
+    if (!payload) return;
+    saveBtn.disabled = true;
     try {
-      saveBtn.disabled = true;
-      await apiFetch('POST', '/api/series/' + series.id + '/posts', {
-        platforms,
-        title: titleInput.value.trim(),
-        title_ru: titleRuInput.value.trim(),
-        description_telegram: descTgInput.value,
-        description_other: descOtherInput.value,
-        tags_telegram: tagsTgInput.value.split(/\s+/).filter(Boolean),
-        tags_other: tagsOtherInput.value.split(/\s+/).filter(Boolean),
-        collection_line: collLineInput.value.trim() || null,
-        collection_line_ru: collLineRuInput.value.trim() || null,
-        image_ids: imageIds,
-        scheduled_at: schedVal,
-      });
-      showToast(platforms.length + ' post(s) created', 'success');
+      const posts = await apiFetch('POST', '/api/series/' + series.id + '/posts', payload);
+      showToast(posts.length + ' post(s) created', 'success');
       onClose();
       await loadSeriesDetail(series.id);
     } catch (e) {
       showToast(e.message, 'danger');
       saveBtn.disabled = false;
+    }
+  });
+
+  // ── Save & send ───────────────────────────────────────────────────────────
+  const saveAndSendBtn = h('button', { cls: 'btn btn-sm btn-success me-1' });
+  saveAndSendBtn.appendChild(icon('bi bi-send-fill me-1'));
+  saveAndSendBtn.appendChild(document.createTextNode('Save & send'));
+  saveAndSendBtn.addEventListener('click', async () => {
+    const payload = _buildCreatePayload();
+    if (!payload) return;
+    saveAndSendBtn.disabled = true;
+    try {
+      const posts = await apiFetch('POST', '/api/series/' + series.id + '/posts', payload);
+      const results = await Promise.all(posts.map(async p => {
+        try {
+          return await apiFetch('POST', '/api/posts/' + p.id + '/post');
+        } catch (e) {
+          return { success: false, message: e.message };
+        }
+      }));
+      results.forEach(r => showToast(r.success ? r.message : 'Error: ' + r.message, r.success ? 'success' : 'danger'));
+      onClose();
+      await loadSeriesDetail(series.id);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      saveAndSendBtn.disabled = false;
     }
   });
 
@@ -2011,7 +2043,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     enBlock, ruBlock,
     h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule (optional)' }),
     schedInput,
-    h('div', null, saveBtn, cancelBtn));
+    h('div', null, saveBtn, saveAndSendBtn, cancelBtn));
 }
 
 // ── Draft restore ─────────────────────────────────────────────────────────────
