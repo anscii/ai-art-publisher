@@ -1910,10 +1910,10 @@ function buildEditPostForm(post, imgMap, series, onClose, onSave) {
 
 function buildCreatePostForm(series, imgMap, onClose) {
   const allImages = series.images.filter(i => !i.deleted_at);
-  // Seed from current strip selection; fall back to all images if nothing selected
+  // Seed from current strip selection; empty if nothing selected (user must pick explicitly)
   const initialSel = _selectedImages.size > 0
     ? allImages.filter(i => _selectedImages.has(i.id)).map(i => i.id)
-    : allImages.map(i => i.id);
+    : [];
   const { grid: imgGrid, selected: _selectedPostImages } = _buildImageSelector(allImages, initialSel, imgMap);
 
   // Platform checkboxes

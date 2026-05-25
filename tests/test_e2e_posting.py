@@ -118,3 +118,28 @@ def test_save_and_send_posts_immediately(page, live_server, tmp_path):
 
     # Fake posting responds with "[FAKE] Posted to telegram"
     page.locator("#toastContainer").get_by_text("[FAKE]").wait_for(timeout=15000)
+
+
+def test_new_post_form_no_images_preselected_when_strip_empty(page, live_server, tmp_path):
+    """When no image selected in the series strip, the post form starts with no images selected."""
+    png_path = tmp_path / "test.png"
+    png_path.write_bytes(_TINY_PNG)
+
+    page.goto(live_server)
+    page.get_by_role("button", name="New series").click()
+    page.locator("#editorTitle").wait_for()
+
+    with page.expect_file_chooser() as fc:
+        page.get_by_role("button", name="Add images").click()
+    fc.value.set_files(str(png_path))
+
+    page.locator("[data-image-id]").wait_for(timeout=20000)
+    # Deliberately do NOT select any image in the strip
+
+    # Open new post form
+    page.get_by_role("button", name="New post").click()
+    page.locator("#pf_title").wait_for(timeout=5000)
+
+    # Attempting to save without selecting an image shows validation error (proves no pre-selection)
+    page.get_by_role("button", name="Save post(s)").click()
+    page.locator("#toastContainer").get_by_text("Select at least one image").wait_for(timeout=5000)
