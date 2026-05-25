@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.enums import Platform
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 
@@ -176,7 +178,7 @@ class AIVariantResponse(BaseModel):
 class PostResponse(BaseModel):
     id: str
     series_id: str
-    platform: str
+    platform: Platform
     title: str
     title_ru: str | None
     description: str
@@ -196,7 +198,7 @@ class PostResponse(BaseModel):
 
 
 class PostCreate(BaseModel):
-    platform: str
+    platform: Platform
     title: str
     title_ru: str = ""
     description: str
@@ -206,7 +208,7 @@ class PostCreate(BaseModel):
 
 
 class PostBatchCreate(BaseModel):
-    platforms: list[str]
+    platforms: list[Platform]
     title: str
     title_ru: str = ""
     description_telegram: str
@@ -338,7 +340,7 @@ class QueueItem(BaseModel):
     post_id: str
     series_id: str
     series_name: str
-    platform: str
+    platform: Platform
     title: str
     scheduled_at: datetime
     cover_url: str | None = None

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_config
 from app.database import get_db
+from app.enums import Platform
 from app.models import Post, PostImage
 from app.routers.settings import get_or_create_settings
 from app.scheduler import run_scheduled_posts
@@ -55,7 +56,7 @@ def get_queue(db: Session = Depends(get_db)) -> list[QueueItem]:
                 series_name=(p.series.name or p.series.title or p.series.original_folder_name or "")
                 if p.series
                 else "",
-                platform=p.platform,
+                platform=Platform(p.platform),
                 title=p.title,
                 scheduled_at=p.scheduled_at,
                 cover_url=cover_url,
