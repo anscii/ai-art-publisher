@@ -1,7 +1,5 @@
 # AI Art Publisher
 
-**[https://ai-art-publisher.fly.dev](https://ai-art-publisher.fly.dev)**
-
 A personal web tool for managing AI-generated image series and publishing them to social media. Built to streamline an actual creative workflow: import images, generate platform-ready captions via LLM, curate and edit, then post or schedule to Telegram, Instagram, Pinterest, and Facebook.
 
 Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible from any device (phone, tablet, laptop) via browser.
@@ -11,7 +9,8 @@ Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible 
 <p>
   <img src="app/static/landing/screenshots/1_main_series_list.jpg" width="180" alt="Series list">
   <img src="app/static/landing/screenshots/3_series_view_top.jpg" width="180" alt="Series editor">
-  <img src="app/static/landing/screenshots/4_series_view_texts_and_generation.jpg" width="180" alt="AI generation">
+  <img src="app/static/landing/screenshots/4_series_view_generation.jpg" width="180" alt="AI generation">
+  <img src="app/static/landing/screenshots/5_series_view_texts.jpg" width="180" alt="AI Generated text">
   <img src="app/static/landing/screenshots/8_posted_post_view.jpg" width="180" alt="Posted result">
 </p>
 
@@ -19,21 +18,44 @@ Runs 24/7 on [Fly.io](https://fly.io/) with scheduled posting and is accessible 
 
 ## Table of Contents
 
-- [Screenshots](#screenshots)
-- [Why I Built This](#why-i-built-this)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Technical Highlights](#technical-highlights)
-- [Trade-offs and Design Decisions](#trade-offs-and-design-decisions)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Available Commands](#available-commands)
-- [Deployment](#deployment)
-- [Status Flows](#status-flows)
-- [Bulk Import](#bulk-import)
-- [Obtaining a Long-Lived Facebook Access Token](#obtaining-a-long-lived-facebook-access-token)
-- [Testing AI Generation Locally](#testing-ai-generation-locally)
+- [AI Art Publisher](#ai-art-publisher)
+  - [Screenshots](#screenshots)
+  - [Table of Contents](#table-of-contents)
+  - [Why I Built This](#why-i-built-this)
+  - [Key Features](#key-features)
+  - [Tech Stack](#tech-stack)
+  - [Architecture](#architecture)
+    - [System Diagram](#system-diagram)
+    - [Directory Structure](#directory-structure)
+    - [Data Model](#data-model)
+  - [Technical Highlights](#technical-highlights)
+    - [Provider-Agnostic AI Layer](#provider-agnostic-ai-layer)
+    - [Structured Prompt Engineering](#structured-prompt-engineering)
+    - [Zero-Infrastructure Scheduling](#zero-infrastructure-scheduling)
+    - [SQLite in Production](#sqlite-in-production)
+    - [Frontend Without a Framework](#frontend-without-a-framework)
+    - [Fake Backends for Testing](#fake-backends-for-testing)
+    - [Alembic Migration Safety](#alembic-migration-safety)
+  - [Trade-offs and Design Decisions](#trade-offs-and-design-decisions)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Setup](#setup)
+  - [Environment Variables](#environment-variables)
+    - [Required for core functionality](#required-for-core-functionality)
+    - [AI providers (at least one required)](#ai-providers-at-least-one-required)
+    - [Cloudflare R2](#cloudflare-r2)
+    - [Social platforms (all optional)](#social-platforms-all-optional)
+    - [Auth and ops](#auth-and-ops)
+  - [Available Commands](#available-commands)
+  - [Deployment](#deployment)
+    - [First deploy](#first-deploy)
+    - [Useful Fly.io commands](#useful-flyio-commands)
+  - [Status Flows](#status-flows)
+    - [Series](#series)
+    - [Image](#image)
+  - [Bulk Import](#bulk-import)
+  - [Obtaining a Long-Lived Facebook Access Token](#obtaining-a-long-lived-facebook-access-token)
+  - [Testing AI Generation Locally](#testing-ai-generation-locally)
 
 ---
 
@@ -80,7 +102,7 @@ So I built a tool that:
 | Scheduling | APScheduler 3.x (in-process, interval trigger) |
 | AI providers | Anthropic Claude, OpenAI, Google Gemini, DeepSeek |
 | Social APIs | Telegram Bot API, Instagram Graph API, Pinterest API v5, Facebook Graph API |
-| Migrations | Alembic (18 versions and counting) |
+| Migrations | Alembic |
 | Testing | pytest, Playwright (E2E via browser), pytest-cov |
 | CI/CD | GitHub Actions (test → deploy on push to `master`) |
 | Linting/types | ruff, mypy |
@@ -154,6 +176,7 @@ app/
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
     collections.py — Collection CRUD + series assignment
     backup.py      — SQLite backup download endpoint (token-auth)
+    landing.py     — public API for landing page dispatch grid (RecentPostCard)
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
@@ -161,10 +184,12 @@ app/
     instagram.py   — InstagramService.post() (single + carousel)
     facebook.py    — FacebookService.post()
     pinterest.py   — PinterestService.post_pin()
-  static/          — app.js, editor.js, posting.js, settings.js
-  templates/       — index.html (Bootstrap 5.3 + SortableJS, dark theme)
+  static/
+    aap/           — AAP design system (tokens.css + app.css)
+    app.js, editor.js, posting.js, settings.js, stats.js
+  templates/       — index.html (Bootstrap 5.3 + SortableJS), landing.html
 alembic/
-  versions/        — 18 migrations (001 through 018)
+  versions/        — 21 migrations (001 through 021)
 scripts/
   import_local.py  — bulk import CLI (direct R2 upload + API register)
   migrate.py       — DB migration entry point (used by Fly.io release_command)
@@ -227,7 +252,7 @@ The frontend is ~1700 lines of vanilla JS across four files with no build step a
 | R2 public bucket (no proxy) | Images served at CDN speed with zero bandwidth cost on the app server | Images are publicly accessible via URL; acceptable for published artwork |
 | Single `AppSettings` DB row | Settings editable in-app without env-var redeployment | Settings are plaintext in SQLite; environment variables take precedence on first boot only |
 | Soft delete for all entities | Nothing is immediately destroyed; trash panel for recovery | DB rows accumulate; `empty trash` is the only cleanup path |
-| 18 Alembic migrations | Schema evolved iteratively as the tool grew; each migration is a clear audit trail | Migration file count grows over time |
+| Alembic migrations | Schema evolved iteratively as the tool grew; each migration is a clear audit trail | Migration file count grows over time |
 
 ---
 

@@ -130,10 +130,38 @@ def test_logout_clears_cookie(client, auth_config):
     assert COOKIE_NAME not in resp.cookies or resp.cookies[COOKIE_NAME] == ""
 
 
-# ── /static/landing/ public access ────────────────────────────────────────────
+# ── /static/ public access ────────────────────────────────────────────────────
 
 
 def test_static_landing_accessible_without_auth(client, auth_config):
     """Missing file returns 404, NOT 401 — confirms auth bypass works."""
     resp = client.get("/static/landing/nonexistent.png")
     assert resp.status_code == 404
+
+
+def test_static_aap_css_accessible_without_auth(client, auth_config):
+    """Landing page CSS (tokens.css, app.css) must be publicly accessible.
+
+    Without this, the browser shows a native Basic Auth dialog instead of
+    rendering the landing page.  A 404 (file not found) is acceptable; 401 is not.
+    """
+    for path in ("/static/aap/tokens.css", "/static/aap/app.css"):
+        resp = client.get(path)
+        assert resp.status_code != 401, f"{path} returned 401 — will block landing page"
+
+
+# ── unauthenticated non-root redirect ─────────────────────────────────────────
+
+
+def test_unauthenticated_page_path_redirects_to_landing(client, auth_config):
+    """Non-root HTML paths redirect to / so browsers show the login form."""
+    resp = client.get("/some-page", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+
+
+def test_unauthenticated_api_path_returns_401(client, auth_config):
+    """API paths keep 401 + WWW-Authenticate for curl/programmatic access."""
+    resp = client.get("/api/series", follow_redirects=False)
+    assert resp.status_code == 401
+    assert "WWW-Authenticate" in resp.headers
