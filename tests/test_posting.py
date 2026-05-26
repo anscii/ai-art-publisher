@@ -115,7 +115,8 @@ def test_post_telegram_error_sets_failed_status(client):
             return_value=httpx.Response(200, json={"ok": False, "description": "Bad request"})
         )
         resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json()["success"] is False
+    # Endpoint returns success=True immediately; error is set by background task.
+    assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
     assert post["status"] == "failed"
     assert "Bad request" in post["error_message"]
@@ -192,7 +193,8 @@ def test_post_instagram_error_sets_failed(client):
             return_value=httpx.Response(200, json={"error": {"message": "Invalid token"}})
         )
         resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json()["success"] is False
+    # Endpoint returns success=True immediately; error is set by background task.
+    assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
     assert post["status"] == "failed"
     assert "Invalid token" in post["error_message"]
@@ -356,7 +358,8 @@ def test_post_pinterest_api_error_sets_failed(client):
             return_value=httpx.Response(400, json={"message": "Invalid board"})
         )
         resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json()["success"] is False
+    # Endpoint returns success=True immediately; error is set by background task.
+    assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
     assert post["status"] == "failed"
 
@@ -417,7 +420,7 @@ def test_post_pinterest_uses_default_when_no_board_name(client):
 
 @respx.mock
 def test_post_pinterest_fails_when_no_board_resolved(client):
-    """Empty map, no default, no board name → explicit error."""
+    """Empty map, no default, no board name → explicit error stored in post."""
     _, pid = _setup(client, "pinterest")
     settings = _mock_settings(pinterest=True)
     settings.pinterest_board_map = "{}"
@@ -425,8 +428,11 @@ def test_post_pinterest_fails_when_no_board_resolved(client):
 
     with patch("app.routers.posts.get_or_create_settings", return_value=settings):
         resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json()["success"] is False
-    assert "No board resolved" in resp.json()["message"]
+    # Endpoint returns success=True immediately; error is set by background task.
+    assert resp.json()["success"] is True
+    post = client.get(f"/api/posts/{pid}").json()
+    assert post["status"] == "failed"
+    assert "No board resolved" in post["error_message"]
 
 
 # ── Instagram permalink & Telegram post_url ───────────────────────────────────

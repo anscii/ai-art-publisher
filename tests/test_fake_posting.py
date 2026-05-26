@@ -19,13 +19,14 @@ def _fake_cfg():
 
 
 @respx.mock
-def test_fake_telegram_returns_fake_message(client):
+def test_fake_telegram_returns_sending_immediately(client):
     _, pid = _setup(client, "telegram")
     with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             resp = client.post(f"/api/posts/{pid}/post")
+    # Endpoint always returns "Sending…"; actual result is set by background task.
     assert resp.status_code == 200
-    assert resp.json() == {"success": True, "message": "[FAKE] Posted to telegram"}
+    assert resp.json() == {"success": True, "message": "Sending…"}
 
 
 @respx.mock
@@ -53,12 +54,12 @@ def test_fake_telegram_logs(client, caplog):
 
 
 @respx.mock
-def test_fake_instagram_returns_fake_message(client):
+def test_fake_instagram_returns_sending_immediately(client):
     _, pid = _setup(client, "instagram")
     with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json() == {"success": True, "message": "[FAKE] Posted to instagram"}
+    assert resp.json() == {"success": True, "message": "Sending…"}
 
 
 @respx.mock
@@ -76,18 +77,22 @@ def test_fake_instagram_marks_post_posted(client):
 
 
 @respx.mock
-def test_fake_pinterest_returns_fake_message(client):
+def test_fake_pinterest_returns_sending_immediately(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)
+    ):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             resp = client.post(f"/api/posts/{pid}/post")
-    assert resp.json() == {"success": True, "message": "[FAKE] Posted to pinterest"}
+    assert resp.json() == {"success": True, "message": "Sending…"}
 
 
 @respx.mock
 def test_fake_pinterest_marks_post_posted(client):
     _, pid = _setup(client, "pinterest")
-    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)):
+    with patch(
+        "app.routers.posts.get_or_create_settings", return_value=_mock_settings(pinterest=True)
+    ):
         with patch("app.routers.posts.get_config", return_value=_fake_cfg()):
             client.post(f"/api/posts/{pid}/post")
     post = client.get(f"/api/posts/{pid}").json()

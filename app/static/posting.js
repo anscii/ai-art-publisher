@@ -1,9 +1,12 @@
 async function postNow(postId) {
   showConfirm('Post now?', async () => {
     try {
-      const result = await apiFetch('POST', '/api/posts/' + postId + '/post');
-      showToast(result.success ? result.message : 'Error: ' + result.message, result.success ? 'success' : 'danger');
-      if (App.currentSeriesId) await loadSeriesDetail(App.currentSeriesId);
+      await apiFetch('POST', '/api/posts/' + postId + '/post');
+      showToast('Sending…', 'info');
+      if (App.currentSeriesId) {
+        await loadSeriesDetail(App.currentSeriesId);
+        _startSendingPoller(App.currentSeriesId);
+      }
     } catch (e) { showToast(e.message, 'danger'); }
   });
 }

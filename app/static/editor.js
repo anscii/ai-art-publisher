@@ -1,3 +1,34 @@
+// ── Sending poller ────────────────────────────────────────────────────────────
+// Polls loadSeriesDetail every 3 s while any post has status="sending".
+// Clears itself when all posts settle (posted/failed) or user navigates away.
+let _sendingPollerId = null;
+function _startSendingPoller(seriesId) {
+  if (_sendingPollerId) clearInterval(_sendingPollerId);
+  const notified = new Set();
+  _sendingPollerId = setInterval(async () => {
+    if (App.currentSeriesId !== seriesId) {
+      clearInterval(_sendingPollerId); _sendingPollerId = null; return;
+    }
+    await loadSeriesDetail(seriesId);
+    const posts = (App.currentSeries?.posts || []).filter(p => !p.deleted_at);
+    const hasSending = posts.some(p => p.status === 'sending');
+    if (!hasSending) {
+      posts
+        .filter(p => !notified.has(p.id) && (p.status === 'posted' || p.status === 'failed'))
+        .forEach(p => {
+          notified.add(p.id);
+          showToast(
+            p.status === 'posted'
+              ? 'Posted to ' + p.platform
+              : 'Failed: ' + (p.error_message || p.platform),
+            p.status === 'posted' ? 'success' : 'danger'
+          );
+        });
+      clearInterval(_sendingPollerId); _sendingPollerId = null;
+    }
+  }, 3000);
+}
+
 // ── Textarea auto-grow ────────────────────────────────────────────────────────
 function _autoGrow(el) {
   if (!el) return;
@@ -1666,7 +1697,7 @@ function _buildImageSelector(allImages, initialSelected, imgMap) {
 
 // ── Posts card ────────────────────────────────────────────────────────────────
 const POST_PLATFORM_ICON = { telegram: 'bi bi-telegram', instagram: 'bi bi-instagram', facebook: 'bi bi-facebook', pinterest: 'bi bi-pinterest' };
-const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', posted: 'bg-success', failed: 'bg-danger' };
+const POST_STATUS_COLOR  = { draft: 'bg-secondary', scheduled: 'bg-purple', sending: 'bg-warning text-dark', posted: 'bg-success', failed: 'bg-danger' };
 
 function buildPostsCard(series) {
   const imgMap = {};
@@ -1721,6 +1752,7 @@ function buildPostRow(post, imgMap, series) {
   const STATUS_COLOR_MAP = {
     draft:     'var(--aap-ink-mute)',
     scheduled: 'var(--aap-dot-active)',
+    sending:   'var(--aap-dot-active)',
     posted:    'var(--aap-dot-done)',
     failed:    'var(--aap-danger)',
   };
@@ -1752,7 +1784,9 @@ function buildPostRow(post, imgMap, series) {
     cls: 'aap-post-row__status',
     style: '--status-color: ' + (STATUS_COLOR_MAP[post.status] || 'var(--aap-ink-mute)'),
   },
-    h('span', { cls: 'aap-dot' }),
+    post.status === 'sending'
+      ? h('span', { cls: 'spinner-border spinner-border-sm me-1', 'aria-hidden': 'true' })
+      : h('span', { cls: 'aap-dot' }),
     document.createTextNode(' ' + post.status)
   );
 
@@ -1763,7 +1797,7 @@ function buildPostRow(post, imgMap, series) {
   viewBtn.addEventListener('click', () => showPostContent(post, imgMap, series));
   actions.appendChild(viewBtn);
 
-  if (post.status !== 'posted') {
+  if (post.status !== 'posted' && post.status !== 'sending') {
     const postNowBtn = h('button', { cls: 'aap-icon-btn', title: 'Post now', 'aria-label': 'Post now' },
       icon('bi bi-send'));
     postNowBtn.addEventListener('click', () => postNow(post.id));
@@ -2011,16 +2045,14 @@ function buildCreatePostForm(series, imgMap, onClose) {
     saveAndSendBtn.disabled = true;
     try {
       const posts = await apiFetch('POST', '/api/series/' + series.id + '/posts', payload);
-      const results = await Promise.all(posts.map(async p => {
-        try {
-          return await apiFetch('POST', '/api/posts/' + p.id + '/post');
-        } catch (e) {
-          return { success: false, message: e.message };
-        }
-      }));
-      results.forEach(r => showToast(r.success ? r.message : 'Error: ' + r.message, r.success ? 'success' : 'danger'));
+      // Fire posting for each platform — returns immediately (background task handles actual send).
+      await Promise.all(posts.map(p =>
+        apiFetch('POST', '/api/posts/' + p.id + '/post').catch(() => {})
+      ));
+      showToast(posts.length + ' post(s) sending…', 'info');
       onClose();
       await loadSeriesDetail(series.id);
+      _startSendingPoller(series.id);
     } catch (e) {
       showToast(e.message, 'danger');
       saveAndSendBtn.disabled = false;
