@@ -996,13 +996,17 @@ a:hover { color: var(--aap-accent); }
 /* ---- Post row (in the Posts section) ------------------------------- */
 .aap-post-row {
   display: grid;
-  grid-template-columns: 52px 1fr auto auto;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto;
   gap: 14px;
   align-items: center;
   padding: 8px 12px;
   background: var(--aap-panel);
   border: 1px solid var(--aap-rule);
   border-radius: 4px;
+}
+.aap-post-row__info {
+  min-width: 0;
+  overflow: hidden;
 }
 .aap-post-row__thumb {
   width: 44px; height: 44px;

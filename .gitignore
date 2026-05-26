@@ -1,5 +1,6 @@
 .env
 .env.import
+scripts/results_*.html
 .venv/
 data/
 docs/todo/

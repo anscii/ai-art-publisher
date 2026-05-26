@@ -55,7 +55,9 @@ def test_post_telegram_fake(page, live_server, tmp_path):
     page.locator("button[title='Post now']").first.click()
     page.locator("#confirmModal").wait_for(state="visible", timeout=3000)
     page.locator("#confirmOkBtn").click()
-    page.locator("#toastContainer").get_by_text("[FAKE] Posted to telegram").wait_for(timeout=10000)
+    # Endpoint returns "Sending…" immediately; poller shows "Posted to telegram" after ~3 s.
+    page.locator("#toastContainer").get_by_text("Sending").wait_for(timeout=5000)
+    page.locator("#toastContainer").get_by_text("Posted to telegram").wait_for(timeout=15000)
 
 
 def test_schedule_series(page, live_server, tmp_path):
@@ -113,11 +115,12 @@ def test_save_and_send_posts_immediately(page, live_server, tmp_path):
 
     page.locator("#pf_title").fill("Save and Send Test Post")
 
-    # Click Save & send — should create + immediately post in one click
+    # Click Save & send — creates post and fires background posting immediately
     page.get_by_role("button", name="Save & send").click()
 
-    # Fake posting responds with "[FAKE] Posted to telegram"
-    page.locator("#toastContainer").get_by_text("[FAKE]").wait_for(timeout=15000)
+    # Endpoint returns "sending…" immediately; poller shows "Posted to telegram" after ~3 s.
+    page.locator("#toastContainer").get_by_text("sending").wait_for(timeout=10000)
+    page.locator("#toastContainer").get_by_text("Posted to telegram").wait_for(timeout=15000)
 
 
 def test_new_post_form_no_images_preselected_when_strip_empty(page, live_server, tmp_path):
