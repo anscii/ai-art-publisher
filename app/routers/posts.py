@@ -2,10 +2,11 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import app.database as _db_module
 from app.config import get_config
 from app.database import get_db
 from app.enums import Platform
@@ -183,6 +184,32 @@ def _maybe_mark_series_posted(series: Series, db: Session) -> None:
     active = [img for img in series.images if img.deleted_at is None and img.status != "skip"]
     if active and all(img.status == "posted" for img in active):
         series.status = "posted"
+
+
+def _execute_post_background(post_id: str) -> None:
+    """Run in a BackgroundTask — creates its own DB session.
+    Uses _db_module.SessionLocal (not a direct import) so test monkeypatching works.
+    """
+    db = _db_module.SessionLocal()
+    try:
+        post = db.get(Post, post_id)
+        if not post:
+            logger.error("Background post task: post %s not found", post_id)
+            return
+        settings = get_or_create_settings(db)
+        execute_post(post, db, settings)
+    except Exception as exc:
+        logger.exception("Background post task failed for post %s: %s", post_id, exc)
+        try:
+            _post = db.get(Post, post_id)
+            if _post and _post.status == "sending":
+                _post.status = "failed"
+                _post.error_message = str(exc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 
 def execute_post(post: Post, db: Session, settings) -> PostResult:
@@ -399,16 +426,22 @@ def delete_post(post_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/api/posts/{post_id}/post")
-def post_now(post_id: str, db: Session = Depends(get_db)) -> PostResult:
+def post_now(
+    post_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+) -> PostResult:
     p = db.get(Post, post_id)
     if not p or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Post not found")
     if p.status == "posted":
         return PostResult(success=False, message="Already posted")
+    if p.status == "sending":
+        return PostResult(success=False, message="Already sending")
     if not p.post_images:
         raise HTTPException(status_code=400, detail="No images in post")
-    settings = get_or_create_settings(db)
-    return execute_post(p, db, settings)
+    p.status = "sending"
+    db.commit()
+    background_tasks.add_task(_execute_post_background, post_id)
+    return PostResult(success=True, message="Sending…")
 
 
 @router.post("/api/posts/{post_id}/schedule")

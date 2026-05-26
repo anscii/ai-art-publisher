@@ -7,8 +7,10 @@ from fastapi.requests import Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+import app.database as _db_module
 from app.config import get_config
 from app.database import init_db
+from app.models import Post
 from app.routers import auth as auth_router
 from app.routers import backup as backup_router
 from app.routers import collections as collections_router
@@ -42,10 +44,28 @@ def _configure_app_logging() -> None:
         app_logger.addHandler(handler)
 
 
+_main_logger = logging.getLogger("app.main")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _configure_app_logging()  # after init_db so alembic's root handler exists to remove
+    # Reset posts stuck in "sending" status from a previous process that was killed mid-task.
+    # Use _db_module.SessionLocal (not a direct import) so test monkeypatching works.
+    _db = _db_module.SessionLocal()
+    try:
+        stuck = _db.query(Post).filter(Post.status == "sending").all()
+        for _p in stuck:
+            _p.status = "failed"
+            _p.error_message = "Server restarted during sending"
+        if stuck:
+            _db.commit()
+            _main_logger.warning("Reset %d stuck 'sending' post(s) to 'failed'", len(stuck))
+    except Exception as exc:
+        _main_logger.exception("Failed to reset stuck 'sending' posts: %s", exc)
+    finally:
+        _db.close()
     yield
 
 
