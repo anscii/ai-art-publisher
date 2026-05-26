@@ -1863,7 +1863,7 @@ function buildPostRow(post, imgMap, series) {
     'data-post-status': post.status,
   },
     thumbDiv,
-    h('div', { cls: 'min-w-0' },
+    h('div', { cls: 'aap-post-row__info' },
       h('div', { cls: 'aap-post-row__title', text: post.title || '(no title)' }),
       platEl
     ),
