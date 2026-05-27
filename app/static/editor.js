@@ -9,7 +9,7 @@ function _startSendingPoller(seriesId) {
     if (App.currentSeriesId !== seriesId) {
       clearInterval(_sendingPollerId); _sendingPollerId = null; return;
     }
-    await loadSeriesDetail(seriesId);
+    await loadSeriesDetail(seriesId, { silent: true });
     const posts = (App.currentSeries?.posts || []).filter(p => !p.deleted_at);
     const hasSending = posts.some(p => p.status === 'sending');
     if (!hasSending) {
@@ -215,7 +215,9 @@ function _selGridCols() {
 function buildImagesSection(series) {
   const images = (series.images || []).filter(i => !i.deleted_at);
   const selected   = images.filter(i => _selectedImages.has(i.id));
-  const unselected = images.filter(i => !_selectedImages.has(i.id));
+  const unselected = images
+    .filter(i => !_selectedImages.has(i.id))
+    .sort((a, b) => (a.status === 'skip' ? 1 : 0) - (b.status === 'skip' ? 1 : 0));
 
   const selGrid = h('div', { cls: 'aap-thumb-grid', id: 'selectedTray' });
   selected.forEach((img, idx) =>
