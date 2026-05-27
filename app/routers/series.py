@@ -60,6 +60,7 @@ def variant_to_resp(v: AIVariant, used_in_posts: bool = False) -> AIVariantRespo
         pinterest_description=v.pinterest_description,
         pinterest_board=v.pinterest_board,
         archive_metadata=json.loads(v.archive_metadata) if v.archive_metadata else None,
+        draft_id=v.draft_id,
         used_in_posts=used_in_posts,
     )
 

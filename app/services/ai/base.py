@@ -255,6 +255,7 @@ class AIVariantData:
     pinterest_description: str = ""
     pinterest_board: str = ""
     archive_metadata: dict = field(default_factory=dict)
+    actual_model: str | None = None
 
     def __post_init__(self):
         self.title = fix_llm_text(self.title)

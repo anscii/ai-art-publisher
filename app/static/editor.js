@@ -916,13 +916,25 @@ async function deleteImage(imageId) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-async function deleteVariant(variantId) {
+async function deleteVariant(variantId, cascade = false) {
+  const path = '/api/ai_variants/' + variantId + (cascade ? '?cascade=true' : '');
   try {
-    const updated = await apiFetch('DELETE', '/api/ai_variants/' + variantId);
+    const updated = await apiFetch('DELETE', path);
     App.currentSeries = updated;
     renderEditor(updated);
     showToast('Variant deleted', 'success');
-  } catch (e) { showToast(e.message, 'danger'); }
+  } catch (e) {
+    if (e.status === 409 && e.body?.detail?.cascade_required) {
+      const n = e.body.detail.dependent_count;
+      showConfirm(
+        'This draft has ' + n + ' dependent full variant' + (n === 1 ? '' : 's') +
+        ' that will also be deleted. Proceed?',
+        () => deleteVariant(variantId, true),
+      );
+    } else {
+      showToast(e.message, 'danger');
+    }
+  }
 }
 
 // ── Descriptions card ─────────────────────────────────────────────────────────

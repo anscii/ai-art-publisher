@@ -150,6 +150,9 @@ class AIVariant(Base):
     tags_instagram: Mapped[str] = mapped_column(Text, default="[]")
     tags_telegram: Mapped[str] = mapped_column(Text, default="[]")
     hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("ai_variants.id", ondelete="CASCADE"), nullable=True
+    )
     instagram_seo: Mapped[str | None] = mapped_column(Text, nullable=True)
     pinterest_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     pinterest_description: Mapped[str | None] = mapped_column(Text, nullable=True)
