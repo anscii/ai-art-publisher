@@ -6,7 +6,10 @@
 - Branch prefix must be `feat/` or `feature/` — never use Linear's auto-suggested branch name (it has a user-specific prefix like `murkycat/`).
 - Always use `origin/<branch>` refs (not local branch names) in `git log`/`git diff` for PR descriptions and release notes — local branches may be stale.
 - Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped. After running `make format`, re-stage any modified files (`git add`) before committing — ruff modifies files in-place, leaving format changes unstaged.
+- The pre-commit hook runs **both** ruff-format and ruff-lint; either can auto-modify files and fail the commit. If commit fails with hook-modified files, `git add -A` and retry the commit.
 - **Before every `git push` and before creating any PR**: run `make format && make types && make test-back` (and `make test-front` if any JS changed). Never push or open a PR on a failing or unchecked suite.
+- **Verify current branch** (`git branch --show-current`) before every commit — never commit directly to `develop` or `master`.
+- Release PRs (`develop` → `master`) use `gh pr merge --merge` — never `--squash`. Squash is only for feature → `develop`.
 
 ## Running tests
 
