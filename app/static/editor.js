@@ -215,7 +215,9 @@ function _selGridCols() {
 function buildImagesSection(series) {
   const images = (series.images || []).filter(i => !i.deleted_at);
   const selected   = images.filter(i => _selectedImages.has(i.id));
-  const unselected = images.filter(i => !_selectedImages.has(i.id));
+  const unselected = images
+    .filter(i => !_selectedImages.has(i.id))
+    .sort((a, b) => (a.status === 'skip' ? 1 : 0) - (b.status === 'skip' ? 1 : 0));
 
   const selGrid = h('div', { cls: 'aap-thumb-grid', id: 'selectedTray' });
   selected.forEach((img, idx) =>
