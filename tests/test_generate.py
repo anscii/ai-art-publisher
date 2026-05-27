@@ -838,6 +838,135 @@ def test_generate_full_updates_existing_variant(client):
     assert updated["description_en"] == "Edited description."
 
 
+def test_generate_full_same_provider_draft_updates_in_place(client):
+    """Draft + same provider/model as full gen → update in-place, no new record."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN[:1])
+        mp.return_value = p
+        draft_variants = client.post(
+            f"/api/series/{sid}/generate",
+            json={"hint": "a fox", "language": "en"},
+        ).json()
+    vid = draft_variants[0]["id"]
+    original_provider = draft_variants[0]["provider"]
+
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={
+                "description": "My edited description.",
+                "language": "en",
+                "variant_id": vid,
+                # no provider override — resolves to same defaults as draft
+            },
+        )
+    assert resp.status_code == 201
+    variants = resp.json()["ai_variants"]
+    # updated in-place: still 1 record
+    assert len(variants) == 1
+    updated = variants[0]
+    assert updated["id"] == vid
+    assert updated["title"] == "Expanded Title"
+    assert updated["description_en"] == "My edited description."
+    assert updated["provider"] == original_provider
+
+
+def test_generate_full_different_provider_creates_new_variant(client):
+    """Draft + different provider for full gen → new variant created, draft preserved."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test", "openai_api_key": "sk-oa"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN[:1])
+        mp.return_value = p
+        draft_variants = client.post(
+            f"/api/series/{sid}/generate",
+            json={"hint": "a fox", "language": "en"},
+        ).json()
+    vid = draft_variants[0]["id"]
+    assert draft_variants[0]["provider"] == "anthropic"
+
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={
+                "description": "Edited description.",
+                "language": "en",
+                "variant_id": vid,
+                "provider": "openai",
+            },
+        )
+    assert resp.status_code == 201
+    variants = resp.json()["ai_variants"]
+    # new variant created alongside the draft
+    assert len(variants) == 2
+    # original draft untouched
+    draft = next(v for v in variants if v["id"] == vid)
+    assert draft["title"] == ""
+    assert draft["provider"] == "anthropic"
+    # new full variant carries openai + draft description
+    new_v = next(v for v in variants if v["id"] != vid)
+    assert new_v["provider"] == "openai"
+    assert new_v["title"] == "Expanded Title"
+    assert new_v["description_en"] == "Edited description."
+
+
+def test_generate_full_on_full_variant_creates_new(client):
+    """Regenerating full content on an already-full variant creates new record, original untouched."""
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
+        mp.return_value = p
+        resp1 = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={"description": "First full description.", "language": "en"},
+        )
+    assert resp1.status_code == 201
+    full_vid = resp1.json()["ai_variants"][0]["id"]
+
+    _FAKE_EXPANDED_2 = AIVariantData(
+        title="Second Full Title",
+        title_ru="Второй заголовок",
+        description_en="Second full description.\n\nSentence two.",
+        description_ru="Второе полное описание.\n\nПредложение два.",
+        tags_instagram=["#second"],
+        tags_telegram=["#второй"],
+        cost_usd=0.003,
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED_2)
+        mp.return_value = p
+        resp2 = client.post(
+            f"/api/series/{sid}/generate-full",
+            json={
+                "description": "Second full description.",
+                "language": "en",
+                "variant_id": full_vid,
+            },
+        )
+    assert resp2.status_code == 201
+    variants = resp2.json()["ai_variants"]
+    # new variant created — 2 total
+    assert len(variants) == 2
+    original = next(v for v in variants if v["id"] == full_vid)
+    assert original["title"] == "Expanded Title"
+    new_v = next(v for v in variants if v["id"] != full_vid)
+    assert new_v["title"] == "Second Full Title"
+    assert new_v["description_en"] == "Second full description."
+
+
 def test_generate_full_missing_series_404(client):
     resp = client.post(
         "/api/series/nonexistent/generate-full",

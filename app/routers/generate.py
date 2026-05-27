@@ -196,9 +196,23 @@ def generate_full(
         vd.description_ru = body.description
 
     if body.variant_id:
-        v = db.get(AIVariant, body.variant_id)
-        if not v or v.series_id != series_id:
+        existing = db.get(AIVariant, body.variant_id)
+        if not existing or existing.series_id != series_id:
             raise HTTPException(status_code=404, detail="Variant not found")
+        is_draft = existing.title == "" and existing.title_ru == ""
+        same_pipeline = existing.provider == provider_name and existing.model == model
+        if is_draft and same_pipeline:
+            # First full-gen on this draft, same provider/model — update in-place
+            v = existing
+        else:
+            # Different provider/model, or variant already has full content — preserve
+            # the existing record and create a new one seeded with the draft description.
+            v = AIVariant(series_id=series_id, provider=provider_name, model=model, hint=body.hint)
+            if body.language == "en":
+                v.description_en = body.description
+            else:
+                v.description_ru = body.description
+            db.add(v)
     else:
         v = AIVariant(series_id=series_id, provider=provider_name, model=model, hint=body.hint)
         db.add(v)
