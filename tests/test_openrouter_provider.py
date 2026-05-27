@@ -183,3 +183,80 @@ def test_openai_provider_step2_format_is_none():
     with patch("openai.OpenAI"):
         p = OpenAIProvider(api_key="sk-test")
     assert p._step2_response_format("en") is None
+
+
+# ── actual_model capture and propagation ─────────────────────────────────────
+
+
+def test_call_api_stores_last_resp_model():
+    provider = _make_provider()
+    mock_resp = MagicMock()
+    mock_resp.model = "google/gemma-3-27b-it:free"
+    provider._client.chat.completions.create = MagicMock(return_value=mock_resp)
+
+    provider._call_api("openrouter/free", [])
+
+    assert provider._last_resp_model == "google/gemma-3-27b-it:free"
+
+
+def test_call_api_last_resp_model_starts_as_none():
+    provider = _make_provider()
+    assert provider._last_resp_model is None
+
+
+def test_generate_variants_sets_actual_model_on_all_variants():
+    from app.services.ai.base import AIVariantData
+    from app.services.ai.openai import OpenAIProvider
+
+    provider = _make_provider()
+    fake_variants = [
+        AIVariantData(
+            title="",
+            title_ru="",
+            description_en=f"Desc {i}.\n\nTwo.",
+            description_ru="",
+            tags_instagram=[],
+            tags_telegram=[],
+        )
+        for i in range(2)
+    ]
+    with patch.object(OpenAIProvider, "generate_variants", return_value=fake_variants):
+        provider._last_resp_model = "google/gemma-3-27b-it:free"
+        result = provider.generate_variants([], "openrouter/free", hint="test")
+
+    assert all(v.actual_model == "google/gemma-3-27b-it:free" for v in result)
+
+
+def test_expand_variant_sets_actual_model():
+    from app.services.ai.base import AIVariantData
+    from app.services.ai.openai import OpenAIProvider
+
+    provider = _make_provider()
+    fake_vd = AIVariantData(
+        title="T",
+        title_ru="Т",
+        description_en="Expanded.\n\nTwo.",
+        description_ru="Расш.\n\nДва.",
+        tags_instagram=[],
+        tags_telegram=[],
+    )
+    with patch.object(OpenAIProvider, "expand_variant", return_value=fake_vd):
+        provider._last_resp_model = "google/gemma-3-27b-it:free"
+        result = provider.expand_variant("My desc.", "en", "openrouter/free")
+
+    assert result.actual_model == "google/gemma-3-27b-it:free"
+
+
+def test_openai_provider_actual_model_is_none():
+    from app.services.ai.base import AIVariantData
+
+    # AIVariantData created without actual_model → should be None
+    vd = AIVariantData(
+        title="T",
+        title_ru="Т",
+        description_en="E.\n\nTwo.",
+        description_ru="R.\n\nTwo.",
+        tags_instagram=[],
+        tags_telegram=[],
+    )
+    assert vd.actual_model is None

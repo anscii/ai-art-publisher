@@ -63,6 +63,18 @@ def _get_api_key(settings, provider: str) -> str:
     }.get(provider, "")
 
 
+def _resolve_actual_provider_model(
+    actual_model: str | None, provider_name: str, model: str
+) -> tuple[str, str]:
+    """Return (provider, model) to store in AIVariant.
+
+    Provider is always the routing provider (e.g. "openrouter").
+    Model is the actual model returned by the API when available
+    (e.g. "google/gemma-3-27b-it:free"), otherwise the requested model.
+    """
+    return provider_name, actual_model or model
+
+
 @router.post("/{series_id}/generate", status_code=201)
 def generate_descriptions(
     series_id: str,
@@ -124,10 +136,13 @@ def generate_descriptions(
     )
 
     for vd in variants_data:
+        used_provider, used_model = _resolve_actual_provider_model(
+            vd.actual_model, provider_name, model
+        )
         v = AIVariant(
             series_id=series_id,
-            provider=provider_name,
-            model=model,
+            provider=used_provider,
+            model=used_model,
             title=vd.title,
             title_ru=vd.title_ru,
             description_en=vd.description_en,
@@ -190,6 +205,9 @@ def generate_full(
 
     provider = get_provider(provider_name, api_key)
     vd = provider.expand_variant(body.description, body.language, model, augmented_hint)
+    used_provider, used_model = _resolve_actual_provider_model(
+        vd.actual_model, provider_name, model
+    )
     if body.language == "en":
         vd.description_en = body.description
     else:
@@ -200,25 +218,28 @@ def generate_full(
         if not existing or existing.series_id != series_id:
             raise HTTPException(status_code=404, detail="Variant not found")
         is_draft = existing.title == "" and existing.title_ru == ""
-        same_pipeline = existing.provider == provider_name and existing.model == model
+        same_pipeline = existing.provider == used_provider and existing.model == used_model
         if is_draft and same_pipeline:
             # First full-gen on this draft, same provider/model — update in-place
             v = existing
         else:
             # Different provider/model, or variant already has full content — preserve
             # the existing record and create a new one seeded with the draft description.
-            v = AIVariant(series_id=series_id, provider=provider_name, model=model, hint=body.hint)
+            v = AIVariant(
+                series_id=series_id, provider=used_provider, model=used_model, hint=body.hint
+            )
             if body.language == "en":
                 v.description_en = body.description
             else:
                 v.description_ru = body.description
+            v.draft_id = body.variant_id
             db.add(v)
     else:
-        v = AIVariant(series_id=series_id, provider=provider_name, model=model, hint=body.hint)
+        v = AIVariant(series_id=series_id, provider=used_provider, model=used_model, hint=body.hint)
         db.add(v)
 
-    v.provider = provider_name
-    v.model = model
+    v.provider = used_provider
+    v.model = used_model
     v.title = vd.title
     v.title_ru = vd.title_ru
     v.description_en = vd.description_en
@@ -237,7 +258,11 @@ def generate_full(
 
 
 @variants_router.delete("/{variant_id}")
-def delete_variant(variant_id: str, db: Session = Depends(get_db)) -> SeriesDetail:
+def delete_variant(
+    variant_id: str,
+    cascade: bool = False,
+    db: Session = Depends(get_db),
+) -> SeriesDetail:
     from sqlalchemy import select as _select
 
     from app.models import Post
@@ -262,6 +287,39 @@ def delete_variant(variant_id: str, db: Session = Depends(get_db)) -> SeriesDeta
             status_code=409,
             detail="Cannot delete a variant that has been used in posts",
         )
+
+    dependents = db.scalars(_select(AIVariant).where(AIVariant.draft_id == variant_id)).all()
+
+    if dependents and not cascade:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"This draft has {len(dependents)} dependent full variant"
+                    f"{'s' if len(dependents) != 1 else ''} that will also be deleted."
+                ),
+                "cascade_required": True,
+                "dependent_count": len(dependents),
+            },
+        )
+
+    if dependents and cascade:
+        dep_ids = [d.id for d in dependents]
+        dep_used = (
+            db.scalar(
+                _select(Post.id)
+                .where(Post.variant_id.in_(dep_ids), Post.deleted_at.is_(None))
+                .limit(1)
+            )
+            is not None
+        )
+        if dep_used:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete: a dependent full variant is used in posts",
+            )
+        for dep in dependents:
+            db.delete(dep)
 
     series = v.series
     if series.chosen_variant_id == variant_id:

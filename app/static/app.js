@@ -95,8 +95,13 @@ async function apiFetch(method, path, body) {
     const detail = err.detail;
     const msg = Array.isArray(detail)
       ? detail.map(d => d.msg || JSON.stringify(d)).join('; ')
-      : (detail || resp.statusText);
-    throw new Error(msg);
+      : (typeof detail === 'object' && detail !== null
+          ? (detail.message || resp.statusText)
+          : (detail || resp.statusText));
+    const e = new Error(msg);
+    e.status = resp.status;
+    e.body = err;
+    throw e;
   }
   return resp.json();
 }

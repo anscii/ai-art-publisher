@@ -121,6 +121,7 @@ class OpenRouterProvider(OpenAIProvider):
                 "X-Title": "AI Art Publisher",
             },
         )
+        self._last_resp_model: str | None = None
 
     def _call_api(self, model: str, messages: list[Any], response_format: Any = None) -> Any:
         kwargs: dict[str, Any] = dict(
@@ -132,10 +133,38 @@ class OpenRouterProvider(OpenAIProvider):
         )
         if response_format is not None:
             kwargs["response_format"] = response_format
-        return self._client.chat.completions.create(**kwargs)
+        resp = self._client.chat.completions.create(**kwargs)
+        self._last_resp_model = resp.model
+        return resp
 
     def _step1_response_format(self, num_variants: int, language: str) -> Any:
         return _step1_schema(num_variants, language)
 
     def _step2_response_format(self, language: str) -> Any:
         return _step2_schema(language)
+
+    def generate_variants(
+        self,
+        images_b64: list[Any],
+        model: str,
+        hint: str | None = None,
+        num_variants: int = 3,
+        language: str = "en",
+    ) -> list:
+        from app.services.ai.base import AIVariantData as _AVD  # noqa: F401
+
+        variants = super().generate_variants(images_b64, model, hint, num_variants, language)
+        for v in variants:
+            v.actual_model = self._last_resp_model
+        return variants
+
+    def expand_variant(
+        self,
+        description: str,
+        language: str,
+        model: str,
+        hint: str | None = None,
+    ):
+        vd = super().expand_variant(description, language, model, hint)
+        vd.actual_model = self._last_resp_model
+        return vd
