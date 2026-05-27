@@ -335,10 +335,12 @@ async function selectSeries(id, { push = true } = {}) {
 
 let _loadDetailToken = 0;
 
-async function loadSeriesDetail(id) {
+async function loadSeriesDetail(id, { silent = false } = {}) {
   const token = ++_loadDetailToken;
   const panel = document.getElementById('editorPanel');
-  panel.replaceChildren(h('div', { cls: 'text-center p-5' }, h('div', { cls: 'spinner-border text-secondary' })));
+  if (!silent) {
+    panel.replaceChildren(h('div', { cls: 'text-center p-5' }, h('div', { cls: 'spinner-border text-secondary' })));
+  }
   try {
     const s = await apiFetch('GET', '/api/series/' + id);
     if (token !== _loadDetailToken) return;

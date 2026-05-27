@@ -9,7 +9,7 @@ function _startSendingPoller(seriesId) {
     if (App.currentSeriesId !== seriesId) {
       clearInterval(_sendingPollerId); _sendingPollerId = null; return;
     }
-    await loadSeriesDetail(seriesId);
+    await loadSeriesDetail(seriesId, { silent: true });
     const posts = (App.currentSeries?.posts || []).filter(p => !p.deleted_at);
     const hasSending = posts.some(p => p.status === 'sending');
     if (!hasSending) {
