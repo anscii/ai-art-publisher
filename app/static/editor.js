@@ -2392,6 +2392,11 @@ function _buildStoryFrameCard(frame, imgMap, story, panel, post, series) {
     }));
   }
 
+  if (frame.rendered_url) {
+    previewEl.style.cursor = 'zoom-in';
+    previewEl.addEventListener('click', () => window.open(frame.rendered_url, '_blank'));
+  }
+
   const controls = [];
 
   if (frame.frame_type === 'text') {
