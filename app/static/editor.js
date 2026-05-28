@@ -2488,6 +2488,7 @@ function _renderStoryEditorV2(body) {
 }
 
 function _buildFramePreview(phone, frame, imgMap) {
+  const savedRail = phone.querySelector('.se-rail');
   phone.replaceChildren();
   const bgUrl = (imgMap && frame.source_image_id) ? imgMap[frame.source_image_id] : '';
 
@@ -2527,6 +2528,7 @@ function _buildFramePreview(phone, frame, imgMap) {
       phone.appendChild(textEl);
     }
   }
+  if (savedRail) phone.appendChild(savedRail);
 }
 
 function _buildRail(body, frame, imgMap) {
@@ -2535,9 +2537,10 @@ function _buildRail(body, frame, imgMap) {
 
   const closePanel = () => {
     if (openPanel) { openPanel.remove(); openPanel = null; }
+    document.removeEventListener('click', closeOnOutside);
   };
   const closeOnOutside = e => {
-    if (openPanel && !rail.contains(e.target)) { closePanel(); document.removeEventListener('click', closeOnOutside); }
+    if (!rail.contains(e.target)) closePanel();
   };
 
   const makeBtn = (label, glyphEl, onOpen) => {
