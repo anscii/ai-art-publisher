@@ -2283,6 +2283,7 @@ async function _openStoryPanel(post, imgMap, series, rowWrap) {
   });
   rowWrap.after(panel);
   await _refreshStoryPanel(panel, post, imgMap, series);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function _refreshStoryPanel(panel, post, imgMap, series) {
