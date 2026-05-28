@@ -157,13 +157,26 @@ class StoryRenderer:
             else:
                 bar_top, bar_bot = _CANVAS_H - bar_h, _CANVAS_H
 
-            draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=(0, 0, 0, 120))
-
+            bg_mode = getattr(frame, "background_mode", "solid_dark")
+            _BAR_FILL: dict[str, tuple[int, int, int, int]] = {
+                "solid_dark": (0, 0, 0, 217),
+                "solid_light": (245, 240, 230, 235),
+                "solid_accent": (184, 80, 31, 235),
+            }
             title_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
             lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
             total_h = _block_height(lines, self._title_font)
-            center_y = (bar_top + bar_bot) // 2
-            top_y = center_y - total_h // 2
+
+            if bg_mode == "image_clean":
+                # floating title — no bar rectangle, just shadowed text
+                center_y = (bar_top + bar_bot) // 2
+                top_y = center_y - total_h // 2
+            else:
+                bar_fill = _BAR_FILL.get(bg_mode, (0, 0, 0, 120))
+                draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=bar_fill)
+                center_y = (bar_top + bar_bot) // 2
+                top_y = center_y - total_h // 2
+
             _draw_text_block(rgba, lines, self._title_font, top_y, _PAD_H, title_color)
             canvas = rgba.convert("RGB")
 

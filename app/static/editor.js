@@ -2506,9 +2506,21 @@ function _buildFramePreview(phone, frame, imgMap) {
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
       const barPos = frame.title_position === 'top' ? 'se-frame-bar--top' : frame.title_position === 'middle' ? 'se-frame-bar--middle' : 'se-frame-bar--bottom';
-      const barCls = 'se-frame-bar ' + barPos;
       const titleStyle = 'color:' + (frame.text_color || '#ffffff');
-      phone.appendChild(h('div', { cls: barCls }, h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })));
+      const BAR_BG = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)' };
+      const bgMode = frame.background_mode || 'solid_dark';
+      if (bgMode === 'image_clean') {
+        // floating title — no bar, absolute text with shadow
+        const alignCls = 'se-frame-text-block ' + (barPos === 'se-frame-bar--top' ? 'se-frame-text-block--top' : barPos === 'se-frame-bar--middle' ? 'se-frame-text-block--middle' : 'se-frame-text-block--bottom');
+        phone.appendChild(h('div', { cls: alignCls },
+          h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })
+        ));
+      } else {
+        const barBg = BAR_BG[bgMode] || 'rgba(0,0,0,0.5)';
+        phone.appendChild(h('div', { cls: 'se-frame-bar ' + barPos, style: 'background:' + barBg },
+          h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })
+        ));
+      }
     }
   } else {
     const mode = frame.background_mode || 'image_blur_dim';
