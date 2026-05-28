@@ -11,8 +11,8 @@ _FONT_DIR = Path("/usr/share/fonts/truetype/liberation")
 _FONT_SERIF_REGULAR = _FONT_DIR / "LiberationSerif-Regular.ttf"
 _FONT_SERIF_BOLD = _FONT_DIR / "LiberationSerif-Bold.ttf"
 
-_BODY_SIZE = 48
-_TITLE_SIZE = 60
+_BODY_SIZE = 64
+_TITLE_SIZE = 80
 
 _PAD_H = 120  # horizontal padding each side
 _SAFE_V = 220  # vertical safe area top/bottom
