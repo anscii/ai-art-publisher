@@ -26,16 +26,16 @@ def main() -> None:
     inspector = inspect(engine)
     fresh = not inspector.has_table("series")
 
-    Base.metadata.create_all(bind=engine)
-
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", str(engine.url))
 
     if fresh:
-        # Tables were just created with the latest schema — mark all migrations done.
+        # Fresh DB — create schema then stamp (no migrations needed).
+        Base.metadata.create_all(bind=engine)
         command.stamp(cfg, "head")
         print("Fresh install: tables created and stamped at head.")
     else:
+        # Existing DB — migrations handle all schema changes.
         command.upgrade(cfg, "head")
         print("Existing install: migrations applied.")
 
