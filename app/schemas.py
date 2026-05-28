@@ -250,6 +250,9 @@ class StoryFrameResponse(BaseModel):
     text: str | None
     is_enabled: bool
     background_mode: str
+    text_color: str
+    text_align: str
+    title_position: str
     rendered_url: str | None
     instagram_frame_id: str | None
     facebook_frame_id: str | None
@@ -277,6 +280,9 @@ class StoryFrameUpdate(BaseModel):
     is_enabled: bool | None = None
     background_mode: str | None = None
     source_image_id: str | None = None
+    text_color: str | None = None
+    text_align: str | None = None
+    title_position: str | None = None
 
 
 class StoryReorderRequest(BaseModel):

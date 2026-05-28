@@ -95,6 +95,9 @@ def _story_to_resp(story: Story) -> StoryResponse:
                 text=f.text,
                 is_enabled=f.is_enabled,
                 background_mode=f.background_mode,
+                text_color=f.text_color,
+                text_align=f.text_align,
+                title_position=f.title_position,
                 rendered_url=f.rendered_url,
                 instagram_frame_id=f.instagram_frame_id,
                 facebook_frame_id=f.facebook_frame_id,
@@ -193,7 +196,15 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
     frame = _get_frame_or_404(frame_id, db)
     story = frame.story
 
-    content_fields = {"text", "title", "source_image_id", "background_mode"}
+    content_fields = {
+        "text",
+        "title",
+        "source_image_id",
+        "background_mode",
+        "text_color",
+        "text_align",
+        "title_position",
+    }
     content_changed = False
 
     for field, value in body.model_dump(exclude_unset=True).items():

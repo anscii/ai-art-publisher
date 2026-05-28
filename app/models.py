@@ -187,7 +187,16 @@ class StoryFrame(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     background_mode: Mapped[str] = mapped_column(String, default="image_blur_dim")
-    # image_clean | image_blur_dim | solid_dark | solid_light
+    # image_clean | image_blur_dim | solid_dark | solid_light | solid_accent
+
+    text_color: Mapped[str] = mapped_column(String, default="#ffffff")
+    # #ffffff | #0e0e10 | #f5e6d3 | #b8501f | #9ab2c7
+
+    text_align: Mapped[str] = mapped_column(String, default="middle")
+    # top | middle | bottom
+
+    title_position: Mapped[str] = mapped_column(String, default="bottom")
+    # top | bottom
 
     rendered_url: Mapped[str | None] = mapped_column(String, nullable=True)
     rendered_storage_key: Mapped[str | None] = mapped_column(String, nullable=True)

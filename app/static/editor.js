@@ -1878,7 +1878,7 @@ function buildPostRow(post, imgMap, series) {
       'aria-label': 'Story',
       'data-story-btn': post.id,
     }, icon('bi bi-film'));
-    storyBtn.addEventListener('click', () => _openStoryPanel(post, imgMap, series, rowWrap));
+    storyBtn.addEventListener('click', () => _openStoryModal(post, imgMap, series));
     actions.appendChild(storyBtn);
   }
 
@@ -2226,117 +2226,72 @@ function showPostContent(post, imgMap, series) {
   bootstrap.Modal.getOrCreateInstance(document.getElementById('postViewModal')).show();
 }
 
+
 // ── Stories ────────────────────────────────────────────────────────────────
 
-function _openStoryFullscreen(urls, startIdx) {
-  let idx = startIdx ?? 0;
+const _TEXT_COLORS = [
+  { hex: '#ffffff', label: 'White' },
+  { hex: '#0e0e10', label: 'Ink' },
+  { hex: '#f5e6d3', label: 'Cream' },
+  { hex: '#b8501f', label: 'Accent' },
+  { hex: '#9ab2c7', label: 'Steel' },
+];
 
-  const overlay = h('div', {
-    style: 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1055;display:flex;align-items:center;justify-content:center',
-  });
+let _storyCtx = null;
 
-  const img = document.createElement('img');
-  img.style.cssText = 'max-width:calc(100% - 96px);max-height:100%;object-fit:contain;display:block';
-
-  const counter = h('div', {
-    style: 'position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;opacity:.7;pointer-events:none',
-  });
-
-  const btnStyle = 'position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);border:none;color:#fff;font-size:28px;padding:8px 14px;cursor:pointer;border-radius:4px;line-height:1;user-select:none';
-  const prevBtn = h('button', { style: btnStyle + ';left:12px', 'aria-label': 'Previous frame' }, '‹');
-  const nextBtn = h('button', { style: btnStyle + ';right:12px', 'aria-label': 'Next frame' }, '›');
-
-  function render() {
-    img.src = urls[idx];
-    const single = urls.length <= 1;
-    prevBtn.style.display = single ? 'none' : '';
-    nextBtn.style.display = single ? 'none' : '';
-    counter.textContent = single ? '' : (idx + 1) + ' / ' + urls.length;
-  }
-
-  prevBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx - 1 + urls.length) % urls.length; render(); });
-  nextBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx + 1) % urls.length; render(); });
-
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
-  overlay.addEventListener('click', close);
-
-  function onKey(e) {
-    if (e.key === 'Escape') close();
-    else if (e.key === 'ArrowLeft')  { idx = (idx - 1 + urls.length) % urls.length; render(); }
-    else if (e.key === 'ArrowRight') { idx = (idx + 1) % urls.length; render(); }
-  }
-  document.addEventListener('keydown', onKey);
-
-  overlay.append(img, prevBtn, nextBtn, counter);
-  render();
-  document.body.appendChild(overlay);
+function _openStoryModal(post, imgMap, series) {
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('storyEditorModal'));
+  document.getElementById('storyEditorTitle').textContent = post.title || 'Story';
+  const body = document.getElementById('storyEditorBody');
+  body.replaceChildren();
+  _loadStoryModal(body, post, imgMap, series);
+  modal.show();
 }
 
-async function _openStoryPanel(post, imgMap, series, rowWrap) {
-  const panelId = 'story-panel-' + post.id;
-  const existing = document.getElementById(panelId);
-  if (existing) { existing.remove(); return; }
-  const panel = h('div', {
-    id: panelId,
-    cls: 'aap-story-panel aap-card mt-2 p-3',
-    'data-story-panel': post.id,
-  });
-  rowWrap.after(panel);
-  await _refreshStoryPanel(panel, post, imgMap, series);
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-async function _refreshStoryPanel(panel, post, imgMap, series) {
-  panel.replaceChildren();
-  const storyId = panel.dataset.storyId || post.story_id;
-  if (storyId) {
+async function _loadStoryModal(body, post, imgMap, series) {
+  if (post.story_id) {
     try {
-      const story = await apiFetch('GET', '/api/stories/' + storyId);
-      panel.dataset.storyId = story.id;
-      _renderStoryEditor(panel, post, imgMap, series, story);
-    } catch (e) {
-      showToast(e.message, 'danger');
-    }
+      const story = await apiFetch('GET', '/api/stories/' + post.story_id);
+      _storyCtx = { post, imgMap, story, frameIdx: 0 };
+      _renderStoryEditorV2(body);
+    } catch (e) { showToast(e.message, 'danger'); }
   } else {
-    _renderStoryImagePicker(panel, post, imgMap, series);
+    _renderStoryPickerV2(body, post, imgMap, series);
   }
 }
 
-function _renderStoryImagePicker(panel, post, imgMap, series) {
-  const allImages = (post.image_ids || []).map(id => ({
-    id,
-    url: imgMap[id],
-  }));
+function _renderStoryPickerV2(body, post, imgMap, series) {
+  const allImages = (post.image_ids || []).map((id, idx) => ({ id, url: imgMap[id], idx }));
 
-  const checkboxes = allImages.map((img, idx) => {
-    const cb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-image-checkbox': img.id });
+  const checkboxes = allImages.map(({ id, url, idx }) => {
+    const cb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-image-checkbox': id });
     if (idx < 4) cb.checked = true;
-    const thumb = img.url
-      ? h('img', { src: img.url, style: 'width:40px;height:40px;object-fit:cover;border-radius:3px;vertical-align:middle;margin-right:6px' })
-      : h('span', { style: 'width:40px;height:40px;display:inline-block;background:#333;border-radius:3px;margin-right:6px;vertical-align:middle' });
-    const label = h('label', { cls: 'form-check-label d-flex align-items-center gap-2 mb-2' },
+    const thumb = url
+      ? h('img', { src: url, style: 'width:36px;height:36px;object-fit:cover;border-radius:3px;flex-shrink:0' })
+      : h('span', { style: 'width:36px;height:36px;display:inline-block;background:var(--aap-panel-hi);border-radius:3px;flex-shrink:0' });
+    const label = h('label', { cls: 'form-check-label d-flex align-items-center gap-2 mb-2', style: 'cursor:pointer' },
       cb, thumb, document.createTextNode('Image ' + (idx + 1)));
-    return { cb, label };
+    return { cb, label, id };
   });
 
   const genBtn = h('button', {
-    cls: 'btn aap-btn aap-btn-primary mt-2',
+    cls: 'va__btn va__btn--primary mt-2',
     text: 'Generate Story Draft',
     'data-story-generate-btn': post.id,
   });
 
   genBtn.addEventListener('click', async () => {
-    const selectedIds = checkboxes.filter(({ cb }) => cb.checked).map(({ cb }) => cb.dataset.storyImageCheckbox);
-    if (!selectedIds.length) { showToast('Select at least one image', 'warning'); return; }
+    const imageIds = checkboxes.filter(({ cb }) => cb.checked).map(({ id }) => id);
+    if (!imageIds.length) { showToast('Select at least one image', 'warning'); return; }
     genBtn.disabled = true;
-    genBtn.textContent = 'Generating...';
+    genBtn.textContent = 'Generating…';
     try {
-      const story = await apiFetch('POST', '/api/posts/' + post.id + '/stories', { image_ids: selectedIds });
-      panel.dataset.storyId = story.id;
-      // Update story button title
+      const story = await apiFetch('POST', '/api/posts/' + post.id + '/stories', { image_ids: imageIds });
+      post.story_id = story.id;
       const btn = document.querySelector('[data-story-btn="' + post.id + '"]');
       if (btn) btn.title = 'Story';
-      _renderStoryEditor(panel, post, imgMap, series, story);
+      _storyCtx = { post, imgMap, story, frameIdx: 0 };
+      _renderStoryEditorV2(body);
     } catch (e) {
       showToast(e.message, 'danger');
       genBtn.disabled = false;
@@ -2344,43 +2299,161 @@ function _renderStoryImagePicker(panel, post, imgMap, series) {
     }
   });
 
-  panel.replaceChildren(
-    h('div', { cls: 'fw-semibold mb-2 small' }, 'Choose images for story (first 4 pre-selected):'),
-    h('div', { cls: 'mb-2' }, ...checkboxes.map(({ label }) => label)),
-    genBtn
+  body.replaceChildren(
+    h('div', { cls: 'se-va', 'data-story-panel': post.id },
+      h('div', { cls: 'fw-semibold small mb-1' }, 'Choose images (first 4 selected):'),
+      h('div', {}, ...checkboxes.map(({ label }) => label)),
+      genBtn
+    )
   );
 }
 
-function _renderStoryEditor(panel, post, imgMap, series, story) {
-  const STATUS_COLOR = { draft: 'var(--aap-ink-mute)', rendered: 'var(--aap-dot-active)', posted: 'var(--aap-dot-done)', failed: 'var(--aap-danger)' };
+function _renderStoryEditorV2(body) {
+  const { story, imgMap, post } = _storyCtx;
+  const frameIdx = _storyCtx.frameIdx;
+  const frames = story.frames;
+  const frame = frames[frameIdx];
 
-  const statusBadge = h('span', {
-    cls: 'badge rounded-pill me-2',
-    style: 'background:' + (STATUS_COLOR[story.status] || 'var(--aap-ink-mute)'),
-    text: story.status,
+  const pill = h('span', {
+    cls: 'se-va__pill' + (story.status === 'draft' ? ' se-va__pill--ghost' : ''),
+    text: story.status.toUpperCase(),
   });
 
-  const regenBtn = h('button', { cls: 'btn aap-btn btn-sm', text: 'Regenerate' });
+  const regenBtn = h('button', { cls: 'se-va__regen', text: 'Regenerate' });
   regenBtn.addEventListener('click', () => {
-    panel.dataset.storyId = '';
-    _renderStoryImagePicker(panel, post, imgMap, series);
+    _storyCtx = null;
+    post.story_id = null;
+    _renderStoryPickerV2(body, post, imgMap, null);
   });
 
-  const framesEl = h('div', { cls: 'aap-story-frames mt-2', 'data-story-frames': story.id });
-  story.frames.forEach(frame => framesEl.appendChild(_buildStoryFrameCard(frame, imgMap, story, panel, post, series)));
+  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), regenBtn);
 
-  const renderBtn = h('button', {
-    cls: 'btn aap-btn aap-btn-primary btn-sm',
-    text: 'Render Preview',
-    'data-story-render-btn': story.id,
+  const prevBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Previous' }, '‹');
+  const nextBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Next' }, '›');
+  prevBtn.disabled = frameIdx === 0;
+  nextBtn.disabled = frameIdx === frames.length - 1;
+  prevBtn.addEventListener('click', () => { _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body); });
+  nextBtn.addEventListener('click', () => { _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body); });
+
+  const numStr = String(frameIdx + 1).padStart(2, '0');
+  const totalStr = String(frames.length).padStart(2, '0');
+  const kindLabel = frame.frame_type === 'image' ? (frame.title ? 'cover slide' : 'image slide') : 'text slide';
+
+  const head = h('div', { cls: 'se-head' },
+    prevBtn,
+    h('div', { cls: 'se-head__mid' },
+      h('span', { cls: 'se-head__count' },
+        document.createTextNode(numStr + ' '),
+        h('strong', {}, '/ ' + totalStr)
+      ),
+      h('span', { cls: 'se-head__kind' }, kindLabel)
+    ),
+    nextBtn
+  );
+
+  const phone = h('div', { cls: 'va__phone' });
+  _buildFramePreview(phone, frame, imgMap);
+
+  const rail = _buildRail(body, frame, imgMap);
+  phone.appendChild(rail);
+
+  if (frame.rendered_url) {
+    phone.style.cursor = 'zoom-in';
+    phone.addEventListener('click', e => {
+      if (e.target.closest('.se-rail')) return;
+      const rendered = frames.filter(f => f.rendered_url);
+      const idx = rendered.findIndex(f => f.id === frame.id);
+      _openStoryFullscreen(rendered.map(f => f.rendered_url), idx);
+    });
+  }
+
+  const colorbar = frame.frame_type === 'text' ? _buildColorBar(body, frame) : null;
+
+  const strip = h('div', { cls: 'se-strip', 'data-story-frames': story.id });
+  frames.forEach((f, i) => {
+    const chip = h('div', {
+      cls: 'se-strip__chip' + (i === frameIdx ? ' is-on' : '') + (!f.is_enabled ? ' is-off' : ''),
+    },
+      h('span', { cls: 'se-strip__num' }, String(i + 1).padStart(2, '0')),
+      h('span', { cls: 'se-strip__kind' },
+        f.frame_type === 'image' ? (f.title ? 'cover' : 'image') : 'text'),
+      ...(!f.is_enabled ? [h('span', { cls: 'se-strip__skip' }, 'skip')] : [])
+    );
+    chip.addEventListener('click', () => { _storyCtx.frameIdx = i; _renderStoryEditorV2(body); });
+    strip.appendChild(chip);
   });
+
+  let controlEl = null;
+  if (frame.frame_type === 'text') {
+    const textarea = h('textarea', { cls: 'va__textarea', rows: '4', 'data-story-frame-text': frame.id });
+    textarea.value = frame.text || '';
+    const charCount = h('span', { style: 'font-family:var(--aap-font-mono);font-size:11px;color:var(--aap-ink-mute);text-align:right;display:block' });
+    const updateCount = () => { charCount.textContent = textarea.value.length; };
+    updateCount();
+    let _dbt = null;
+    textarea.addEventListener('input', () => {
+      updateCount();
+      clearTimeout(_dbt);
+      _dbt = setTimeout(async () => {
+        try {
+          const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text: textarea.value });
+          const f = updated.frames.find(f => f.id === frame.id);
+          if (f) { frame.text = f.text; frame.rendered_url = f.rendered_url; }
+          story.status = updated.status;
+          pill.textContent = story.status.toUpperCase();
+          if (story.status === 'draft') pill.classList.add('se-va__pill--ghost');
+          else pill.classList.remove('se-va__pill--ghost');
+        } catch (e) { showToast(e.message, 'danger'); }
+      }, 600);
+    });
+    controlEl = h('div', {}, textarea, charCount);
+  } else {
+    const titleInput = h('input', {
+      type: 'text', cls: 'form-control',
+      style: 'background:var(--aap-field-bg);border-color:var(--aap-rule);color:var(--aap-ink)',
+      placeholder: 'Title (leave empty for no title)',
+      'data-story-frame-title': frame.id,
+    });
+    titleInput.value = frame.title || '';
+    titleInput.addEventListener('change', async () => {
+      try {
+        await apiFetch('PATCH', '/api/story-frames/' + frame.id, { title: titleInput.value || null });
+        frame.title = titleInput.value || null;
+        _buildFramePreview(phone, frame, imgMap);
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    controlEl = titleInput;
+  }
+
+  const incCb = h('input', { type: 'checkbox', cls: 'form-check-input' });
+  incCb.checked = frame.is_enabled;
+  incCb.addEventListener('change', async () => {
+    try {
+      await apiFetch('PATCH', '/api/story-frames/' + frame.id, { is_enabled: incCb.checked });
+      frame.is_enabled = incCb.checked;
+      const chip = strip.children[frameIdx];
+      if (chip) {
+        chip.classList.toggle('is-off', !incCb.checked);
+        const skipEl = chip.querySelector('.se-strip__skip');
+        if (!incCb.checked && !skipEl) chip.appendChild(h('span', { cls: 'se-strip__skip' }, 'skip'));
+        else if (incCb.checked && skipEl) skipEl.remove();
+      }
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
+
+  const includeRow = h('div', { cls: 'd-flex align-items-center gap-2' },
+    h('label', { cls: 'form-check-label d-flex align-items-center gap-2', style: 'cursor:pointer;font-size:13px' },
+      incCb, document.createTextNode('Include frame'))
+  );
+
+  const renderBtn = h('button', { cls: 'va__btn va__btn--primary', text: 'Render Preview', 'data-story-render-btn': story.id });
   renderBtn.addEventListener('click', async () => {
     renderBtn.disabled = true;
-    renderBtn.textContent = 'Rendering...';
+    renderBtn.textContent = 'Rendering…';
     try {
       const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
-      panel.dataset.storyId = updated.id;
-      _renderStoryEditor(panel, post, imgMap, series, updated);
+      _storyCtx.story = updated;
+      _renderStoryEditorV2(body);
       showToast('Rendered ' + updated.frames.filter(f => f.is_enabled).length + ' frames', 'success');
     } catch (e) {
       showToast(e.message, 'danger');
@@ -2389,163 +2462,287 @@ function _renderStoryEditor(panel, post, imgMap, series, story) {
     }
   });
 
-  const publishBtn = h('button', {
-    cls: 'btn aap-btn aap-btn-primary btn-sm',
-    text: 'Publish Stories',
-    'data-story-publish-btn': story.id,
-  });
-  if (story.status !== 'rendered') publishBtn.disabled = true;
+  const publishBtn = h('button', { cls: 'va__btn', text: 'Publish Stories', 'data-story-publish-btn': story.id });
+  publishBtn.disabled = story.status !== 'rendered';
   publishBtn.addEventListener('click', async () => {
     publishBtn.disabled = true;
-    publishBtn.textContent = 'Publishing...';
+    publishBtn.textContent = 'Publishing…';
     try {
       const updated = await apiFetch('POST', '/api/stories/' + story.id + '/publish');
-      _renderStoryEditor(panel, post, imgMap, series, updated);
+      _storyCtx.story = updated;
+      _renderStoryEditorV2(body);
       showToast('Story published', 'success');
     } catch (e) {
       showToast(e.message, 'danger');
-      publishBtn.disabled = false;
-      publishBtn.textContent = 'Publish Stories';
+      _renderStoryEditorV2(body);
     }
   });
 
-  panel.replaceChildren(
-    h('div', { cls: 'd-flex align-items-center gap-2 mb-2' },
-      h('span', { cls: 'fw-semibold small' }, 'Story Draft'),
-      statusBadge,
-      regenBtn
-    ),
-    framesEl,
-    h('div', { cls: 'd-flex gap-2 mt-2' }, renderBtn, publishBtn)
+  const children = [topbar, head, phone];
+  if (colorbar) children.push(colorbar);
+  children.push(strip, includeRow);
+  if (controlEl) children.push(controlEl);
+  children.push(h('div', { cls: 'va__foot' }, renderBtn, publishBtn));
+
+  body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id }, ...children));
+}
+
+function _buildFramePreview(phone, frame, imgMap) {
+  phone.replaceChildren();
+  const bgUrl = (imgMap && frame.source_image_id) ? imgMap[frame.source_image_id] : '';
+
+  if (frame.rendered_url) {
+    const img = document.createElement('img');
+    img.src = frame.rendered_url;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+    phone.appendChild(img);
+    return;
+  }
+
+  if (frame.frame_type === 'image') {
+    if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
+    else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+    if (frame.title) {
+      const barCls = 'se-frame-bar ' + (frame.title_position === 'top' ? 'se-frame-bar--top' : 'se-frame-bar--bottom');
+      phone.appendChild(h('div', { cls: barCls }, h('div', { cls: 'se-frame-title', text: frame.title })));
+    }
+  } else {
+    const mode = frame.background_mode || 'image_blur_dim';
+    const SOLID = { solid_dark: '#121212', solid_light: '#f0ede7', solid_accent: '#b8501f' };
+    if (SOLID[mode]) {
+      phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:' + SOLID[mode] }));
+    } else {
+      if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg' + (mode !== 'image_clean' ? ' se-frame-bg--blur' : ''), style: 'background-image:url(' + bgUrl + ')' }));
+      else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+      if (mode === 'image_blur_dim') phone.appendChild(h('div', { cls: 'se-frame-dim' }));
+    }
+
+    if (frame.text || frame.title) {
+      const ALIGN_MAP = { top: 'se-frame-text-block--top', middle: 'se-frame-text-block--middle', bottom: 'se-frame-text-block--bottom' };
+      const alignCls = ALIGN_MAP[frame.text_align || 'middle'] || 'se-frame-text-block--middle';
+      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls });
+      const color = frame.text_color || '#ffffff';
+      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color }));
+      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color }, frame.text));
+      phone.appendChild(textEl);
+    }
+  }
+}
+
+function _buildRail(body, frame, imgMap) {
+  let openPanel = null;
+  const rail = h('div', { cls: 'se-rail' });
+
+  const closePanel = () => {
+    if (openPanel) { openPanel.remove(); openPanel = null; }
+  };
+  const closeOnOutside = e => {
+    if (openPanel && !rail.contains(e.target)) { closePanel(); document.removeEventListener('click', closeOnOutside); }
+  };
+
+  const makeBtn = (label, glyphEl, onOpen) => {
+    const btn = h('button', { cls: 'se-rail__btn' }, glyphEl, document.createTextNode(label));
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const wrap = h('div', { cls: 'se-rail__pop' });
+      const panel = h('div', { cls: 'se-rail__panel' });
+      onOpen(panel, wrap);
+      btn.parentElement.insertBefore(wrap, btn);
+      wrap.appendChild(btn);
+      wrap.appendChild(panel);
+      // move btn back in rail
+      btn.parentElement && btn.parentElement.removeChild(wrap);
+      btn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    return btn;
+  };
+
+  // BG button
+  if (frame.frame_type === 'text' || frame.title !== null) {
+    const bgChip = h('span', { style: 'width:16px;height:16px;border-radius:999px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)' });
+    _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
+    const bgBtn = h('button', { cls: 'se-rail__btn' }, bgChip, document.createTextNode('BG'));
+    bgBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Background'));
+      const opts = frame.frame_type === 'text'
+        ? [['image_clean','Image'],['image_blur_dim','Blurred'],['solid_dark','Dark'],['solid_light','Light'],['solid_accent','Accent']]
+        : [['solid_dark','Dark bar'],['solid_light','Light bar'],['solid_accent','Accent bar'],['image_clean','Floating']];
+      opts.forEach(([val, lbl]) => {
+        const chip = h('span', { cls: 'se-rail__pick-chip' });
+        _setBgChipStyle(chip, val, imgMap && imgMap[frame.source_image_id]);
+        const pick = h('button', { cls: 'se-rail__pick' + (frame.background_mode === val ? ' is-on' : '') }, chip, document.createTextNode(lbl));
+        pick.addEventListener('click', async () => {
+          closePanel();
+          try {
+            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { background_mode: val });
+            const f = updated.frames.find(f => f.id === frame.id);
+            if (f) { frame.background_mode = f.background_mode; frame.rendered_url = f.rendered_url; }
+            const phone = bgBtn.closest('.va__phone');
+            if (phone) _buildFramePreview(phone, frame, imgMap);
+            _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
+          } catch (e) { showToast(e.message, 'danger'); }
+        });
+        panel.appendChild(pick);
+      });
+      bgBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, bgBtn));
+  }
+
+  // Align button
+  {
+    const alignBtn = h('button', { cls: 'se-rail__btn' },
+      h('span', { style: 'font-size:14px;line-height:1' }, '≡'),
+      document.createTextNode('Align')
+    );
+    alignBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Position'));
+      const opts = frame.frame_type === 'text'
+        ? [['top','Top'],['middle','Middle'],['bottom','Bottom']]
+        : [['top','Top'],['bottom','Bottom']];
+      const current = frame.frame_type === 'text' ? (frame.text_align || 'middle') : (frame.title_position || 'bottom');
+      opts.forEach(([val, lbl]) => {
+        const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));
+        pick.addEventListener('click', async () => {
+          closePanel();
+          const field = frame.frame_type === 'text' ? 'text_align' : 'title_position';
+          try {
+            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { [field]: val });
+            const f = updated.frames.find(f => f.id === frame.id);
+            if (f) { frame.text_align = f.text_align; frame.title_position = f.title_position; frame.rendered_url = f.rendered_url; }
+            const phone = alignBtn.closest('.va__phone');
+            if (phone) _buildFramePreview(phone, frame, imgMap);
+          } catch (e) { showToast(e.message, 'danger'); }
+        });
+        panel.appendChild(pick);
+      });
+      alignBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, alignBtn));
+  }
+
+  // Color button (text frames only)
+  if (frame.frame_type === 'text') {
+    const colorChip = h('span', { style: 'width:14px;height:14px;border-radius:999px;display:inline-block;background:' + (frame.text_color || '#fff') + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)' });
+    const colorBtn = h('button', { cls: 'se-rail__btn' }, colorChip, document.createTextNode('Color'));
+    colorBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Text color'));
+      _TEXT_COLORS.forEach(({ hex, label }) => {
+        const chip = h('span', { cls: 'se-rail__pick-chip', style: 'background:' + hex });
+        const pick = h('button', { cls: 'se-rail__pick' + (frame.text_color === hex ? ' is-on' : '') }, chip, document.createTextNode(label));
+        pick.addEventListener('click', async () => {
+          closePanel();
+          try {
+            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text_color: hex });
+            const f = updated.frames.find(f => f.id === frame.id);
+            if (f) { frame.text_color = f.text_color; frame.rendered_url = f.rendered_url; }
+            colorChip.style.background = hex;
+            const phone = colorBtn.closest('.va__phone');
+            if (phone) _buildFramePreview(phone, frame, imgMap);
+            // refresh colorbar swatches
+            body.querySelectorAll('.se-swatch').forEach(s => {
+              s.classList.toggle('is-on', s.dataset.colorHex === hex);
+            });
+          } catch (e) { showToast(e.message, 'danger'); }
+        });
+        panel.appendChild(pick);
+      });
+      colorBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, colorBtn));
+  }
+
+  return rail;
+}
+
+function _setBgChipStyle(el, mode, imageUrl) {
+  el.style.backgroundImage = '';
+  el.style.filter = '';
+  if (mode === 'solid_dark') { el.style.background = '#121212'; return; }
+  if (mode === 'solid_light') { el.style.background = '#f0ede7'; return; }
+  if (mode === 'solid_accent') { el.style.background = '#b8501f'; return; }
+  if (imageUrl) {
+    el.style.background = '';
+    el.style.backgroundImage = 'url(' + imageUrl + ')';
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    if (mode === 'image_blur_dim') el.style.filter = 'blur(1.5px)';
+  } else {
+    el.style.background = '#333';
+  }
+}
+
+function _buildColorBar(body, frame) {
+  const swatches = _TEXT_COLORS.map(({ hex }) => {
+    const chip = h('span', { cls: 'se-swatch__chip', style: 'background:' + hex });
+    const swatch = h('button', { cls: 'se-swatch' + (frame.text_color === hex ? ' is-on' : ''), 'data-color-hex': hex }, chip);
+    swatch.addEventListener('click', async () => {
+      try {
+        const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text_color: hex });
+        const f = updated.frames.find(f => f.id === frame.id);
+        if (f) { frame.text_color = f.text_color; frame.rendered_url = f.rendered_url; }
+        body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
+        const phone = body.querySelector('.va__phone');
+        if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap);
+      } catch (e) { showToast(e.message, 'danger'); }
+    });
+    return swatch;
+  });
+  return h('div', { cls: 'va__colorbar' },
+    h('span', { cls: 'va__colorbar-lbl' }, 'Text'),
+    ...swatches
   );
 }
 
-function _buildStoryFrameCard(frame, imgMap, story, panel, post, series) {
-  const previewEl = h('div', { cls: 'aap-story-frame-preview' });
-
-  const previewSrc = frame.rendered_url || imgMap[frame.source_image_id];
-  if (previewSrc) {
-    const img = document.createElement('img');
-    img.src = previewSrc;
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
-    previewEl.appendChild(img);
-  } else {
-    previewEl.appendChild(h('div', {
-      cls: 'd-flex align-items-center justify-content-center h-100',
-      style: 'color:var(--aap-ink-mute);font-size:11px',
-      text: frame.frame_type,
-    }));
-  }
-
-  if (frame.rendered_url) {
-    previewEl.style.cursor = 'zoom-in';
-    previewEl.addEventListener('click', () => {
-      const rendered = story.frames.filter(f => f.rendered_url);
-      const idx = rendered.findIndex(f => f.id === frame.id);
-      _openStoryFullscreen(rendered.map(f => f.rendered_url), idx);
-    });
-  }
-
-  const controls = [];
-
-  if (frame.frame_type === 'text') {
-    const textarea = h('textarea', {
-      cls: 'form-control aap-input',
-      style: 'font-size:11px;min-height:64px;resize:vertical',
-      'data-story-frame-text': frame.id,
-    });
-    textarea.value = frame.text || '';
-    let _debounce = null;
-    textarea.addEventListener('input', () => {
-      clearTimeout(_debounce);
-      _debounce = setTimeout(async () => {
-        try {
-          await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text: textarea.value });
-        } catch (e) {
-          showToast(e.message, 'danger');
-        }
-      }, 600);
-    });
-    controls.push(textarea);
-  } else {
-    const titleInput = h('input', {
-      type: 'text',
-      cls: 'form-control aap-input',
-      style: 'font-size:11px',
-      placeholder: 'Title (optional)',
-      'data-story-frame-title': frame.id,
-    });
-    titleInput.value = frame.title || '';
-    titleInput.addEventListener('change', async () => {
-      try {
-        await apiFetch('PATCH', '/api/story-frames/' + frame.id, { title: titleInput.value || null });
-      } catch (e) {
-        showToast(e.message, 'danger');
-      }
-    });
-    controls.push(titleInput);
-  }
-
-  const enabledCb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-frame-enabled': frame.id });
-  enabledCb.checked = frame.is_enabled;
-  enabledCb.addEventListener('change', async () => {
-    try {
-      await apiFetch('PATCH', '/api/story-frames/' + frame.id, { is_enabled: enabledCb.checked });
-    } catch (e) {
-      showToast(e.message, 'danger');
-    }
+function _openStoryFullscreen(urls, startIdx) {
+  let idx = startIdx ?? 0;
+  const overlay = h('div', {
+    style: 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:flex;align-items:center;justify-content:center',
   });
-
-  const enabledLabel = h('label', { cls: 'form-check-label small' }, enabledCb, document.createTextNode(' Include'));
-
-  const moveLeft = h('button', { cls: 'btn aap-btn btn-sm py-0 px-1', text: '←' });
-  const moveRight = h('button', { cls: 'btn aap-btn btn-sm py-0 px-1', text: '→' });
-
-  const reorderAndRefresh = async (newOrderFn) => {
-    const framesEl = document.querySelector('[data-story-frames="' + story.id + '"]');
-    if (!framesEl) return;
-    const currentIds = [...framesEl.querySelectorAll('[data-story-frame-card]')].map(el => el.dataset.storyFrameCard);
-    const newIds = newOrderFn(currentIds, frame.id);
-    try {
-      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/reorder', { frame_ids: newIds });
-      _renderStoryEditor(panel, post, imgMap, series, updated);
-    } catch (e) {
-      showToast(e.message, 'danger');
-    }
-  };
-
-  moveLeft.addEventListener('click', () => reorderAndRefresh((ids, id) => {
-    const i = ids.indexOf(id);
-    if (i <= 0) return ids;
-    const copy = [...ids];
-    [copy[i - 1], copy[i]] = [copy[i], copy[i - 1]];
-    return copy;
-  }));
-
-  moveRight.addEventListener('click', () => reorderAndRefresh((ids, id) => {
-    const i = ids.indexOf(id);
-    if (i < 0 || i >= ids.length - 1) return ids;
-    const copy = [...ids];
-    [copy[i], copy[i + 1]] = [copy[i + 1], copy[i]];
-    return copy;
-  }));
-
-  const typeLabel = h('div', {
-    cls: 'small',
-    style: 'color:var(--aap-ink-mute);font-size:10px;text-transform:uppercase;letter-spacing:.06em',
-    text: (frame.position + 1) + ' / ' + frame.frame_type,
+  const img = document.createElement('img');
+  img.style.cssText = 'max-width:calc(100% - 96px);max-height:100%;object-fit:contain;display:block';
+  const counter = h('div', {
+    style: 'position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;opacity:.7;pointer-events:none',
   });
-
-  return h('div', {
-    cls: 'aap-story-frame-card',
-    'data-story-frame-card': frame.id,
-  },
-    typeLabel,
-    previewEl,
-    ...controls,
-    h('div', { cls: 'd-flex justify-content-between align-items-center' },
-      h('div', { cls: 'form-check mb-0' }, enabledLabel),
-      h('div', { cls: 'd-flex gap-1' }, moveLeft, moveRight)
-    )
-  );
+  const btnStyle = 'position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);border:none;color:#fff;font-size:28px;padding:8px 14px;cursor:pointer;border-radius:4px;line-height:1;user-select:none';
+  const prevBtn = h('button', { style: btnStyle + ';left:12px', 'aria-label': 'Previous' }, '‹');
+  const nextBtn = h('button', { style: btnStyle + ';right:12px', 'aria-label': 'Next' }, '›');
+  function render() {
+    img.src = urls[idx];
+    const single = urls.length <= 1;
+    prevBtn.style.display = single ? 'none' : '';
+    nextBtn.style.display = single ? 'none' : '';
+    counter.textContent = single ? '' : (idx + 1) + ' / ' + urls.length;
+  }
+  prevBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx - 1 + urls.length) % urls.length; render(); });
+  nextBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx + 1) % urls.length; render(); });
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  overlay.addEventListener('click', close);
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft')  { idx = (idx - 1 + urls.length) % urls.length; render(); }
+    else if (e.key === 'ArrowRight') { idx = (idx + 1) % urls.length; render(); }
+  }
+  document.addEventListener('keydown', onKey);
+  overlay.append(img, prevBtn, nextBtn, counter);
+  render();
+  document.body.appendChild(overlay);
 }

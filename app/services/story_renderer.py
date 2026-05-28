@@ -1,7 +1,7 @@
 import io
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
 
 _CANVAS_W = 1080
 _CANVAS_H = 1920
@@ -22,6 +22,12 @@ _SHADOW_OPACITY = 160  # out of 255
 _DIM_OPACITY = 140  # dark overlay (0-255)
 _BLUR_RADIUS = 20
 
+_BG_COLORS = {
+    "solid_dark": (18, 18, 18),
+    "solid_light": (240, 235, 225),
+    "solid_accent": (184, 80, 31),
+}
+
 
 def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
     try:
@@ -31,7 +37,6 @@ def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
 
 
 def _cover_crop(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
-    """Resize + center-crop image to exactly (target_w, target_h)."""
     src_w, src_h = img.size
     scale = max(target_w / src_w, target_h / src_h)
     new_w = int(src_w * scale)
@@ -42,8 +47,15 @@ def _cover_crop(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     return img.crop((left, top, left + target_w, top + target_h))
 
 
+def _parse_color(hex_color: str) -> tuple[int, int, int]:
+    try:
+        rgb = ImageColor.getrgb(hex_color)
+        return (rgb[0], rgb[1], rgb[2])
+    except (ValueError, AttributeError):
+        return (255, 255, 255)
+
+
 def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """Wrap text into lines not exceeding max_width pixels."""
     lines: list[str] = []
     for paragraph in text.split("\n"):
         if not paragraph.strip():
@@ -66,44 +78,47 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[
     return lines
 
 
-def _text_block_height(lines: list[str], font: ImageFont.FreeTypeFont, line_gap: int) -> int:
-    if not lines:
-        return 0
+def _line_height(font: ImageFont.FreeTypeFont) -> int:
     _, _, _, h = font.getbbox("Ag")
-    return int(len(lines) * (h * _LINE_SPACING) + (len(lines) - 1) * line_gap)
+    return int(h * _LINE_SPACING)
 
 
-def _draw_shadowed_text(
-    draw: ImageDraw.ImageDraw,
-    pos: tuple[int, int],
-    text: str,
-    font: ImageFont.FreeTypeFont,
-) -> None:
-    sx, sy = pos[0] + _SHADOW_OFFSET[0], pos[1] + _SHADOW_OFFSET[1]
-    draw.text((sx, sy), text, font=font, fill=(0, 0, 0, _SHADOW_OPACITY))
-    draw.text(pos, text, font=font, fill=(255, 255, 255, 255))
+def _block_height(lines: list[str], font: ImageFont.FreeTypeFont) -> int:
+    return _line_height(font) * len(lines) if lines else 0
 
 
 def _draw_text_block(
     canvas: Image.Image,
     lines: list[str],
     font: ImageFont.FreeTypeFont,
-    center_y: int,
+    top_y: int,
     pad_x: int,
+    color: tuple[int, int, int] = (255, 255, 255),
 ) -> None:
-    """Draw a centered multi-line text block on the canvas using RGBA overlay."""
     draw = ImageDraw.Draw(canvas, "RGBA")
-    bbox_h = font.getbbox("Ag")
-    line_h = int((bbox_h[3] - bbox_h[1]) * _LINE_SPACING)
-    total_h = line_h * len(lines)
-    y = center_y - total_h // 2
-
+    lh = _line_height(font)
+    y = top_y
     for line in lines:
         if line.strip():
             lw = int(font.getbbox(line)[2])
             x = max((_CANVAS_W - lw) // 2, pad_x)
-            _draw_shadowed_text(draw, (x, y), line, font)
-        y += line_h
+            # shadow
+            draw.text(
+                (x + _SHADOW_OFFSET[0], y + _SHADOW_OFFSET[1]),
+                line,
+                font=font,
+                fill=(0, 0, 0, _SHADOW_OPACITY),
+            )
+            draw.text((x, y), line, font=font, fill=(*color, 255))
+        y += lh
+
+
+def _text_top_y(total_h: int, align: str) -> int:
+    if align == "top":
+        return _SAFE_V
+    if align == "bottom":
+        return _CANVAS_H - _SAFE_V - total_h
+    return (_CANVAS_H - total_h) // 2  # middle
 
 
 class StoryRenderer:
@@ -112,13 +127,11 @@ class StoryRenderer:
         self._title_font = _load_font(_FONT_SERIF_BOLD, _TITLE_SIZE)
 
     def render_frame(self, frame, image_bytes: bytes | None) -> bytes:
-        """Render a StoryFrame to a 1080x1920 JPEG and return the bytes."""
         if frame.frame_type == "image":
             return self._render_image_frame(frame, image_bytes)
         return self._render_text_frame(frame, image_bytes)
 
     def _base_image(self, image_bytes: bytes | None) -> Image.Image:
-        """Return a cover-cropped 1080x1920 RGB image from bytes, or dark fallback."""
         if image_bytes:
             try:
                 src = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -131,30 +144,33 @@ class StoryRenderer:
         canvas = self._base_image(image_bytes)
 
         if frame.title:
-            rgba_canvas = canvas.convert("RGBA")
-            draw = ImageDraw.Draw(rgba_canvas, "RGBA")
-            # Semi-transparent dark strip at bottom third for readability
-            strip_top = int(_CANVAS_H * 0.65)
-            draw.rectangle(
-                [(0, strip_top), (_CANVAS_W, _CANVAS_H)],
-                fill=(0, 0, 0, 120),
-            )
+            title_pos = getattr(frame, "title_position", "bottom")
+            rgba = canvas.convert("RGBA")
+            draw = ImageDraw.Draw(rgba, "RGBA")
+
+            bar_h = int(_CANVAS_H * 0.22)
+            if title_pos == "top":
+                bar_top, bar_bot = 0, bar_h
+            else:
+                bar_top, bar_bot = _CANVAS_H - bar_h, _CANVAS_H
+
+            draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=(0, 0, 0, 120))
+
             lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
-            center_y = strip_top + (_CANVAS_H - strip_top) // 2
-            _draw_text_block(rgba_canvas, lines, self._title_font, center_y, _PAD_H)
-            canvas = rgba_canvas.convert("RGB")
+            total_h = _block_height(lines, self._title_font)
+            center_y = (bar_top + bar_bot) // 2
+            top_y = center_y - total_h // 2
+            _draw_text_block(rgba, lines, self._title_font, top_y, _PAD_H)
+            canvas = rgba.convert("RGB")
 
         return _to_jpeg(canvas)
 
     def _render_text_frame(self, frame, image_bytes: bytes | None) -> bytes:
         mode = getattr(frame, "background_mode", "image_blur_dim")
 
-        if mode == "solid_dark":
-            canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), (18, 18, 18))
-        elif mode == "solid_light":
-            canvas = Image.new("RGB", (_CANVAS_W, _CANVAS_H), (240, 235, 225))
+        if mode in _BG_COLORS:
+            canvas: Image.Image = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _BG_COLORS[mode])
         else:
-            # image_blur_dim or image_clean
             bg = self._base_image(image_bytes)
             if mode != "image_clean":
                 bg = bg.filter(ImageFilter.GaussianBlur(radius=_BLUR_RADIUS))
@@ -162,31 +178,34 @@ class StoryRenderer:
 
         canvas = canvas.convert("RGBA")
 
-        if mode not in ("solid_dark", "solid_light", "image_clean"):
+        if mode == "image_blur_dim":
             overlay = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), (0, 0, 0, _DIM_OPACITY))
             canvas = Image.alpha_composite(canvas, overlay)
 
-        # Text content area
+        text_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
+        text_align = getattr(frame, "text_align", "middle")
         usable_w = _CANVAS_W - 2 * _PAD_H
-        center_y = _CANVAS_H // 2
 
         if frame.title:
             title_lines = _wrap_text(frame.title, self._title_font, usable_w)
             body_lines = _wrap_text(frame.text or "", self._body_font, usable_w)
-
-            title_h = _text_block_height(title_lines, self._title_font, 0)
-            body_h = _text_block_height(body_lines, self._body_font, 0)
             gap = 40
-            total_h = title_h + gap + body_h
-
-            title_center = center_y - total_h // 2 + title_h // 2
-            body_center = title_center + title_h // 2 + gap + body_h // 2
-
-            _draw_text_block(canvas, title_lines, self._title_font, title_center, _PAD_H)
-            _draw_text_block(canvas, body_lines, self._body_font, body_center, _PAD_H)
+            total_h = (
+                _block_height(title_lines, self._title_font)
+                + gap
+                + _block_height(body_lines, self._body_font)
+            )
+            top_y = _text_top_y(total_h, text_align)
+            _draw_text_block(canvas, title_lines, self._title_font, top_y, _PAD_H, text_color)
+            title_h = _block_height(title_lines, self._title_font)
+            _draw_text_block(
+                canvas, body_lines, self._body_font, top_y + title_h + gap, _PAD_H, text_color
+            )
         else:
             lines = _wrap_text(frame.text or "", self._body_font, usable_w)
-            _draw_text_block(canvas, lines, self._body_font, center_y, _PAD_H)
+            total_h = _block_height(lines, self._body_font)
+            top_y = _text_top_y(total_h, text_align)
+            _draw_text_block(canvas, lines, self._body_font, top_y, _PAD_H, text_color)
 
         return _to_jpeg(canvas.convert("RGB"))
 
