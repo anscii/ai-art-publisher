@@ -2228,6 +2228,21 @@ function showPostContent(post, imgMap, series) {
 
 // ── Stories ────────────────────────────────────────────────────────────────
 
+function _openStoryFullscreen(url) {
+  const overlay = h('div', {
+    style: 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1055;display:flex;align-items:center;justify-content:center;cursor:zoom-out',
+  });
+  const img = document.createElement('img');
+  img.src = url;
+  img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain';
+  overlay.appendChild(img);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', close);
+  function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } }
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+}
+
 async function _openStoryPanel(post, imgMap, series, rowWrap) {
   const panelId = 'story-panel-' + post.id;
   const existing = document.getElementById(panelId);
@@ -2394,7 +2409,7 @@ function _buildStoryFrameCard(frame, imgMap, story, panel, post, series) {
 
   if (frame.rendered_url) {
     previewEl.style.cursor = 'zoom-in';
-    previewEl.addEventListener('click', () => window.open(frame.rendered_url, '_blank'));
+    previewEl.addEventListener('click', () => _openStoryFullscreen(frame.rendered_url));
   }
 
   const controls = [];
