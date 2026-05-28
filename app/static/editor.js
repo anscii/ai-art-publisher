@@ -2367,7 +2367,8 @@ function _renderStoryEditorV2(body) {
     });
   }
 
-  const colorbar = frame.frame_type === 'text' ? _buildColorBar(body, frame) : null;
+  const showColorbar = frame.frame_type === 'text' || (frame.frame_type === 'image' && frame.title);
+  const colorbar = showColorbar ? _buildColorBar(body, frame) : null;
 
   const strip = h('div', { cls: 'se-strip', 'data-story-frames': story.id });
   frames.forEach((f, i) => {
@@ -2505,7 +2506,8 @@ function _buildFramePreview(phone, frame, imgMap) {
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
       const barCls = 'se-frame-bar ' + (frame.title_position === 'top' ? 'se-frame-bar--top' : 'se-frame-bar--bottom');
-      phone.appendChild(h('div', { cls: barCls }, h('div', { cls: 'se-frame-title', text: frame.title })));
+      const titleStyle = 'color:' + (frame.text_color || '#ffffff');
+      phone.appendChild(h('div', { cls: barCls }, h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })));
     }
   } else {
     const mode = frame.background_mode || 'image_blur_dim';
@@ -2635,42 +2637,6 @@ function _buildRail(body, frame, imgMap) {
       document.addEventListener('click', closeOnOutside);
     });
     rail.appendChild(h('div', { cls: 'se-rail__pop' }, alignBtn));
-  }
-
-  // Color button (text frames only)
-  if (frame.frame_type === 'text') {
-    const colorChip = h('span', { style: 'width:14px;height:14px;border-radius:999px;display:inline-block;background:' + (frame.text_color || '#fff') + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)' });
-    const colorBtn = h('button', { cls: 'se-rail__btn' }, colorChip, document.createTextNode('Color'));
-    colorBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (openPanel) { closePanel(); return; }
-      const panel = h('div', { cls: 'se-rail__panel' });
-      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Text color'));
-      _TEXT_COLORS.forEach(({ hex, label }) => {
-        const chip = h('span', { cls: 'se-rail__pick-chip', style: 'background:' + hex });
-        const pick = h('button', { cls: 'se-rail__pick' + (frame.text_color === hex ? ' is-on' : '') }, chip, document.createTextNode(label));
-        pick.addEventListener('click', async () => {
-          closePanel();
-          try {
-            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text_color: hex });
-            const f = updated.frames.find(f => f.id === frame.id);
-            if (f) { frame.text_color = f.text_color; frame.rendered_url = f.rendered_url; }
-            colorChip.style.background = hex;
-            const phone = colorBtn.closest('.va__phone');
-            if (phone) _buildFramePreview(phone, frame, imgMap);
-            // refresh colorbar swatches
-            body.querySelectorAll('.se-swatch').forEach(s => {
-              s.classList.toggle('is-on', s.dataset.colorHex === hex);
-            });
-          } catch (e) { showToast(e.message, 'danger'); }
-        });
-        panel.appendChild(pick);
-      });
-      colorBtn.after(panel);
-      openPanel = panel;
-      document.addEventListener('click', closeOnOutside);
-    });
-    rail.appendChild(h('div', { cls: 'se-rail__pop' }, colorBtn));
   }
 
   return rail;

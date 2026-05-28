@@ -156,11 +156,12 @@ class StoryRenderer:
 
             draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=(0, 0, 0, 120))
 
+            title_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
             lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
             total_h = _block_height(lines, self._title_font)
             center_y = (bar_top + bar_bot) // 2
             top_y = center_y - total_h // 2
-            _draw_text_block(rgba, lines, self._title_font, top_y, _PAD_H)
+            _draw_text_block(rgba, lines, self._title_font, top_y, _PAD_H, title_color)
             canvas = rgba.convert("RGB")
 
         return _to_jpeg(canvas)
