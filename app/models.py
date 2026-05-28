@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -132,6 +132,73 @@ class Post(Base):
         cascade="all, delete-orphan",
         order_by="PostImage.order_index",
     )
+    story: Mapped["Story | None"] = relationship(
+        "Story", back_populates="post", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class Story(Base):
+    __tablename__ = "stories"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    post_id: Mapped[str] = mapped_column(
+        String, ForeignKey("posts.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String, default="draft")
+    # draft | rendered | posted | failed
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    rendered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instagram_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    facebook_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    post: Mapped["Post"] = relationship("Post", back_populates="story")
+    frames: Mapped[list["StoryFrame"]] = relationship(
+        "StoryFrame",
+        back_populates="story",
+        cascade="all, delete-orphan",
+        order_by="StoryFrame.position",
+    )
+
+
+class StoryFrame(Base):
+    __tablename__ = "story_frames"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    story_id: Mapped[str] = mapped_column(
+        String, ForeignKey("stories.id", ondelete="CASCADE"), index=True
+    )
+
+    position: Mapped[int] = mapped_column(Integer)
+    frame_type: Mapped[str] = mapped_column(String)
+    # image | text
+
+    source_image_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("images.id", ondelete="SET NULL"), nullable=True
+    )
+
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    background_mode: Mapped[str] = mapped_column(String, default="image_blur_dim")
+    # image_clean | image_blur_dim | solid_dark | solid_light
+
+    rendered_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    rendered_storage_key: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    instagram_frame_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    facebook_frame_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    story: Mapped["Story"] = relationship("Story", back_populates="frames")
 
 
 class AIVariant(Base):

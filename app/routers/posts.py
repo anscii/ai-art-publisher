@@ -45,6 +45,7 @@ def post_to_resp(p: Post) -> PostResponse:
         seo=p.seo,
         variant_id=p.variant_id,
         post_url=p.post_url,
+        story_id=p.story.id if p.story else None,
     )
 
 

@@ -80,6 +80,37 @@ class InstagramService:
             permalink = self._fetch_permalink(client, data2["id"])
         return {"ok": True, "media_id": data2["id"], "permalink": permalink}
 
+    def post_story(self, image_url: str) -> dict:
+        with httpx.Client(timeout=60) as client:
+            resp = client.post(
+                f"{BASE}/{self._user_id}/media",
+                params={"access_token": self._token},
+                json={"image_url": image_url, "media_type": "STORIES"},
+            )
+            data = resp.json()
+            if "id" not in data:
+                return {
+                    "ok": False,
+                    "description": data.get("error", {}).get(
+                        "message", "Story container create failed"
+                    ),
+                }
+            err = self._wait_for_container(client, data["id"])
+            if err:
+                return {"ok": False, "description": err}
+            resp2 = client.post(
+                f"{BASE}/{self._user_id}/media_publish",
+                params={"access_token": self._token},
+                json={"creation_id": data["id"]},
+            )
+            data2 = resp2.json()
+            if "id" not in data2:
+                return {
+                    "ok": False,
+                    "description": data2.get("error", {}).get("message", "Story publish failed"),
+                }
+        return {"ok": True, "media_id": data2["id"]}
+
     def _post_carousel(self, image_urls: list[str], caption: str) -> dict:
         permalink: str | None = None
         with httpx.Client(timeout=60) as client:

@@ -1049,6 +1049,39 @@ a:hover { color: var(--aap-accent); }
 .aap-post-row__actions { display: flex; gap: 4px; }
 
 /* =====================================================================
+   STORIES
+   ===================================================================== */
+
+.aap-story-panel {
+  margin-top: 6px;
+}
+
+.aap-story-frames {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.aap-story-frame-card {
+  width: 148px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aap-story-frame-preview {
+  width: 148px;
+  height: 263px; /* 148 * 16/9 ≈ 263 */
+  background: var(--aap-bg);
+  border: 1px solid var(--aap-rule);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* =====================================================================
    LIGHTBOX / IMAGE PREVIEW
    ===================================================================== */
 

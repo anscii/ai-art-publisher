@@ -1871,6 +1871,17 @@ function buildPostRow(post, imgMap, series) {
     actions.appendChild(delBtn);
   }
 
+  if (post.platform === 'instagram') {
+    const storyBtn = h('button', {
+      cls: 'aap-icon-btn',
+      title: post.story_id ? 'Story' : 'Create Story',
+      'aria-label': 'Story',
+      'data-story-btn': post.id,
+    }, icon('bi bi-film'));
+    storyBtn.addEventListener('click', () => _openStoryPanel(post, imgMap, series, rowWrap));
+    actions.appendChild(storyBtn);
+  }
+
   const rowWrap = h('article', {
     cls: 'aap-post-row',
     'data-post-row': post.id,
@@ -2213,4 +2224,274 @@ function showPostContent(post, imgMap, series) {
 
   document.getElementById('postViewBody').replaceChildren(...sections);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('postViewModal')).show();
+}
+
+// ── Stories ────────────────────────────────────────────────────────────────
+
+async function _openStoryPanel(post, imgMap, series, rowWrap) {
+  const panelId = 'story-panel-' + post.id;
+  const existing = document.getElementById(panelId);
+  if (existing) { existing.remove(); return; }
+  const panel = h('div', {
+    id: panelId,
+    cls: 'aap-story-panel aap-card mt-2 p-3',
+    'data-story-panel': post.id,
+  });
+  rowWrap.after(panel);
+  await _refreshStoryPanel(panel, post, imgMap, series);
+}
+
+async function _refreshStoryPanel(panel, post, imgMap, series) {
+  panel.replaceChildren();
+  const storyId = panel.dataset.storyId || post.story_id;
+  if (storyId) {
+    try {
+      const story = await apiFetch('GET', '/api/stories/' + storyId);
+      panel.dataset.storyId = story.id;
+      _renderStoryEditor(panel, post, imgMap, series, story);
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  } else {
+    _renderStoryImagePicker(panel, post, imgMap, series);
+  }
+}
+
+function _renderStoryImagePicker(panel, post, imgMap, series) {
+  const allImages = (post.image_ids || []).map(id => ({
+    id,
+    url: imgMap[id],
+  }));
+
+  const checkboxes = allImages.map((img, idx) => {
+    const cb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-image-checkbox': img.id });
+    if (idx < 4) cb.checked = true;
+    const thumb = img.url
+      ? h('img', { src: img.url, style: 'width:40px;height:40px;object-fit:cover;border-radius:3px;vertical-align:middle;margin-right:6px' })
+      : h('span', { style: 'width:40px;height:40px;display:inline-block;background:#333;border-radius:3px;margin-right:6px;vertical-align:middle' });
+    const label = h('label', { cls: 'form-check-label d-flex align-items-center gap-2 mb-2' },
+      cb, thumb, document.createTextNode('Image ' + (idx + 1)));
+    return { cb, label };
+  });
+
+  const genBtn = h('button', {
+    cls: 'btn aap-btn aap-btn-primary mt-2',
+    text: 'Generate Story Draft',
+    'data-story-generate-btn': post.id,
+  });
+
+  genBtn.addEventListener('click', async () => {
+    const selectedIds = checkboxes.filter(({ cb }) => cb.checked).map(({ cb }) => cb.dataset.storyImageCheckbox);
+    if (!selectedIds.length) { showToast('Select at least one image', 'warning'); return; }
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating...';
+    try {
+      const story = await apiFetch('POST', '/api/posts/' + post.id + '/stories', { image_ids: selectedIds });
+      panel.dataset.storyId = story.id;
+      // Update story button title
+      const btn = document.querySelector('[data-story-btn="' + post.id + '"]');
+      if (btn) btn.title = 'Story';
+      _renderStoryEditor(panel, post, imgMap, series, story);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      genBtn.disabled = false;
+      genBtn.textContent = 'Generate Story Draft';
+    }
+  });
+
+  panel.replaceChildren(
+    h('div', { cls: 'fw-semibold mb-2 small' }, 'Choose images for story (first 4 pre-selected):'),
+    h('div', { cls: 'mb-2' }, ...checkboxes.map(({ label }) => label)),
+    genBtn
+  );
+}
+
+function _renderStoryEditor(panel, post, imgMap, series, story) {
+  const STATUS_COLOR = { draft: 'var(--aap-ink-mute)', rendered: 'var(--aap-dot-active)', posted: 'var(--aap-dot-done)', failed: 'var(--aap-danger)' };
+
+  const statusBadge = h('span', {
+    cls: 'badge rounded-pill me-2',
+    style: 'background:' + (STATUS_COLOR[story.status] || 'var(--aap-ink-mute)'),
+    text: story.status,
+  });
+
+  const regenBtn = h('button', { cls: 'btn aap-btn btn-sm', text: 'Regenerate' });
+  regenBtn.addEventListener('click', () => {
+    panel.dataset.storyId = '';
+    _renderStoryImagePicker(panel, post, imgMap, series);
+  });
+
+  const framesEl = h('div', { cls: 'aap-story-frames mt-2', 'data-story-frames': story.id });
+  story.frames.forEach(frame => framesEl.appendChild(_buildStoryFrameCard(frame, imgMap, story, panel, post, series)));
+
+  const renderBtn = h('button', {
+    cls: 'btn aap-btn aap-btn-primary btn-sm',
+    text: 'Render Preview',
+    'data-story-render-btn': story.id,
+  });
+  renderBtn.addEventListener('click', async () => {
+    renderBtn.disabled = true;
+    renderBtn.textContent = 'Rendering...';
+    try {
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
+      panel.dataset.storyId = updated.id;
+      _renderStoryEditor(panel, post, imgMap, series, updated);
+      showToast('Rendered ' + updated.frames.filter(f => f.is_enabled).length + ' frames', 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+      renderBtn.disabled = false;
+      renderBtn.textContent = 'Render Preview';
+    }
+  });
+
+  const publishBtn = h('button', {
+    cls: 'btn aap-btn aap-btn-primary btn-sm',
+    text: 'Publish Stories',
+    'data-story-publish-btn': story.id,
+  });
+  if (story.status !== 'rendered') publishBtn.disabled = true;
+  publishBtn.addEventListener('click', async () => {
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Publishing...';
+    try {
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/publish');
+      _renderStoryEditor(panel, post, imgMap, series, updated);
+      showToast('Story published', 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+      publishBtn.disabled = false;
+      publishBtn.textContent = 'Publish Stories';
+    }
+  });
+
+  panel.replaceChildren(
+    h('div', { cls: 'd-flex align-items-center gap-2 mb-2' },
+      h('span', { cls: 'fw-semibold small' }, 'Story Draft'),
+      statusBadge,
+      regenBtn
+    ),
+    framesEl,
+    h('div', { cls: 'd-flex gap-2 mt-2' }, renderBtn, publishBtn)
+  );
+}
+
+function _buildStoryFrameCard(frame, imgMap, story, panel, post, series) {
+  const previewEl = h('div', { cls: 'aap-story-frame-preview' });
+
+  const previewSrc = frame.rendered_url || imgMap[frame.source_image_id];
+  if (previewSrc) {
+    const img = document.createElement('img');
+    img.src = previewSrc;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+    previewEl.appendChild(img);
+  } else {
+    previewEl.appendChild(h('div', {
+      cls: 'd-flex align-items-center justify-content-center h-100',
+      style: 'color:var(--aap-ink-mute);font-size:11px',
+      text: frame.frame_type,
+    }));
+  }
+
+  const controls = [];
+
+  if (frame.frame_type === 'text') {
+    const textarea = h('textarea', {
+      cls: 'form-control aap-input',
+      style: 'font-size:11px;min-height:64px;resize:vertical',
+      'data-story-frame-text': frame.id,
+    });
+    textarea.value = frame.text || '';
+    let _debounce = null;
+    textarea.addEventListener('input', () => {
+      clearTimeout(_debounce);
+      _debounce = setTimeout(async () => {
+        try {
+          await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text: textarea.value });
+        } catch (e) {
+          showToast(e.message, 'danger');
+        }
+      }, 600);
+    });
+    controls.push(textarea);
+  } else {
+    const titleInput = h('input', {
+      type: 'text',
+      cls: 'form-control aap-input',
+      style: 'font-size:11px',
+      placeholder: 'Title (optional)',
+      'data-story-frame-title': frame.id,
+    });
+    titleInput.value = frame.title || '';
+    titleInput.addEventListener('change', async () => {
+      try {
+        await apiFetch('PATCH', '/api/story-frames/' + frame.id, { title: titleInput.value || null });
+      } catch (e) {
+        showToast(e.message, 'danger');
+      }
+    });
+    controls.push(titleInput);
+  }
+
+  const enabledCb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-frame-enabled': frame.id });
+  enabledCb.checked = frame.is_enabled;
+  enabledCb.addEventListener('change', async () => {
+    try {
+      await apiFetch('PATCH', '/api/story-frames/' + frame.id, { is_enabled: enabledCb.checked });
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  });
+
+  const enabledLabel = h('label', { cls: 'form-check-label small' }, enabledCb, document.createTextNode(' Include'));
+
+  const moveLeft = h('button', { cls: 'btn aap-btn btn-sm py-0 px-1', text: '←' });
+  const moveRight = h('button', { cls: 'btn aap-btn btn-sm py-0 px-1', text: '→' });
+
+  const reorderAndRefresh = async (newOrderFn) => {
+    const framesEl = document.querySelector('[data-story-frames="' + story.id + '"]');
+    if (!framesEl) return;
+    const currentIds = [...framesEl.querySelectorAll('[data-story-frame-card]')].map(el => el.dataset.storyFrameCard);
+    const newIds = newOrderFn(currentIds, frame.id);
+    try {
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/reorder', { frame_ids: newIds });
+      _renderStoryEditor(panel, post, imgMap, series, updated);
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  };
+
+  moveLeft.addEventListener('click', () => reorderAndRefresh((ids, id) => {
+    const i = ids.indexOf(id);
+    if (i <= 0) return ids;
+    const copy = [...ids];
+    [copy[i - 1], copy[i]] = [copy[i], copy[i - 1]];
+    return copy;
+  }));
+
+  moveRight.addEventListener('click', () => reorderAndRefresh((ids, id) => {
+    const i = ids.indexOf(id);
+    if (i < 0 || i >= ids.length - 1) return ids;
+    const copy = [...ids];
+    [copy[i], copy[i + 1]] = [copy[i + 1], copy[i]];
+    return copy;
+  }));
+
+  const typeLabel = h('div', {
+    cls: 'small',
+    style: 'color:var(--aap-ink-mute);font-size:10px;text-transform:uppercase;letter-spacing:.06em',
+    text: (frame.position + 1) + ' / ' + frame.frame_type,
+  });
+
+  return h('div', {
+    cls: 'aap-story-frame-card',
+    'data-story-frame-card': frame.id,
+  },
+    typeLabel,
+    previewEl,
+    ...controls,
+    h('div', { cls: 'd-flex justify-content-between align-items-center' },
+      h('div', { cls: 'form-check mb-0' }, enabledLabel),
+      h('div', { cls: 'd-flex gap-1' }, moveLeft, moveRight)
+    )
+  );
 }
