@@ -2505,7 +2505,8 @@ function _buildFramePreview(phone, frame, imgMap) {
     if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
-      const barCls = 'se-frame-bar ' + (frame.title_position === 'top' ? 'se-frame-bar--top' : 'se-frame-bar--bottom');
+      const barPos = frame.title_position === 'top' ? 'se-frame-bar--top' : frame.title_position === 'middle' ? 'se-frame-bar--middle' : 'se-frame-bar--bottom';
+      const barCls = 'se-frame-bar ' + barPos;
       const titleStyle = 'color:' + (frame.text_color || '#ffffff');
       phone.appendChild(h('div', { cls: barCls }, h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })));
     }
@@ -2615,7 +2616,7 @@ function _buildRail(body, frame, imgMap) {
       panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Position'));
       const opts = frame.frame_type === 'text'
         ? [['top','Top'],['middle','Middle'],['bottom','Bottom']]
-        : [['top','Top'],['bottom','Bottom']];
+        : [['top','Top'],['middle','Middle'],['bottom','Bottom']];
       const current = frame.frame_type === 'text' ? (frame.text_align || 'middle') : (frame.title_position || 'bottom');
       opts.forEach(([val, lbl]) => {
         const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));

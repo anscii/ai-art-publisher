@@ -151,6 +151,9 @@ class StoryRenderer:
             bar_h = int(_CANVAS_H * 0.22)
             if title_pos == "top":
                 bar_top, bar_bot = 0, bar_h
+            elif title_pos == "middle":
+                bar_top = (_CANVAS_H - bar_h) // 2
+                bar_bot = bar_top + bar_h
             else:
                 bar_top, bar_bot = _CANVAS_H - bar_h, _CANVAS_H
 

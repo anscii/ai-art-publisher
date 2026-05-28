@@ -1105,6 +1105,7 @@ a:hover { color: var(--aap-accent); }
   display: grid; place-items: center; padding: 14px 22px;
   background: rgba(0,0,0,0.5); }
 .se-frame-bar--top { top: 0; }
+.se-frame-bar--middle { top: 50%; transform: translateY(-50%); }
 .se-frame-bar--bottom { bottom: 0; }
 .se-frame-title {
   font-family: var(--aap-font-sans); font-weight: 700; font-size: 15px;
