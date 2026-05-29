@@ -1066,6 +1066,11 @@ a:hover { color: var(--aap-accent); }
   background: transparent; color: var(--aap-ink-mute);
   border: 1px solid var(--aap-rule); }
 .se-va__rule { flex: 1; height: 1px; background: var(--aap-rule); }
+.se-va__unsaved {
+  padding: 3px 7px; border-radius: 3px;
+  background: rgba(220,140,20,0.15); border: 1px solid rgba(220,140,20,0.4);
+  font-family: var(--aap-font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: .10em; text-transform: uppercase; color: #c88a14; }
 .se-va__regen {
   background: transparent; border: 1px solid var(--aap-rule-strong);
   border-radius: 4px; padding: 5px 10px; font-size: 11px; font-weight: 500;

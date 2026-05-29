@@ -2262,6 +2262,12 @@ let _storyCtx = null;
 let _allTextMode = false;
 const _dirtyFrameIds = new Set();
 
+function _markFrameDirty(frameId) {
+  _markFrameDirty(frameId);
+  const pill = document.querySelector('[data-unsaved-pill]');
+  if (pill) pill.hidden = false;
+}
+
 function _openStoryModal(post, imgMap, series) {
   _dirtyFrameIds.clear();
   _allTextMode = false;
@@ -2322,7 +2328,7 @@ function _loadDraftFromLS(story) {
       const f = story.frames.find(fr => fr.id === fid);
       if (!f) continue;
       Object.assign(f, data);
-      _dirtyFrameIds.add(fid);
+      _markFrameDirty(fid);
     }
   } catch (e) { /* ignore corrupt draft */ }
 }
@@ -2414,7 +2420,7 @@ function _parseAndDistribute(value, frames) {
     const f = textFrames[i];
     f.text = section.trim();
     f.rendered_url = null;
-    _dirtyFrameIds.add(f.id);
+    _markFrameDirty(f.id);
   });
 }
 
@@ -2432,18 +2438,18 @@ function _buildTextDragHandle(upperFrame, lowerFrame, upperTa, lowerTa) {
       // drag down → separator moves down → upper grows: first line of lower → end of upper
       const [taken, rest] = _splitFirstLine(lowerFrame.text || '');
       if (!taken) return;
-      lowerFrame.text = rest; lowerFrame.rendered_url = null; _dirtyFrameIds.add(lowerFrame.id);
+      lowerFrame.text = rest; lowerFrame.rendered_url = null; _markFrameDirty(lowerFrame.id);
       upperFrame.text = (upperFrame.text ? upperFrame.text + '\n' : '') + taken;
-      upperFrame.rendered_url = null; _dirtyFrameIds.add(upperFrame.id);
+      upperFrame.rendered_url = null; _markFrameDirty(upperFrame.id);
       upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
       fit(); startY = currentY;
     } else if (dy < -THRESHOLD) {
       // drag up → separator moves up → lower grows: last line of upper → start of lower
       const [rest, taken] = _splitLastLine(upperFrame.text || '');
       if (!taken) return;
-      upperFrame.text = rest; upperFrame.rendered_url = null; _dirtyFrameIds.add(upperFrame.id);
+      upperFrame.text = rest; upperFrame.rendered_url = null; _markFrameDirty(upperFrame.id);
       lowerFrame.text = taken + (lowerFrame.text ? '\n' + lowerFrame.text : '');
-      lowerFrame.rendered_url = null; _dirtyFrameIds.add(lowerFrame.id);
+      lowerFrame.rendered_url = null; _markFrameDirty(lowerFrame.id);
       upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
       fit(); startY = currentY;
     }
@@ -2506,7 +2512,8 @@ function _renderStoryEditorV2(body) {
     } catch (e) { showToast(e.message, 'danger'); }
   });
 
-  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
+  const unsavedPill = h('span', { cls: 'se-va__unsaved', 'data-unsaved-pill': '', hidden: _dirtyFrameIds.size === 0 }, 'unsaved');
+  const topbar = h('div', { cls: 'se-va__topbar' }, pill, unsavedPill, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
 
   // ── Option C: stacked text canvas with drag handles ────────────────────────
   if (_allTextMode) {
@@ -2518,7 +2525,7 @@ function _renderStoryEditorV2(body) {
     const items = textFrames.map(f => {
       const ta = h('textarea', { cls: 'va__textarea va__all-text__area' });
       ta.value = f.text || '';
-      ta.addEventListener('input', () => { f.text = ta.value; f.rendered_url = null; _dirtyFrameIds.add(f.id); _fitTa(ta); });
+      ta.addEventListener('input', () => { f.text = ta.value; f.rendered_url = null; _markFrameDirty(f.id); _fitTa(ta); });
       return { f, ta };
     });
 
@@ -2652,9 +2659,9 @@ function _renderStoryEditorV2(body) {
     fromPrevBtn.addEventListener('click', () => {
       const [taken, rest] = _splitFirstLine(frame.text || '');
       if (!taken) return;
-      frame.text = rest; frame.rendered_url = null; _dirtyFrameIds.add(frame.id);
+      frame.text = rest; frame.rendered_url = null; _markFrameDirty(frame.id);
       prevTextFrame.text = (prevTextFrame.text ? prevTextFrame.text + '\n' : '') + taken;
-      prevTextFrame.rendered_url = null; _dirtyFrameIds.add(prevTextFrame.id);
+      prevTextFrame.rendered_url = null; _markFrameDirty(prevTextFrame.id);
       _renderStoryEditorV2(body);
     });
 
@@ -2674,7 +2681,7 @@ function _renderStoryEditorV2(body) {
       updateCount();
       frame.text = textarea.value;
       frame.rendered_url = null;
-      _dirtyFrameIds.add(frame.id);
+      _markFrameDirty(frame.id);
       _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
       updateToPrevState();
       updateToNextState();
@@ -2682,9 +2689,9 @@ function _renderStoryEditorV2(body) {
     toNextBtn.addEventListener('click', () => {
       const [rest, taken] = _splitLastLine(frame.text || '');
       if (!taken) return;
-      frame.text = rest; frame.rendered_url = null; _dirtyFrameIds.add(frame.id);
+      frame.text = rest; frame.rendered_url = null; _markFrameDirty(frame.id);
       nextTextFrame.text = taken + (nextTextFrame.text ? '\n' + nextTextFrame.text : '');
-      nextTextFrame.rendered_url = null; _dirtyFrameIds.add(nextTextFrame.id);
+      nextTextFrame.rendered_url = null; _markFrameDirty(nextTextFrame.id);
       _renderStoryEditorV2(body);
     });
 
@@ -2700,7 +2707,7 @@ function _renderStoryEditorV2(body) {
     titleInput.addEventListener('input', () => {
       frame.title = titleInput.value || null;
       frame.rendered_url = null;
-      _dirtyFrameIds.add(frame.id);
+      _markFrameDirty(frame.id);
       _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
     });
     controlEl = titleInput;
@@ -2710,7 +2717,7 @@ function _renderStoryEditorV2(body) {
   incCb.checked = frame.is_enabled;
   incCb.addEventListener('change', () => {
     frame.is_enabled = incCb.checked;
-    _dirtyFrameIds.add(frame.id);
+    _markFrameDirty(frame.id);
     const chip = strip.children[frameIdx];
     if (chip) {
       chip.classList.toggle('is-off', !incCb.checked);
@@ -2774,7 +2781,7 @@ function _renderStoryEditorV2(body) {
       sizeLabel.textContent = sz;
       frame.font_size = sz;
       frame.rendered_url = null;
-      _dirtyFrameIds.add(frame.id);
+      _markFrameDirty(frame.id);
       const phoneEl = body.querySelector('.va__phone');
       if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
     });
@@ -2788,7 +2795,7 @@ function _renderStoryEditorV2(body) {
       frames.filter(f => f.frame_type === 'text').forEach(f => {
         f.font_size = sz;
         f.rendered_url = null;
-        _dirtyFrameIds.add(f.id);
+        _markFrameDirty(f.id);
       });
       const phoneEl = body.querySelector('.va__phone');
       if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
@@ -2917,7 +2924,7 @@ function _buildRail(body, frame, imgMap) {
           closePanel();
           frame.background_mode = val;
           frame.rendered_url = null;
-          _dirtyFrameIds.add(frame.id);
+          _markFrameDirty(frame.id);
           const phone = bgBtn.closest('.va__phone');
           if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
           _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
@@ -2951,7 +2958,7 @@ function _buildRail(body, frame, imgMap) {
           if (frame.frame_type === 'text') frame.text_align = val;
           else frame.title_position = val;
           frame.rendered_url = null;
-          _dirtyFrameIds.add(frame.id);
+          _markFrameDirty(frame.id);
           const phone = alignBtn.closest('.va__phone');
           if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
         });
@@ -2991,7 +2998,7 @@ function _buildColorBar(body, frame) {
     swatch.addEventListener('click', () => {
       frame.text_color = hex;
       frame.rendered_url = null;
-      _dirtyFrameIds.add(frame.id);
+      _markFrameDirty(frame.id);
       body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
       const phone = body.querySelector('.va__phone');
       if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap, _isLastTextFrame(frame));
