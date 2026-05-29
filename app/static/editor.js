@@ -2298,6 +2298,7 @@ async function _flushDirtyFrames() {
         text_color: frame.text_color,
         text_align: frame.text_align,
         title_position: frame.title_position,
+        text_halign: frame.text_halign,
         font_size: frame.font_size,
         is_enabled: frame.is_enabled,
       });
@@ -2314,7 +2315,7 @@ function _saveDraftToLS(story) {
   const draft = {};
   for (const fid of _dirtyFrameIds) {
     const f = story.frames.find(fr => fr.id === fid);
-    if (f) draft[fid] = { text: f.text, title: f.title, background_mode: f.background_mode, text_color: f.text_color, text_align: f.text_align, title_position: f.title_position, font_size: f.font_size, is_enabled: f.is_enabled };
+    if (f) draft[fid] = { text: f.text, title: f.title, background_mode: f.background_mode, text_color: f.text_color, text_align: f.text_align, title_position: f.title_position, text_halign: f.text_halign, font_size: f.font_size, is_enabled: f.is_enabled };
   }
   localStorage.setItem(_lsKey(story.id), JSON.stringify(draft));
 }

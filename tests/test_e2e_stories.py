@@ -232,7 +232,7 @@ def test_close_without_render_restores_draft_on_reopen(page, live_server, tmp_pa
 
 
 def test_format_controls_do_not_crash(page, live_server, tmp_path):
-    """BG, Align, and Font rail buttons must be clickable without JS errors."""
+    """BG, Align, H-Align, and Font rail buttons must be clickable without JS errors."""
     _create_series_with_instagram_post(page, live_server, tmp_path)
     _open_story_modal(page)
     textarea = _generate_and_go_to_text_frame(page)
@@ -247,10 +247,16 @@ def test_format_controls_do_not_crash(page, live_server, tmp_path):
     page.locator(".se-rail__pick").first.click()
     page.wait_for_timeout(300)
 
-    # Open Align panel and pick an option
-    page.locator(".se-rail__btn").filter(has_text="Align").click()
+    # Open Align panel and pick an option (exact "Align" so H-Align doesn't match first)
+    page.locator(".se-rail__btn").filter(has_text="Align").first.click()
     page.locator(".se-rail__pick").first.wait_for(timeout=3000)
     page.locator(".se-rail__pick").first.click()
+    page.wait_for_timeout(300)
+
+    # Open H-Align panel and pick "Left"
+    page.locator(".se-rail__btn").filter(has_text="H-Align").click()
+    page.locator(".se-rail__pick").filter(has_text="Left").wait_for(timeout=3000)
+    page.locator(".se-rail__pick").filter(has_text="Left").click()
     page.wait_for_timeout(300)
 
     assert js_errors == [], f"JS errors after using format controls: {js_errors}"
