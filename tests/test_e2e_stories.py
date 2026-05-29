@@ -150,6 +150,27 @@ def test_render_preview_and_publish(page, live_server, tmp_path):
     page.locator("#toastContainer").get_by_text("published").wait_for(timeout=10000)
 
 
+def test_story_status_icon_appears_in_post_row(page, live_server, tmp_path):
+    """After creating a story and reloading, post row shows draft clock icon."""
+    _create_series_with_instagram_post(page, live_server, tmp_path)
+    _open_story_modal(page)
+    page.locator("[data-story-generate-btn]").wait_for(timeout=5000)
+    page.locator("[data-story-generate-btn]").click()
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+
+    # Close modal
+    page.locator("#storyEditorModal .aap-icon-btn").click()
+    page.locator("#storyEditorModal").wait_for(state="hidden", timeout=3000)
+
+    # Reload page — series stays selected via URL param, post row re-renders
+    page.reload()
+    page.locator("[data-post-row]").wait_for(timeout=8000)
+
+    # Story button should show bi-clock (draft status) below the film icon
+    story_btn = page.locator("[data-story-btn]").first
+    expect(story_btn.locator(".bi-clock")).to_be_visible(timeout=5000)
+
+
 def test_close_modal_via_close_button(page, live_server, tmp_path):
     _create_series_with_instagram_post(page, live_server, tmp_path)
     _open_story_modal(page)
