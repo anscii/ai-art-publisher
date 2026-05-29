@@ -2461,7 +2461,23 @@ function _renderStoryEditorV2(body) {
   });
   allTextBtn.addEventListener('click', () => { _allTextMode = !_allTextMode; _renderStoryEditorV2(body); });
 
-  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), allTextBtn, regenBtn);
+  const resetBtn = h('button', {
+    cls: 'se-va__regen',
+    text: 'Reset',
+    title: 'Discard unsaved changes and revert to last saved state',
+    disabled: _dirtyFrameIds.size === 0,
+  });
+  resetBtn.addEventListener('click', async () => {
+    _dirtyFrameIds.clear();
+    try {
+      const fresh = await apiFetch('GET', '/api/stories/' + story.id);
+      _storyCtx.story = fresh;
+      _allTextMode = false;
+      _renderStoryEditorV2(body);
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
+
+  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
 
   // ── Option C: stacked text canvas with drag handles ────────────────────────
   if (_allTextMode) {
