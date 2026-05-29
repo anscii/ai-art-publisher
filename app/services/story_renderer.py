@@ -1,4 +1,5 @@
 import io
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
@@ -29,7 +30,9 @@ _BG_COLORS = {
 }
 
 
+@lru_cache(maxsize=32)
 def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
+    # Cached process-wide: font files are read from disk once per (path, size).
     try:
         return ImageFont.truetype(str(path), size)
     except OSError:
@@ -122,21 +125,14 @@ def _text_top_y(total_h: int, align: str) -> int:
 
 
 class StoryRenderer:
-    def __init__(self) -> None:
-        self._cached_body_size = _BODY_SIZE
-        self._body_font = _load_font(_FONT_BODY, _BODY_SIZE)
-        self._title_font = _load_font(_FONT_TITLE, _TITLE_SIZE)
-
     def render_frame(self, frame, image_bytes: bytes | None) -> bytes:
-        # Per-frame font size override; falls back to global defaults
+        # Per-frame font size override; falls back to global defaults.
+        # Fonts come from the module-level lru_cache, so this is cheap to call per frame.
         fs = getattr(frame, "font_size", None)
         body_size = fs if fs is not None else _BODY_SIZE
         title_size = round(body_size * 1.25)
-        # Reload fonts only when size changes (avoids repeated disk reads)
-        if body_size != self._cached_body_size:
-            self._body_font = _load_font(_FONT_BODY, body_size)
-            self._title_font = _load_font(_FONT_TITLE, title_size)
-            self._cached_body_size = body_size
+        self._body_font = _load_font(_FONT_BODY, body_size)
+        self._title_font = _load_font(_FONT_TITLE, title_size)
         if frame.frame_type == "image":
             return self._render_image_frame(frame, image_bytes)
         return self._render_text_frame(frame, image_bytes)
@@ -178,20 +174,15 @@ class StoryRenderer:
                 "solid_accent": (184, 80, 31, 235),
             }
             title_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
-            lines = title_lines  # already wrapped above
-            total_h = text_h
 
-            if bg_mode == "image_clean":
-                # floating title — no bar rectangle, just shadowed text
-                center_y = (bar_top + bar_bot) // 2
-                top_y = center_y - total_h // 2
-            else:
+            # image_clean draws floating shadowed text only (no bar rectangle)
+            if bg_mode != "image_clean":
                 bar_fill = _BAR_FILL.get(bg_mode, (0, 0, 0, 120))
                 draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=bar_fill)
-                center_y = (bar_top + bar_bot) // 2
-                top_y = center_y - total_h // 2
+            center_y = (bar_top + bar_bot) // 2
+            top_y = center_y - text_h // 2
 
-            _draw_text_block(rgba, lines, self._title_font, top_y, _PAD_H, title_color)
+            _draw_text_block(rgba, title_lines, self._title_font, top_y, _PAD_H, title_color)
             canvas = rgba.convert("RGB")
 
         return _to_jpeg(canvas)
@@ -243,5 +234,7 @@ class StoryRenderer:
 
 def _to_jpeg(img: Image.Image) -> bytes:
     buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    img.save(buf, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
     return buf.getvalue()

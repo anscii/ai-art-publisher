@@ -1756,6 +1756,19 @@ function buildPostsCard(series) {
   );
 }
 
+const STATUS_ICON_MAP = {
+  draft:     { cls: 'bi bi-pencil',           color: 'var(--aap-ink-mute)' },
+  scheduled: { cls: 'bi bi-calendar-check',   color: 'var(--aap-dot-active)' },
+  posted:    { cls: 'bi bi-check-lg',          color: 'var(--aap-dot-done)' },
+  failed:    { cls: 'bi bi-exclamation-circle',color: 'var(--aap-danger)' },
+};
+const STORY_STATUS_ICON = {
+  draft:    { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
+  rendered: { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
+  posted:   { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
+  failed:   { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
+};
+
 function buildPostRow(post, imgMap, series) {
   const PLAT_ICON = {
     telegram:  'bi bi-telegram',
@@ -1794,12 +1807,6 @@ function buildPostRow(post, imgMap, series) {
       : null;
   if (timeEl) platEl.appendChild(timeEl);
 
-  const STATUS_ICON_MAP = {
-    draft:     { cls: 'bi bi-pencil',           color: 'var(--aap-ink-mute)' },
-    scheduled: { cls: 'bi bi-calendar-check',   color: 'var(--aap-dot-active)' },
-    posted:    { cls: 'bi bi-check-lg',          color: 'var(--aap-dot-done)' },
-    failed:    { cls: 'bi bi-exclamation-circle',color: 'var(--aap-danger)' },
-  };
   const si = STATUS_ICON_MAP[post.status];
   const statusEl = h('span', {
     cls: 'aap-post-row__status',
@@ -1880,12 +1887,6 @@ function buildPostRow(post, imgMap, series) {
   }
 
   if (post.platform === 'instagram') {
-    const STORY_STATUS_ICON = {
-      draft:    { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
-      rendered: { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
-      posted:   { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
-      failed:   { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
-    };
     const storyChildren = [icon('bi bi-film')];
     if (post.story_status) {
       const si = STORY_STATUS_ICON[post.story_status];
@@ -2781,7 +2782,8 @@ function _buildFramePreview(phone, frame, imgMap) {
     if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
-      const barPos = frame.title_position === 'top' ? 'se-frame-bar--top' : frame.title_position === 'middle' ? 'se-frame-bar--middle' : 'se-frame-bar--bottom';
+      const pos = (frame.title_position === 'top' || frame.title_position === 'middle') ? frame.title_position : 'bottom';
+      const barPos = 'se-frame-bar--' + pos;
       const PREVIEW_RATIO = 0.37;
       const sz = frame.font_size || 64;
       const titleStyle = 'color:' + (frame.text_color || '#ffffff') + ';font-size:' + Math.round(sz * 1.25 * PREVIEW_RATIO) + 'px';
@@ -2789,7 +2791,7 @@ function _buildFramePreview(phone, frame, imgMap) {
       const bgMode = frame.background_mode || 'solid_dark';
       if (bgMode === 'image_clean') {
         // floating title — no bar, absolute text with shadow
-        const alignCls = 'se-frame-text-block ' + (barPos === 'se-frame-bar--top' ? 'se-frame-text-block--top' : barPos === 'se-frame-bar--middle' ? 'se-frame-text-block--middle' : 'se-frame-text-block--bottom');
+        const alignCls = 'se-frame-text-block se-frame-text-block--' + pos;
         phone.appendChild(h('div', { cls: alignCls },
           h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })
         ));
@@ -2838,26 +2840,6 @@ function _buildRail(body, frame, imgMap) {
     if (!rail.contains(e.target)) closePanel();
   };
 
-  const makeBtn = (label, glyphEl, onOpen) => {
-    const btn = h('button', { cls: 'se-rail__btn' }, glyphEl, document.createTextNode(label));
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (openPanel) { closePanel(); return; }
-      const wrap = h('div', { cls: 'se-rail__pop' });
-      const panel = h('div', { cls: 'se-rail__panel' });
-      onOpen(panel, wrap);
-      btn.parentElement.insertBefore(wrap, btn);
-      wrap.appendChild(btn);
-      wrap.appendChild(panel);
-      // move btn back in rail
-      btn.parentElement && btn.parentElement.removeChild(wrap);
-      btn.after(panel);
-      openPanel = panel;
-      document.addEventListener('click', closeOnOutside);
-    });
-    return btn;
-  };
-
   // BG button
   if (frame.frame_type === 'text' || frame.title !== null) {
     const bgChip = h('span', { style: 'width:16px;height:16px;border-radius:999px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)' });
@@ -2904,9 +2886,7 @@ function _buildRail(body, frame, imgMap) {
       if (openPanel) { closePanel(); return; }
       const panel = h('div', { cls: 'se-rail__panel' });
       panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Position'));
-      const opts = frame.frame_type === 'text'
-        ? [['top','Top'],['middle','Middle'],['bottom','Bottom']]
-        : [['top','Top'],['middle','Middle'],['bottom','Bottom']];
+      const opts = [['top','Top'],['middle','Middle'],['bottom','Bottom']];
       const current = frame.frame_type === 'text' ? (frame.text_align || 'middle') : (frame.title_position || 'bottom');
       opts.forEach(([val, lbl]) => {
         const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));

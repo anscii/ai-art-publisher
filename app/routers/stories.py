@@ -5,6 +5,7 @@ import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_config
@@ -154,12 +155,11 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
     db.add(story)
     db.flush()
 
-    position = 0
     for i, img in enumerate(images):
         db.add(
             StoryFrame(
                 story_id=story.id,
-                position=position,
+                position=i * 2,
                 frame_type="image",
                 source_image_id=img.id,
                 title=post.title if i == 0 else None,
@@ -167,11 +167,10 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
                 updated_at=now,
             )
         )
-        position += 1
         db.add(
             StoryFrame(
                 story_id=story.id,
-                position=position,
+                position=i * 2 + 1,
                 frame_type="text",
                 source_image_id=img.id,
                 text=fragments[i] if i < len(fragments) else None,
@@ -179,7 +178,6 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
                 updated_at=now,
             )
         )
-        position += 1
 
     db.commit()
     db.refresh(story)
@@ -206,12 +204,10 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
         "title_position",
         "font_size",
     }
-    content_changed = False
-
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(frame, field, value)
-        if field in content_fields:
-            content_changed = True
+    content_changed = bool(changes.keys() & content_fields)
 
     now = datetime.now(UTC).replace(tzinfo=None)
     if content_changed:
@@ -260,17 +256,30 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
 
     renderer = StoryRenderer()
 
+    # Batch-load all source images in one query (avoids N+1 PK lookups)
+    source_ids = {f.source_image_id for f in enabled_frames if f.source_image_id}
+    image_by_id: dict[str, Image] = {}
+    if source_ids:
+        image_by_id = {
+            img.id: img for img in db.scalars(select(Image).where(Image.id.in_(source_ids)))
+        }
+
+    # Cache downloads by r2_key — paired image/text frames often share one source
+    bytes_by_key: dict[str, bytes | None] = {}
+
     for frame in enabled_frames:
-        source_image: Image | None = None
-        if frame.source_image_id:
-            source_image = db.get(Image, frame.source_image_id)
+        source_image = image_by_id.get(frame.source_image_id) if frame.source_image_id else None
 
         image_bytes: bytes | None = None
         if source_image and source_image.r2_key:
-            try:
-                image_bytes = storage.download_bytes(source_image.r2_key)
-            except Exception as exc:
-                logger.warning("Failed to download source image %s: %s", source_image.r2_key, exc)
+            key = source_image.r2_key
+            if key not in bytes_by_key:
+                try:
+                    bytes_by_key[key] = storage.download_bytes(key)
+                except Exception as exc:
+                    logger.warning("Failed to download source image %s: %s", key, exc)
+                    bytes_by_key[key] = None
+            image_bytes = bytes_by_key[key]
 
         try:
             rendered_bytes = renderer.render_frame(frame, image_bytes)
