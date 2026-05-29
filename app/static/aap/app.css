@@ -1123,7 +1123,7 @@ a:hover { color: var(--aap-accent); }
   text-shadow: 0 2px 8px rgba(0,0,0,0.55);
   white-space: pre-line; }
 .se-frame-label-latest {
-  position: absolute; right: 10%; bottom: 7%;
+  position: absolute; right: 10%; bottom: 4%;
   font-family: "Inter", "Liberation Sans", Arial, sans-serif; font-weight: 600; font-size: 9px;
   letter-spacing: .03em;
   text-shadow: 0 1px 4px rgba(0,0,0,0.65);

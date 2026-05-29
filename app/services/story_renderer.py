@@ -22,7 +22,7 @@ _SHADOW_OFFSET = (2, 3)
 _SHADOW_OPACITY = 160  # out of 255
 _DIM_OPACITY = 140  # dark overlay (0-255)
 _BLUR_RADIUS = 20
-_LABEL_SIZE = 36
+_LABEL_SIZE = 72
 _LABEL_TEXT = "↘ latest post"
 
 _BG_COLORS = {
@@ -123,7 +123,7 @@ def _draw_latest_label(canvas: Image.Image, color: tuple[int, int, int]) -> None
     bbox = font.getbbox(_LABEL_TEXT)
     text_w = bbox[2] - bbox[0]
     x = _CANVAS_W - _PAD_H - text_w
-    y = _CANVAS_H - 120
+    y = _CANVAS_H - 90
     draw = ImageDraw.Draw(canvas, "RGBA")
     draw.text(
         (x + _SHADOW_OFFSET[0], y + _SHADOW_OFFSET[1]),
