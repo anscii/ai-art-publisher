@@ -123,15 +123,20 @@ def _text_top_y(total_h: int, align: str) -> int:
 
 class StoryRenderer:
     def __init__(self) -> None:
+        self._cached_body_size = _BODY_SIZE
         self._body_font = _load_font(_FONT_BODY, _BODY_SIZE)
         self._title_font = _load_font(_FONT_TITLE, _TITLE_SIZE)
 
     def render_frame(self, frame, image_bytes: bytes | None) -> bytes:
         # Per-frame font size override; falls back to global defaults
-        body_size = getattr(frame, "font_size", None) or _BODY_SIZE
+        fs = getattr(frame, "font_size", None)
+        body_size = fs if fs is not None else _BODY_SIZE
         title_size = round(body_size * 1.25)
-        self._body_font = _load_font(_FONT_BODY, body_size)
-        self._title_font = _load_font(_FONT_TITLE, title_size)
+        # Reload fonts only when size changes (avoids repeated disk reads)
+        if body_size != self._cached_body_size:
+            self._body_font = _load_font(_FONT_BODY, body_size)
+            self._title_font = _load_font(_FONT_TITLE, title_size)
+            self._cached_body_size = body_size
         if frame.frame_type == "image":
             return self._render_image_frame(frame, image_bytes)
         return self._render_text_frame(frame, image_bytes)

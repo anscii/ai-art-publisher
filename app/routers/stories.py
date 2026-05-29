@@ -27,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["stories"])
 
-_MAX_DEFAULT_IMAGES = 4
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -312,10 +310,11 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
             detail=f"{len(unrendered)} frame(s) not yet rendered — call /render first",
         )
 
+    fake = get_config().fake_posting
     ig_svc: InstagramService | None = None
     fb_svc: FacebookService | None = None
 
-    if not get_config().fake_posting:
+    if not fake:
         ig_svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
         if settings.facebook_page_id:
             fb_svc = FacebookService(settings.facebook_page_access_token, settings.facebook_page_id)
@@ -326,9 +325,11 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
     for frame in enabled_frames:
         rendered_url: str = frame.rendered_url  # type: ignore[assignment]
 
-        # Instagram
-        if get_config().fake_posting:
-            ig_result: dict[str, object] = {
+        # Instagram — skip frames already posted (idempotent retry)
+        if frame.instagram_frame_id:
+            ig_result: dict[str, object] = {"ok": True, "media_id": frame.instagram_frame_id}
+        elif fake:
+            ig_result = {
                 "ok": True,
                 "fake": True,
                 "media_id": f"fake-story-{frame.id}",
@@ -350,18 +351,19 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
         ig_results.append(ig_result)
 
         # Facebook (mirror behavior: attempt if configured, silently skip if not)
-        if fb_svc or get_config().fake_posting:
+        if fb_svc or fake:
             try:
-                if get_config().fake_posting:
+                if fake:
                     fb_result: dict[str, object] = {
                         "ok": True,
                         "fake": True,
                         "media_id": f"fake-fb-story-{frame.id}",
                     }
                     logger.info("[FAKE] Facebook story | story=%s | frame=%s", story.id, frame.id)
-                else:
-                    assert fb_svc is not None
+                elif fb_svc is not None:
                     fb_result = fb_svc.post_story(rendered_url)
+                else:
+                    fb_result = {"ok": True, "skipped": True}
 
                 if fb_result.get("ok") and not fb_result.get("skipped"):
                     frame.facebook_frame_id = (

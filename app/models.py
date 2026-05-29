@@ -133,7 +133,7 @@ class Post(Base):
         order_by="PostImage.order_index",
     )
     story: Mapped["Story | None"] = relationship(
-        "Story", back_populates="post", uselist=False, cascade="all, delete-orphan"
+        "Story", back_populates="post", uselist=False, cascade="all, delete-orphan", lazy="joined"
     )
 
 
