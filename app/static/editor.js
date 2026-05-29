@@ -2813,7 +2813,29 @@ function _renderStoryEditorV2(body) {
   const children = [topbar, head, phone];
   if (colorbar) children.push(colorbar);
   if (sizeSlider) children.push(sizeSlider);
-  children.push(strip, includeRow);
+  const addTextFrameBtn = h('button', {
+    cls: 'va__transfer-btn',
+    title: 'Add a new text frame, splitting current text evenly',
+    style: 'align-self:flex-end',
+  }, '＋ text frame');
+  addTextFrameBtn.addEventListener('click', async () => {
+    addTextFrameBtn.disabled = true;
+    addTextFrameBtn.textContent = 'Adding…';
+    try {
+      await _flushDirtyFrames();
+      _clearDraftFromLS(story.id);
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/frames');
+      _storyCtx.story = updated;
+      _storyCtx.frameIdx = updated.frames.length - 1;
+      _renderStoryEditorV2(body);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      addTextFrameBtn.disabled = false;
+      addTextFrameBtn.textContent = '＋ text frame';
+    }
+  });
+
+  children.push(strip, h('div', { cls: 'd-flex justify-content-end' }, addTextFrameBtn), includeRow);
   if (controlEl) children.push(controlEl);
   children.push(h('div', { cls: 'va__foot' }, renderBtn, publishBtn));
 
