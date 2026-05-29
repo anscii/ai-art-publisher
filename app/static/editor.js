@@ -2900,12 +2900,14 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
     if (frame.text || frame.title) {
       const ALIGN_MAP = { top: 'se-frame-text-block--top', middle: 'se-frame-text-block--middle', bottom: 'se-frame-text-block--bottom' };
       const alignCls = ALIGN_MAP[frame.text_align || 'middle'] || 'se-frame-text-block--middle';
-      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls, style: 'text-align:' + (frame.text_halign || 'center') });
+      const _ha = frame.text_halign || 'center';
+      const _flexAlign = _ha === 'left' ? 'flex-start' : _ha === 'right' ? 'flex-end' : 'center';
+      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls, style: 'align-items:' + _flexAlign });
       const color = frame.text_color || '#ffffff';
       const pRatio = 0.37;
       const pSz = frame.font_size || 64;
-      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color + ';font-size:' + Math.round(pSz * 1.25 * pRatio) + 'px' }));
-      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px' }, frame.text));
+      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color + ';font-size:' + Math.round(pSz * 1.25 * pRatio) + 'px;text-align:' + _ha }));
+      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px;text-align:' + _ha }, frame.text));
       phone.appendChild(textEl);
     }
     if (isLastTextFrame) {
