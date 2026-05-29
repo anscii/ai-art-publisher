@@ -2263,7 +2263,7 @@ let _allTextMode = false;
 const _dirtyFrameIds = new Set();
 
 function _markFrameDirty(frameId) {
-  _markFrameDirty(frameId);
+  _dirtyFrameIds.add(frameId);
   const pill = document.querySelector('[data-unsaved-pill]');
   if (pill) pill.hidden = false;
 }

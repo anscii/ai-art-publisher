@@ -229,3 +229,28 @@ def test_close_without_render_restores_draft_on_reopen(page, live_server, tmp_pa
         page.locator("[data-story-frame-text]").first.input_value()
         == "Draft text that should survive close."
     )
+
+
+def test_format_controls_do_not_crash(page, live_server, tmp_path):
+    """BG, Align, and Font rail buttons must be clickable without JS errors."""
+    _create_series_with_instagram_post(page, live_server, tmp_path)
+    _open_story_modal(page)
+    textarea = _generate_and_go_to_text_frame(page)
+    assert textarea.is_visible()
+
+    js_errors = []
+    page.on("pageerror", lambda e: js_errors.append(str(e)))
+
+    # Open BG panel and pick a background option
+    page.locator(".se-rail__btn").filter(has_text="BG").click()
+    page.locator(".se-rail__pick").first.wait_for(timeout=3000)
+    page.locator(".se-rail__pick").first.click()
+    page.wait_for_timeout(300)
+
+    # Open Align panel and pick an option
+    page.locator(".se-rail__btn").filter(has_text="Align").click()
+    page.locator(".se-rail__pick").first.wait_for(timeout=3000)
+    page.locator(".se-rail__pick").first.click()
+    page.wait_for_timeout(300)
+
+    assert js_errors == [], f"JS errors after using format controls: {js_errors}"
