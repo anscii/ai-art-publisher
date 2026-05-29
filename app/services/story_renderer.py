@@ -22,7 +22,7 @@ _SHADOW_OFFSET = (2, 3)
 _SHADOW_OPACITY = 160  # out of 255
 _DIM_OPACITY = 140  # dark overlay (0-255)
 _BLUR_RADIUS = 20
-_LABEL_SIZE = 26
+_LABEL_SIZE = 36
 _LABEL_TEXT = "↘ latest post"
 
 _BG_COLORS = {

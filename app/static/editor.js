@@ -2534,7 +2534,7 @@ function _renderStoryEditorV2(body) {
   );
 
   const phone = h('div', { cls: 'va__phone' });
-  _buildFramePreview(phone, frame, imgMap);
+  _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
 
   const rail = _buildRail(body, frame, imgMap);
   phone.appendChild(rail);
@@ -2629,7 +2629,7 @@ function _renderStoryEditorV2(body) {
       frame.text = textarea.value;
       frame.rendered_url = null;
       _dirtyFrameIds.add(frame.id);
-      _buildFramePreview(phone, frame, imgMap);
+      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
       updateToPrevState();
       updateToNextState();
     });
@@ -2655,7 +2655,7 @@ function _renderStoryEditorV2(body) {
       frame.title = titleInput.value || null;
       frame.rendered_url = null;
       _dirtyFrameIds.add(frame.id);
-      _buildFramePreview(phone, frame, imgMap);
+      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
     });
     controlEl = titleInput;
   }
@@ -2729,7 +2729,7 @@ function _renderStoryEditorV2(body) {
       frame.rendered_url = null;
       _dirtyFrameIds.add(frame.id);
       const phoneEl = body.querySelector('.va__phone');
-      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
     });
 
     const applyAllBtn = h('button', {
@@ -2744,7 +2744,7 @@ function _renderStoryEditorV2(body) {
         _dirtyFrameIds.add(f.id);
       });
       const phoneEl = body.querySelector('.va__phone');
-      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
     });
 
     sizeSlider = h('div', { cls: 'd-flex align-items-center gap-2', style: 'padding:4px 0' },
@@ -2765,7 +2765,13 @@ function _renderStoryEditorV2(body) {
   body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id }, ...children));
 }
 
-function _buildFramePreview(phone, frame, imgMap) {
+function _isLastTextFrame(frame) {
+  if (!_storyCtx) return false;
+  const last = [..._storyCtx.story.frames].reverse().find(f => f.frame_type === 'text' && f.is_enabled);
+  return !!last && last.id === frame.id;
+}
+
+function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
   const savedRail = phone.querySelector('.se-rail');
   phone.replaceChildren();
   const bgUrl = (imgMap && frame.source_image_id) ? imgMap[frame.source_image_id] : '';
@@ -2824,6 +2830,9 @@ function _buildFramePreview(phone, frame, imgMap) {
       if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px' }, frame.text));
       phone.appendChild(textEl);
     }
+    if (isLastTextFrame) {
+      phone.appendChild(h('div', { cls: 'se-frame-label-latest', style: 'color:' + (frame.text_color || '#ffffff') }, '↘ latest post'));
+    }
   }
   if (savedRail) phone.appendChild(savedRail);
 }
@@ -2863,7 +2872,7 @@ function _buildRail(body, frame, imgMap) {
           frame.rendered_url = null;
           _dirtyFrameIds.add(frame.id);
           const phone = bgBtn.closest('.va__phone');
-          if (phone) _buildFramePreview(phone, frame, imgMap);
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
           _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
         });
         panel.appendChild(pick);
@@ -2897,7 +2906,7 @@ function _buildRail(body, frame, imgMap) {
           frame.rendered_url = null;
           _dirtyFrameIds.add(frame.id);
           const phone = alignBtn.closest('.va__phone');
-          if (phone) _buildFramePreview(phone, frame, imgMap);
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
         });
         panel.appendChild(pick);
       });
@@ -2938,7 +2947,7 @@ function _buildColorBar(body, frame) {
       _dirtyFrameIds.add(frame.id);
       body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
       const phone = body.querySelector('.va__phone');
-      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap);
+      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap, _isLastTextFrame(frame));
     });
     return swatch;
   });
