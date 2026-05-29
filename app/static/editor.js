@@ -2513,7 +2513,8 @@ function _renderStoryEditorV2(body) {
   });
 
   const unsavedPill = h('span', { cls: 'se-va__unsaved', 'data-unsaved-pill': '', hidden: _dirtyFrameIds.size === 0 }, 'unsaved');
-  const topbar = h('div', { cls: 'se-va__topbar' }, pill, unsavedPill, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
+  const pillGroup = h('div', { style: 'display:flex;flex-direction:column;gap:3px' }, pill, unsavedPill);
+  const topbar = h('div', { cls: 'se-va__topbar' }, pillGroup, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
 
   // ── Option C: stacked text canvas with drag handles ────────────────────────
   if (_allTextMode) {
