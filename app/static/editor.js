@@ -2271,8 +2271,8 @@ function _openStoryModal(post, imgMap, series) {
   const body = document.getElementById('storyEditorBody');
   body.replaceChildren();
   _loadStoryModal(body, post, imgMap, series);
-  // Flush dirty frames when modal closes
-  modalEl.addEventListener('hide.bs.modal', _flushDirtyFrames, { once: true });
+  // Save unsaved changes to localStorage on close (only sent to server on render)
+  modalEl.addEventListener('hide.bs.modal', () => { if (_storyCtx) _saveDraftToLS(_storyCtx.story); }, { once: true });
   modal.show();
 }
 
@@ -2301,11 +2301,40 @@ async function _flushDirtyFrames() {
   }
 }
 
+function _lsKey(storyId) { return 'se_draft_' + storyId; }
+
+function _saveDraftToLS(story) {
+  if (!_dirtyFrameIds.size) { localStorage.removeItem(_lsKey(story.id)); return; }
+  const draft = {};
+  for (const fid of _dirtyFrameIds) {
+    const f = story.frames.find(fr => fr.id === fid);
+    if (f) draft[fid] = { text: f.text, title: f.title, background_mode: f.background_mode, text_color: f.text_color, text_align: f.text_align, title_position: f.title_position, font_size: f.font_size, is_enabled: f.is_enabled };
+  }
+  localStorage.setItem(_lsKey(story.id), JSON.stringify(draft));
+}
+
+function _loadDraftFromLS(story) {
+  const raw = localStorage.getItem(_lsKey(story.id));
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    for (const [fid, data] of Object.entries(draft)) {
+      const f = story.frames.find(fr => fr.id === fid);
+      if (!f) continue;
+      Object.assign(f, data);
+      _dirtyFrameIds.add(fid);
+    }
+  } catch (e) { /* ignore corrupt draft */ }
+}
+
+function _clearDraftFromLS(storyId) { localStorage.removeItem(_lsKey(storyId)); }
+
 async function _loadStoryModal(body, post, imgMap, series) {
   if (post.story_id) {
     try {
       const story = await apiFetch('GET', '/api/stories/' + post.story_id);
       _storyCtx = { post, imgMap, story, frameIdx: 0 };
+      _loadDraftFromLS(story);
       _renderStoryEditorV2(body);
     } catch (e) { showToast(e.message, 'danger'); }
   } else {
@@ -2469,6 +2498,7 @@ function _renderStoryEditorV2(body) {
   });
   resetBtn.addEventListener('click', async () => {
     _dirtyFrameIds.clear();
+    _clearDraftFromLS(story.id);
     try {
       const fresh = await apiFetch('GET', '/api/stories/' + story.id);
       _storyCtx.story = fresh;
@@ -2508,6 +2538,7 @@ function _renderStoryEditorV2(body) {
       renderBtnAll.disabled = true; renderBtnAll.textContent = 'Saving…';
       try {
         await _flushDirtyFrames();
+        _clearDraftFromLS(story.id);
         renderBtnAll.textContent = 'Rendering…';
         const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
         _storyCtx.story = updated;
@@ -2701,6 +2732,7 @@ function _renderStoryEditorV2(body) {
     renderBtn.textContent = 'Saving…';
     try {
       await _flushDirtyFrames();
+      _clearDraftFromLS(story.id);
       renderBtn.textContent = 'Rendering…';
       const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
       _storyCtx.story = updated;
