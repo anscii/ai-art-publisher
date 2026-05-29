@@ -179,3 +179,53 @@ def test_close_modal_via_close_button(page, live_server, tmp_path):
     # Close via × button in modal header
     page.locator("#storyEditorModal .aap-icon-btn").click()
     page.locator("#storyEditorModal").wait_for(state="hidden", timeout=3000)
+
+
+def _generate_and_go_to_text_frame(page):
+    """Generate story draft and navigate to the first text frame. Returns the textarea."""
+    page.locator("[data-story-generate-btn]").wait_for(timeout=5000)
+    page.locator("[data-story-generate-btn]").click()
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+    page.locator(".se-strip__chip").nth(1).click()
+    page.locator("[data-story-frame-text]").wait_for(timeout=5000)
+    return page.locator("[data-story-frame-text]").first
+
+
+def test_reset_button_reverts_unsaved_edits(page, live_server, tmp_path):
+    """Reset re-fetches server state, discarding in-memory edits."""
+    _create_series_with_instagram_post(page, live_server, tmp_path)
+    _open_story_modal(page)
+    textarea = _generate_and_go_to_text_frame(page)
+    original = textarea.input_value()
+
+    textarea.fill("Completely different text that should vanish.")
+
+    page.get_by_role("button", name="Reset").click()
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+
+    page.locator(".se-strip__chip").nth(1).click()
+    page.locator("[data-story-frame-text]").wait_for(timeout=5000)
+    assert page.locator("[data-story-frame-text]").first.input_value() == original
+
+
+def test_close_without_render_restores_draft_on_reopen(page, live_server, tmp_path):
+    """Unsaved edits persist in localStorage across modal close/open without render."""
+    _create_series_with_instagram_post(page, live_server, tmp_path)
+    _open_story_modal(page)
+    textarea = _generate_and_go_to_text_frame(page)
+
+    textarea.fill("Draft text that should survive close.")
+
+    # Close without rendering
+    page.locator("#storyEditorModal .aap-icon-btn").click()
+    page.locator("#storyEditorModal").wait_for(state="hidden", timeout=3000)
+
+    # Reopen — localStorage draft should be merged in
+    _open_story_modal(page)
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+    page.locator(".se-strip__chip").nth(1).click()
+    page.locator("[data-story-frame-text]").wait_for(timeout=5000)
+    assert (
+        page.locator("[data-story-frame-text]").first.input_value()
+        == "Draft text that should survive close."
+    )

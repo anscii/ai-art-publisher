@@ -2494,7 +2494,6 @@ function _renderStoryEditorV2(body) {
     cls: 'se-va__regen',
     text: 'Reset',
     title: 'Discard unsaved changes and revert to last saved state',
-    disabled: _dirtyFrameIds.size === 0,
   });
   resetBtn.addEventListener('click', async () => {
     _dirtyFrameIds.clear();
