@@ -7,9 +7,9 @@ _CANVAS_W = 1080
 _CANVAS_H = 1920
 _JPEG_QUALITY = 92
 
-_FONT_DIR = Path("/usr/share/fonts/truetype/liberation")
-_FONT_SERIF_REGULAR = _FONT_DIR / "LiberationSerif-Regular.ttf"
-_FONT_SERIF_BOLD = _FONT_DIR / "LiberationSerif-Bold.ttf"
+_FONT_DIR = Path("/usr/share/fonts/opentype/inter")
+_FONT_BODY = _FONT_DIR / "Inter-SemiBold.otf"  # weight 600, matches CSS font-weight:600
+_FONT_TITLE = _FONT_DIR / "Inter-Bold.otf"  # weight 700
 
 _BODY_SIZE = 64
 _TITLE_SIZE = 80
@@ -123,10 +123,15 @@ def _text_top_y(total_h: int, align: str) -> int:
 
 class StoryRenderer:
     def __init__(self) -> None:
-        self._body_font = _load_font(_FONT_SERIF_REGULAR, _BODY_SIZE)
-        self._title_font = _load_font(_FONT_SERIF_BOLD, _TITLE_SIZE)
+        self._body_font = _load_font(_FONT_BODY, _BODY_SIZE)
+        self._title_font = _load_font(_FONT_TITLE, _TITLE_SIZE)
 
     def render_frame(self, frame, image_bytes: bytes | None) -> bytes:
+        # Per-frame font size override; falls back to global defaults
+        body_size = getattr(frame, "font_size", None) or _BODY_SIZE
+        title_size = round(body_size * 1.25)
+        self._body_font = _load_font(_FONT_BODY, body_size)
+        self._title_font = _load_font(_FONT_TITLE, title_size)
         if frame.frame_type == "image":
             return self._render_image_frame(frame, image_bytes)
         return self._render_text_frame(frame, image_bytes)
@@ -148,7 +153,11 @@ class StoryRenderer:
             rgba = canvas.convert("RGBA")
             draw = ImageDraw.Draw(rgba, "RGBA")
 
-            bar_h = int(_CANVAS_H * 0.22)
+            # Bar height: at least 22% of frame, grows to fit wrapped title text
+            title_lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
+            text_h = _block_height(title_lines, self._title_font)
+            _BAR_V_PAD = 112  # top + bottom padding (px at full resolution)
+            bar_h = max(int(_CANVAS_H * 0.22), text_h + _BAR_V_PAD)
             if title_pos == "top":
                 bar_top, bar_bot = 0, bar_h
             elif title_pos == "middle":
@@ -164,8 +173,8 @@ class StoryRenderer:
                 "solid_accent": (184, 80, 31, 235),
             }
             title_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
-            lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
-            total_h = _block_height(lines, self._title_font)
+            lines = title_lines  # already wrapped above
+            total_h = text_h
 
             if bg_mode == "image_clean":
                 # floating title — no bar rectangle, just shadowed text

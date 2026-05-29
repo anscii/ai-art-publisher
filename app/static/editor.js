@@ -1794,14 +1794,22 @@ function buildPostRow(post, imgMap, series) {
       : null;
   if (timeEl) platEl.appendChild(timeEl);
 
+  const STATUS_ICON_MAP = {
+    draft:     { cls: 'bi bi-pencil',           color: 'var(--aap-ink-mute)' },
+    scheduled: { cls: 'bi bi-calendar-check',   color: 'var(--aap-dot-active)' },
+    posted:    { cls: 'bi bi-check-lg',          color: 'var(--aap-dot-done)' },
+    failed:    { cls: 'bi bi-exclamation-circle',color: 'var(--aap-danger)' },
+  };
+  const si = STATUS_ICON_MAP[post.status];
   const statusEl = h('span', {
     cls: 'aap-post-row__status',
     style: '--status-color: ' + (STATUS_COLOR_MAP[post.status] || 'var(--aap-ink-mute)'),
+    title: post.status,
   },
     post.status === 'sending'
-      ? h('span', { cls: 'spinner-border spinner-border-sm me-1', 'aria-hidden': 'true' })
-      : h('span', { cls: 'aap-dot' }),
-    document.createTextNode(' ' + post.status)
+      ? h('span', { cls: 'spinner-border spinner-border-sm', 'aria-hidden': 'true' })
+      : si ? h('i', { cls: si.cls, style: 'color:' + si.color + ';font-size:14px' })
+           : h('span', { cls: 'aap-dot' })
   );
 
   const actions = h('div', { cls: 'aap-post-row__actions' });
@@ -1872,12 +1880,24 @@ function buildPostRow(post, imgMap, series) {
   }
 
   if (post.platform === 'instagram') {
+    const STORY_STATUS_ICON = {
+      draft:    { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
+      rendered: { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
+      posted:   { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
+      failed:   { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
+    };
+    const storyChildren = [icon('bi bi-film')];
+    if (post.story_status) {
+      const si = STORY_STATUS_ICON[post.story_status];
+      if (si) storyChildren.push(h('i', { cls: si.cls, style: 'font-size:9px;color:' + si.color }));
+    }
     const storyBtn = h('button', {
       cls: 'aap-icon-btn',
-      title: post.story_id ? 'Story' : 'Create Story',
+      style: 'flex-direction:column;gap:1px;height:auto;padding:4px 6px;min-width:28px',
+      title: post.story_id ? 'Story: ' + post.story_status : 'Create Story',
       'aria-label': 'Story',
       'data-story-btn': post.id,
-    }, icon('bi bi-film'));
+    }, ...storyChildren);
     storyBtn.addEventListener('click', () => _openStoryModal(post, imgMap, series));
     actions.appendChild(storyBtn);
   }
@@ -2238,14 +2258,46 @@ const _TEXT_COLORS = [
 ];
 
 let _storyCtx = null;
+let _allTextMode = false;
+const _dirtyFrameIds = new Set();
 
 function _openStoryModal(post, imgMap, series) {
-  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('storyEditorModal'));
+  _dirtyFrameIds.clear();
+  _allTextMode = false;
+  const modalEl = document.getElementById('storyEditorModal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   document.getElementById('storyEditorTitle').textContent = post.title || 'Story';
   const body = document.getElementById('storyEditorBody');
   body.replaceChildren();
   _loadStoryModal(body, post, imgMap, series);
+  // Flush dirty frames when modal closes
+  modalEl.addEventListener('hide.bs.modal', _flushDirtyFrames, { once: true });
   modal.show();
+}
+
+async function _flushDirtyFrames() {
+  if (!_storyCtx || !_dirtyFrameIds.size) return;
+  const { story } = _storyCtx;
+  const ids = [..._dirtyFrameIds];
+  _dirtyFrameIds.clear();
+  for (const frameId of ids) {
+    const frame = story.frames.find(f => f.id === frameId);
+    if (!frame) continue;
+    try {
+      await apiFetch('PATCH', '/api/story-frames/' + frameId, {
+        text: frame.text,
+        title: frame.title,
+        background_mode: frame.background_mode,
+        text_color: frame.text_color,
+        text_align: frame.text_align,
+        title_position: frame.title_position,
+        font_size: frame.font_size,
+        is_enabled: frame.is_enabled,
+      });
+    } catch (e) {
+      showToast('Frame save failed: ' + e.message, 'danger');
+    }
+  }
 }
 
 async function _loadStoryModal(body, post, imgMap, series) {
@@ -2308,6 +2360,80 @@ function _renderStoryPickerV2(body, post, imgMap, series) {
   );
 }
 
+function _splitLastLine(text) {
+  const lines = (text || '').split('\n');
+  if (lines.length > 1) return [lines.slice(0, -1).join('\n'), lines[lines.length - 1]];
+  const m = text.match(/^(.*[.!?…])\s+(.+)$/s);
+  if (m) return [m[1], m[2]];
+  return [text, ''];
+}
+
+function _splitFirstLine(text) {
+  const lines = (text || '').split('\n');
+  if (lines.length > 1) return [lines[0], lines.slice(1).join('\n')];
+  const m = text.match(/^(.+?[.!?…])\s+(.+)$/s);
+  if (m) return [m[1], m[2]];
+  return [text, ''];
+}
+
+function _parseAndDistribute(value, frames) {
+  const textFrames = frames.filter(f => f.frame_type === 'text');
+  const sections = value.split(/^─+\s*frame\s+\d+\s*─+\s*$/m);
+  sections.forEach((section, i) => {
+    if (i >= textFrames.length) return;
+    const f = textFrames[i];
+    f.text = section.trim();
+    f.rendered_url = null;
+    _dirtyFrameIds.add(f.id);
+  });
+}
+
+function _buildTextDragHandle(upperFrame, lowerFrame, upperTa, lowerTa) {
+  const handle = h('div', { cls: 'va__drag-handle' },
+    h('span', { cls: 'va__drag-handle__icon' }, '⠿')
+  );
+  const THRESHOLD = 28;
+  let startY = 0;
+
+  function onMove(currentY) {
+    const dy = currentY - startY;
+    const fit = () => [upperTa, lowerTa].forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+    if (dy > THRESHOLD) {
+      // drag down → separator moves down → upper grows: first line of lower → end of upper
+      const [taken, rest] = _splitFirstLine(lowerFrame.text || '');
+      if (!taken) return;
+      lowerFrame.text = rest; lowerFrame.rendered_url = null; _dirtyFrameIds.add(lowerFrame.id);
+      upperFrame.text = (upperFrame.text ? upperFrame.text + '\n' : '') + taken;
+      upperFrame.rendered_url = null; _dirtyFrameIds.add(upperFrame.id);
+      upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
+      fit(); startY = currentY;
+    } else if (dy < -THRESHOLD) {
+      // drag up → separator moves up → lower grows: last line of upper → start of lower
+      const [rest, taken] = _splitLastLine(upperFrame.text || '');
+      if (!taken) return;
+      upperFrame.text = rest; upperFrame.rendered_url = null; _dirtyFrameIds.add(upperFrame.id);
+      lowerFrame.text = taken + (lowerFrame.text ? '\n' + lowerFrame.text : '');
+      lowerFrame.rendered_url = null; _dirtyFrameIds.add(lowerFrame.id);
+      upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
+      fit(); startY = currentY;
+    }
+  }
+
+  handle.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+  handle.addEventListener('touchmove', e => { onMove(e.touches[0].clientY); }, { passive: true });
+
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    e.preventDefault();
+    const onMouseMove = e => onMove(e.clientY);
+    const onMouseUp = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
+  return handle;
+}
+
 function _renderStoryEditorV2(body) {
   const { story, imgMap, post } = _storyCtx;
   const frameIdx = _storyCtx.frameIdx;
@@ -2326,7 +2452,62 @@ function _renderStoryEditorV2(body) {
     _renderStoryPickerV2(body, post, imgMap, null);
   });
 
-  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), regenBtn);
+  const allTextBtn = h('button', {
+    cls: 'se-va__regen',
+    text: _allTextMode ? '← Preview' : 'Edit all text',
+    style: _allTextMode ? 'border-color:var(--aap-accent);color:var(--aap-accent)' : '',
+    title: 'View and redistribute all frame text in one editor',
+  });
+  allTextBtn.addEventListener('click', () => { _allTextMode = !_allTextMode; _renderStoryEditorV2(body); });
+
+  const topbar = h('div', { cls: 'se-va__topbar' }, pill, h('span', { cls: 'se-va__rule' }), allTextBtn, regenBtn);
+
+  // ── Option C: stacked text canvas with drag handles ────────────────────────
+  if (_allTextMode) {
+    const textFrames = frames.filter(f => f.frame_type === 'text');
+
+    const _fitTa = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+
+    // Build textareas first so handles can reference adjacent ones
+    const items = textFrames.map(f => {
+      const ta = h('textarea', { cls: 'va__textarea va__all-text__area' });
+      ta.value = f.text || '';
+      ta.addEventListener('input', () => { f.text = ta.value; f.rendered_url = null; _dirtyFrameIds.add(f.id); _fitTa(ta); });
+      return { f, ta };
+    });
+
+    const canvas = h('div', { cls: 'va__all-text' });
+    items.forEach(({ f, ta }, i) => {
+      const frameNum = frames.indexOf(f) + 1;
+      canvas.appendChild(h('div', { cls: 'va__all-text__label' }, `Frame ${frameNum}`));
+      canvas.appendChild(ta);
+      if (i < items.length - 1) {
+        canvas.appendChild(_buildTextDragHandle(f, items[i + 1].f, ta, items[i + 1].ta));
+      }
+    });
+
+    const renderBtnAll = h('button', { cls: 'va__btn va__btn--primary', text: 'Render Preview', 'data-story-render-btn': story.id });
+    renderBtnAll.addEventListener('click', async () => {
+      renderBtnAll.disabled = true; renderBtnAll.textContent = 'Saving…';
+      try {
+        await _flushDirtyFrames();
+        renderBtnAll.textContent = 'Rendering…';
+        const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
+        _storyCtx.story = updated;
+        _allTextMode = false;
+        _renderStoryEditorV2(body);
+        showToast('Rendered ' + updated.frames.filter(f => f.is_enabled).length + ' frames', 'success');
+      } catch (e) { showToast(e.message, 'danger'); renderBtnAll.disabled = false; renderBtnAll.textContent = 'Render Preview'; }
+    });
+
+    body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id },
+      topbar, canvas, h('div', { cls: 'va__foot' }, renderBtnAll)
+    ));
+    // Fit all textareas to content after DOM insertion
+    items.forEach(({ ta }) => _fitTa(ta));
+    return;
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   const prevBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Previous' }, '‹');
   const nextBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Next' }, '›');
@@ -2357,15 +2538,41 @@ function _renderStoryEditorV2(body) {
   const rail = _buildRail(body, frame, imgMap);
   phone.appendChild(rail);
 
-  if (frame.rendered_url) {
-    phone.style.cursor = 'zoom-in';
-    phone.addEventListener('click', e => {
-      if (e.target.closest('.se-rail')) return;
+  if (frame.rendered_url) phone.style.cursor = 'zoom-in';
+
+  // Tap zones + swipe on phone frame
+  let _swipeX = 0;
+  let _swipeMoved = false;
+  phone.addEventListener('touchstart', e => {
+    _swipeX = e.changedTouches[0].clientX;
+    _swipeMoved = false;
+  }, { passive: true });
+  phone.addEventListener('touchmove', () => { _swipeMoved = true; }, { passive: true });
+  phone.addEventListener('touchend', e => {
+    if (e.target.closest('.se-rail')) return;
+    const dx = e.changedTouches[0].clientX - _swipeX;
+    if (_swipeMoved && Math.abs(dx) >= 40) {
+      // swipe
+      if (dx < 0 && frameIdx < frames.length - 1) { _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body); }
+      else if (dx > 0 && frameIdx > 0) { _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body); }
+    }
+  }, { passive: true });
+
+  phone.addEventListener('click', e => {
+    if (e.target.closest('.se-rail')) return;
+    const rect = phone.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width;
+    if (xRatio < 0.3 && frameIdx > 0) {
+      _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body);
+    } else if (xRatio > 0.7 && frameIdx < frames.length - 1) {
+      _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body);
+    } else if (frame.rendered_url) {
+      // center tap → fullscreen
       const rendered = frames.filter(f => f.rendered_url);
       const idx = rendered.findIndex(f => f.id === frame.id);
       _openStoryFullscreen(rendered.map(f => f.rendered_url), idx);
-    });
-  }
+    }
+  });
 
   const showColorbar = frame.frame_type === 'text' || (frame.frame_type === 'image' && frame.title);
   const colorbar = showColorbar ? _buildColorBar(body, frame) : null;
@@ -2386,28 +2593,55 @@ function _renderStoryEditorV2(body) {
 
   let controlEl = null;
   if (frame.frame_type === 'text') {
+    const prevTextFrame = frames.slice(0, frameIdx).reverse().find(f => f.frame_type === 'text' && f.is_enabled);
+    const nextTextFrame = frames.slice(frameIdx + 1).find(f => f.frame_type === 'text' && f.is_enabled);
+
+    const fromPrevBtn = h('button', { cls: 'va__transfer-btn', title: 'Send first line to previous text frame' }, '↑ to prev');
+    const updateToPrevState = () => {
+      const [first] = _splitFirstLine(frame.text || '');
+      fromPrevBtn.disabled = !prevTextFrame || !first;
+    };
+    updateToPrevState();
+    fromPrevBtn.addEventListener('click', () => {
+      const [taken, rest] = _splitFirstLine(frame.text || '');
+      if (!taken) return;
+      frame.text = rest; frame.rendered_url = null; _dirtyFrameIds.add(frame.id);
+      prevTextFrame.text = (prevTextFrame.text ? prevTextFrame.text + '\n' : '') + taken;
+      prevTextFrame.rendered_url = null; _dirtyFrameIds.add(prevTextFrame.id);
+      _renderStoryEditorV2(body);
+    });
+
     const textarea = h('textarea', { cls: 'va__textarea', rows: '4', 'data-story-frame-text': frame.id });
     textarea.value = frame.text || '';
     const charCount = h('span', { style: 'font-family:var(--aap-font-mono);font-size:11px;color:var(--aap-ink-mute);text-align:right;display:block' });
     const updateCount = () => { charCount.textContent = textarea.value.length; };
     updateCount();
-    let _dbt = null;
+    const toNextBtn = h('button', { cls: 'va__transfer-btn', title: 'Send last line to next text frame' }, '↓ to next');
+    const updateToNextState = () => {
+      const [, last] = _splitLastLine(frame.text || '');
+      toNextBtn.disabled = !nextTextFrame || !last;
+    };
+    updateToNextState();
+
     textarea.addEventListener('input', () => {
       updateCount();
-      clearTimeout(_dbt);
-      _dbt = setTimeout(async () => {
-        try {
-          const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text: textarea.value });
-          const f = updated.frames.find(f => f.id === frame.id);
-          if (f) { frame.text = f.text; frame.rendered_url = f.rendered_url; }
-          story.status = updated.status;
-          pill.textContent = story.status.toUpperCase();
-          if (story.status === 'draft') pill.classList.add('se-va__pill--ghost');
-          else pill.classList.remove('se-va__pill--ghost');
-        } catch (e) { showToast(e.message, 'danger'); }
-      }, 600);
+      frame.text = textarea.value;
+      frame.rendered_url = null;
+      _dirtyFrameIds.add(frame.id);
+      _buildFramePreview(phone, frame, imgMap);
+      updateToPrevState();
+      updateToNextState();
     });
-    controlEl = h('div', {}, textarea, charCount);
+    toNextBtn.addEventListener('click', () => {
+      const [rest, taken] = _splitLastLine(frame.text || '');
+      if (!taken) return;
+      frame.text = rest; frame.rendered_url = null; _dirtyFrameIds.add(frame.id);
+      nextTextFrame.text = taken + (nextTextFrame.text ? '\n' + nextTextFrame.text : '');
+      nextTextFrame.rendered_url = null; _dirtyFrameIds.add(nextTextFrame.id);
+      _renderStoryEditorV2(body);
+    });
+
+    controlEl = h('div', {}, fromPrevBtn, textarea, charCount, toNextBtn);
   } else {
     const titleInput = h('input', {
       type: 'text', cls: 'form-control',
@@ -2416,30 +2650,27 @@ function _renderStoryEditorV2(body) {
       'data-story-frame-title': frame.id,
     });
     titleInput.value = frame.title || '';
-    titleInput.addEventListener('change', async () => {
-      try {
-        await apiFetch('PATCH', '/api/story-frames/' + frame.id, { title: titleInput.value || null });
-        frame.title = titleInput.value || null;
-        _buildFramePreview(phone, frame, imgMap);
-      } catch (e) { showToast(e.message, 'danger'); }
+    titleInput.addEventListener('input', () => {
+      frame.title = titleInput.value || null;
+      frame.rendered_url = null;
+      _dirtyFrameIds.add(frame.id);
+      _buildFramePreview(phone, frame, imgMap);
     });
     controlEl = titleInput;
   }
 
   const incCb = h('input', { type: 'checkbox', cls: 'form-check-input' });
   incCb.checked = frame.is_enabled;
-  incCb.addEventListener('change', async () => {
-    try {
-      await apiFetch('PATCH', '/api/story-frames/' + frame.id, { is_enabled: incCb.checked });
-      frame.is_enabled = incCb.checked;
-      const chip = strip.children[frameIdx];
-      if (chip) {
-        chip.classList.toggle('is-off', !incCb.checked);
-        const skipEl = chip.querySelector('.se-strip__skip');
-        if (!incCb.checked && !skipEl) chip.appendChild(h('span', { cls: 'se-strip__skip' }, 'skip'));
-        else if (incCb.checked && skipEl) skipEl.remove();
-      }
-    } catch (e) { showToast(e.message, 'danger'); }
+  incCb.addEventListener('change', () => {
+    frame.is_enabled = incCb.checked;
+    _dirtyFrameIds.add(frame.id);
+    const chip = strip.children[frameIdx];
+    if (chip) {
+      chip.classList.toggle('is-off', !incCb.checked);
+      const skipEl = chip.querySelector('.se-strip__skip');
+      if (!incCb.checked && !skipEl) chip.appendChild(h('span', { cls: 'se-strip__skip' }, 'skip'));
+      else if (incCb.checked && skipEl) skipEl.remove();
+    }
   });
 
   const includeRow = h('div', { cls: 'd-flex align-items-center gap-2' },
@@ -2450,8 +2681,10 @@ function _renderStoryEditorV2(body) {
   const renderBtn = h('button', { cls: 'va__btn va__btn--primary', text: 'Render Preview', 'data-story-render-btn': story.id });
   renderBtn.addEventListener('click', async () => {
     renderBtn.disabled = true;
-    renderBtn.textContent = 'Rendering…';
+    renderBtn.textContent = 'Saving…';
     try {
+      await _flushDirtyFrames();
+      renderBtn.textContent = 'Rendering…';
       const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
       _storyCtx.story = updated;
       _renderStoryEditorV2(body);
@@ -2479,8 +2712,51 @@ function _renderStoryEditorV2(body) {
     }
   });
 
+  // Font size slider (text frames + cover frames)
+  const showSizeSlider = frame.frame_type === 'text' || (frame.frame_type === 'image' && frame.title);
+  let sizeSlider = null;
+  if (showSizeSlider) {
+    const DEFAULT_SIZE = 64;
+    const slider = h('input', { type: 'range', min: '32', max: '120', step: '4', style: 'flex:1;accent-color:var(--aap-accent)' });
+    slider.value = String(frame.font_size || DEFAULT_SIZE);
+    const sizeLabel = h('span', { style: 'font-family:var(--aap-font-mono);font-size:11px;color:var(--aap-ink-mute);min-width:28px;text-align:right' });
+    sizeLabel.textContent = slider.value;
+    slider.addEventListener('input', () => {
+      const sz = parseInt(slider.value);
+      sizeLabel.textContent = sz;
+      frame.font_size = sz;
+      frame.rendered_url = null;
+      _dirtyFrameIds.add(frame.id);
+      const phoneEl = body.querySelector('.va__phone');
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
+    });
+
+    const applyAllBtn = h('button', {
+      style: 'font-family:var(--aap-font-mono);font-size:10px;color:var(--aap-ink-mute);background:transparent;border:1px solid var(--aap-rule);border-radius:4px;padding:2px 7px;cursor:pointer;white-space:nowrap',
+      title: 'Apply this size to all frames',
+    }, 'All');
+    applyAllBtn.addEventListener('click', () => {
+      const sz = parseInt(slider.value);
+      frames.filter(f => f.frame_type === 'text').forEach(f => {
+        f.font_size = sz;
+        f.rendered_url = null;
+        _dirtyFrameIds.add(f.id);
+      });
+      const phoneEl = body.querySelector('.va__phone');
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
+    });
+
+    sizeSlider = h('div', { cls: 'd-flex align-items-center gap-2', style: 'padding:4px 0' },
+      h('span', { style: 'font-family:var(--aap-font-mono);font-size:10px;color:var(--aap-ink-mute);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap' }, 'Size'),
+      slider,
+      sizeLabel,
+      applyAllBtn
+    );
+  }
+
   const children = [topbar, head, phone];
   if (colorbar) children.push(colorbar);
+  if (sizeSlider) children.push(sizeSlider);
   children.push(strip, includeRow);
   if (controlEl) children.push(controlEl);
   children.push(h('div', { cls: 'va__foot' }, renderBtn, publishBtn));
@@ -2506,7 +2782,9 @@ function _buildFramePreview(phone, frame, imgMap) {
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
       const barPos = frame.title_position === 'top' ? 'se-frame-bar--top' : frame.title_position === 'middle' ? 'se-frame-bar--middle' : 'se-frame-bar--bottom';
-      const titleStyle = 'color:' + (frame.text_color || '#ffffff');
+      const PREVIEW_RATIO = 0.37;
+      const sz = frame.font_size || 64;
+      const titleStyle = 'color:' + (frame.text_color || '#ffffff') + ';font-size:' + Math.round(sz * 1.25 * PREVIEW_RATIO) + 'px';
       const BAR_BG = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)' };
       const bgMode = frame.background_mode || 'solid_dark';
       if (bgMode === 'image_clean') {
@@ -2538,8 +2816,10 @@ function _buildFramePreview(phone, frame, imgMap) {
       const alignCls = ALIGN_MAP[frame.text_align || 'middle'] || 'se-frame-text-block--middle';
       const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls });
       const color = frame.text_color || '#ffffff';
-      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color }));
-      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color }, frame.text));
+      const pRatio = 0.37;
+      const pSz = frame.font_size || 64;
+      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color + ';font-size:' + Math.round(pSz * 1.25 * pRatio) + 'px' }));
+      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px' }, frame.text));
       phone.appendChild(textEl);
     }
   }
@@ -2595,16 +2875,14 @@ function _buildRail(body, frame, imgMap) {
         const chip = h('span', { cls: 'se-rail__pick-chip' });
         _setBgChipStyle(chip, val, imgMap && imgMap[frame.source_image_id]);
         const pick = h('button', { cls: 'se-rail__pick' + (frame.background_mode === val ? ' is-on' : '') }, chip, document.createTextNode(lbl));
-        pick.addEventListener('click', async () => {
+        pick.addEventListener('click', () => {
           closePanel();
-          try {
-            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { background_mode: val });
-            const f = updated.frames.find(f => f.id === frame.id);
-            if (f) { frame.background_mode = f.background_mode; frame.rendered_url = f.rendered_url; }
-            const phone = bgBtn.closest('.va__phone');
-            if (phone) _buildFramePreview(phone, frame, imgMap);
-            _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
-          } catch (e) { showToast(e.message, 'danger'); }
+          frame.background_mode = val;
+          frame.rendered_url = null;
+          _dirtyFrameIds.add(frame.id);
+          const phone = bgBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap);
+          _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
         });
         panel.appendChild(pick);
       });
@@ -2615,8 +2893,8 @@ function _buildRail(body, frame, imgMap) {
     rail.appendChild(h('div', { cls: 'se-rail__pop' }, bgBtn));
   }
 
-  // Align button
-  {
+  // Align button — hidden for image frames with no title (nothing to align)
+  if (frame.frame_type === 'text' || frame.title) {
     const alignBtn = h('button', { cls: 'se-rail__btn' },
       h('span', { style: 'font-size:14px;line-height:1' }, '≡'),
       document.createTextNode('Align')
@@ -2632,16 +2910,14 @@ function _buildRail(body, frame, imgMap) {
       const current = frame.frame_type === 'text' ? (frame.text_align || 'middle') : (frame.title_position || 'bottom');
       opts.forEach(([val, lbl]) => {
         const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));
-        pick.addEventListener('click', async () => {
+        pick.addEventListener('click', () => {
           closePanel();
-          const field = frame.frame_type === 'text' ? 'text_align' : 'title_position';
-          try {
-            const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { [field]: val });
-            const f = updated.frames.find(f => f.id === frame.id);
-            if (f) { frame.text_align = f.text_align; frame.title_position = f.title_position; frame.rendered_url = f.rendered_url; }
-            const phone = alignBtn.closest('.va__phone');
-            if (phone) _buildFramePreview(phone, frame, imgMap);
-          } catch (e) { showToast(e.message, 'danger'); }
+          if (frame.frame_type === 'text') frame.text_align = val;
+          else frame.title_position = val;
+          frame.rendered_url = null;
+          _dirtyFrameIds.add(frame.id);
+          const phone = alignBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap);
         });
         panel.appendChild(pick);
       });
@@ -2676,15 +2952,13 @@ function _buildColorBar(body, frame) {
   const swatches = _TEXT_COLORS.map(({ hex }) => {
     const chip = h('span', { cls: 'se-swatch__chip', style: 'background:' + hex });
     const swatch = h('button', { cls: 'se-swatch' + (frame.text_color === hex ? ' is-on' : ''), 'data-color-hex': hex }, chip);
-    swatch.addEventListener('click', async () => {
-      try {
-        const updated = await apiFetch('PATCH', '/api/story-frames/' + frame.id, { text_color: hex });
-        const f = updated.frames.find(f => f.id === frame.id);
-        if (f) { frame.text_color = f.text_color; frame.rendered_url = f.rendered_url; }
-        body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
-        const phone = body.querySelector('.va__phone');
-        if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap);
-      } catch (e) { showToast(e.message, 'danger'); }
+    swatch.addEventListener('click', () => {
+      frame.text_color = hex;
+      frame.rendered_url = null;
+      _dirtyFrameIds.add(frame.id);
+      body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
+      const phone = body.querySelector('.va__phone');
+      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap);
     });
     return swatch;
   });

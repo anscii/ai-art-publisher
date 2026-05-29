@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -98,6 +99,7 @@ def _story_to_resp(story: Story) -> StoryResponse:
                 text_color=f.text_color,
                 text_align=f.text_align,
                 title_position=f.title_position,
+                font_size=f.font_size,
                 rendered_url=f.rendered_url,
                 instagram_frame_id=f.instagram_frame_id,
                 facebook_frame_id=f.facebook_frame_id,
@@ -204,6 +206,7 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
         "text_color",
         "text_align",
         "title_position",
+        "font_size",
     }
     content_changed = False
 
@@ -281,7 +284,8 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
         r2_key = f"stories/{story.id}/frame_{frame.id}.jpg"
         storage.upload_bytes(rendered_bytes, r2_key, content_type="image/jpeg")
         frame.rendered_storage_key = r2_key
-        frame.rendered_url = storage.public_url(r2_key)
+        # Cache-bust so browser fetches the new JPEG after re-render
+        frame.rendered_url = storage.public_url(r2_key) + f"?v={int(time.time())}"
 
     now = datetime.now(UTC).replace(tzinfo=None)
     story.status = "rendered"

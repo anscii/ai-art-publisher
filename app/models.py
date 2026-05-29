@@ -192,6 +192,9 @@ class StoryFrame(Base):
     text_color: Mapped[str] = mapped_column(String, default="#ffffff")
     # #ffffff | #0e0e10 | #f5e6d3 | #b8501f | #9ab2c7
 
+    font_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # None = use renderer default (64); range 32-120
+
     text_align: Mapped[str] = mapped_column(String, default="middle")
     # top | middle | bottom
 

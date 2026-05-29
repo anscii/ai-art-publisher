@@ -197,6 +197,7 @@ class PostResponse(BaseModel):
     variant_id: str | None = None
     post_url: str | None = None
     story_id: str | None = None
+    story_status: str | None = None
 
 
 class PostCreate(BaseModel):
@@ -253,6 +254,7 @@ class StoryFrameResponse(BaseModel):
     text_color: str
     text_align: str
     title_position: str
+    font_size: int | None
     rendered_url: str | None
     instagram_frame_id: str | None
     facebook_frame_id: str | None
@@ -283,6 +285,7 @@ class StoryFrameUpdate(BaseModel):
     text_color: str | None = None
     text_align: str | None = None
     title_position: str | None = None
+    font_size: int | None = None
 
 
 class StoryReorderRequest(BaseModel):
