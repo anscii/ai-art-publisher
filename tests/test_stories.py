@@ -702,3 +702,87 @@ def test_publish_skips_already_posted_frames(client, db, monkeypatch):
         f for f in result["frames"] if f.get("instagram_frame_id") == "already-posted-id"
     )
     assert pre_set_frame is not None
+
+
+# ── add_text_frame endpoint ───────────────────────────────────────────────────
+
+
+def test_add_text_frame_appends_frame(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+    story = _story(client, post["id"], [img_id])
+    story_id = story["id"]
+    original_count = len(story["frames"])
+
+    resp = client.post(f"/api/stories/{story_id}/frames")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data["frames"]) == original_count + 1
+    new_frame = data["frames"][-1]
+    assert new_frame["frame_type"] == "text"
+    assert new_frame["position"] == max(f["position"] for f in story["frames"]) + 1
+
+
+def test_add_text_frame_inherits_background(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+    story = _story(client, post["id"], [img_id])
+    story_id = story["id"]
+    last_frame = story["frames"][-1]
+
+    resp = client.post(f"/api/stories/{story_id}/frames")
+    assert resp.status_code == 200
+    new_frame = resp.json()["frames"][-1]
+    assert new_frame["background_mode"] == last_frame["background_mode"]
+    assert new_frame["source_image_id"] == last_frame["source_image_id"]
+
+
+def test_add_text_frame_splits_last_text_frame(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(
+        client, sid, [img_id], description="First sentence here. Second sentence here."
+    )
+    story = _story(client, post["id"], [img_id])
+    story_id = story["id"]
+    last_text_before = next(f for f in reversed(story["frames"]) if f["frame_type"] == "text")
+    original_text = last_text_before["text"] or ""
+
+    resp = client.post(f"/api/stories/{story_id}/frames")
+    assert resp.status_code == 200
+    frames = resp.json()["frames"]
+    updated_last_text = next(f for f in frames if f["id"] == last_text_before["id"])
+    new_frame = frames[-1]
+
+    # original text is split: neither part equals original, and together they cover it
+    assert updated_last_text["text"] != original_text
+    combined = (updated_last_text["text"] or "") + " " + (new_frame["text"] or "")
+    for word in original_text.split():
+        assert word in combined
+
+
+def test_add_text_frame_inherits_text_format(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+    story = _story(client, post["id"], [img_id])
+    story_id = story["id"]
+
+    # Set a distinctive font_size and text_color on the last frame before adding
+    last_frame_id = story["frames"][-1]["id"]
+    client.patch(
+        f"/api/story-frames/{last_frame_id}", json={"font_size": 48, "text_color": "#b8501f"}
+    )
+
+    resp = client.post(f"/api/stories/{story_id}/frames")
+    assert resp.status_code == 200
+    new_frame = resp.json()["frames"][-1]
+    assert new_frame["font_size"] == 48
+    assert new_frame["text_color"] == "#b8501f"
+
+
+def test_add_text_frame_404_on_unknown_story(client):
+    resp = client.post("/api/stories/nonexistent-id/frames")
+    assert resp.status_code == 404

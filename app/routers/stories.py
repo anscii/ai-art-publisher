@@ -74,6 +74,24 @@ def split_description(description: str, n: int) -> list[str]:
     return paragraphs
 
 
+def _split_text_half(text: str) -> tuple[str, str]:
+    """Split text into two roughly equal halves at a paragraph or sentence boundary."""
+    if not text or not text.strip():
+        return ("", "")
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paragraphs) >= 2:
+        mid = max(1, len(paragraphs) // 2)
+        return ("\n\n".join(paragraphs[:mid]), "\n\n".join(paragraphs[mid:]))
+
+    sentences = re.split(r"(?<=[.!?…])\s+", text.strip())
+    if len(sentences) >= 2:
+        mid = max(1, len(sentences) // 2)
+        return (" ".join(sentences[:mid]), " ".join(sentences[mid:]))
+
+    return (text.strip(), "")
+
+
 def _story_to_resp(story: Story) -> StoryResponse:
     return StoryResponse(
         id=story.id,
@@ -237,6 +255,52 @@ def reorder_frames(story_id: str, body: StoryReorderRequest, db: Session = Depen
         frame_map[frame_id].position = position
 
     story.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+    db.refresh(story)
+    return _story_to_resp(story)
+
+
+@router.post("/api/stories/{story_id}/frames", response_model=StoryResponse)
+def add_text_frame(story_id: str, db: Session = Depends(get_db)):
+    story = _get_story_or_404(story_id, db)
+
+    frames_sorted = sorted(story.frames, key=lambda f: f.position)
+    last_frame = frames_sorted[-1] if frames_sorted else None
+
+    background_mode = last_frame.background_mode if last_frame else "image_blur_dim"
+    source_image_id = last_frame.source_image_id if last_frame else None
+    text_color = last_frame.text_color if last_frame else "#ffffff"
+    font_size = last_frame.font_size if last_frame else None
+    new_position = (last_frame.position + 1) if last_frame else 0
+
+    last_text_frame = next((f for f in reversed(frames_sorted) if f.frame_type == "text"), None)
+    new_text: str | None = None
+    if last_text_frame and last_text_frame.text:
+        first_half, second_half = _split_text_half(last_text_frame.text)
+        last_text_frame.text = first_half or None
+        last_text_frame.rendered_url = None
+        last_text_frame.rendered_storage_key = None
+        new_text = second_half or None
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    new_frame = StoryFrame(
+        story_id=story.id,
+        position=new_position,
+        frame_type="text",
+        source_image_id=source_image_id,
+        background_mode=background_mode,
+        text_color=text_color,
+        font_size=font_size,
+        text=new_text,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(new_frame)
+
+    if story.status != "posted":
+        story.status = "draft"
+    story.updated_at = now
+
     db.commit()
     db.refresh(story)
     return _story_to_resp(story)
