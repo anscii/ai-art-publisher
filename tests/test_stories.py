@@ -506,6 +506,7 @@ def test_patch_frame_style_fields_clear_rendered(client, db):
         ("text_color", "#0e0e10"),
         ("text_align", "top"),
         ("font_size", 80),
+        ("text_halign", "left"),
     ]:
         # Re-set rendered URL before each patch
         text_frame.rendered_url = "https://r2.example.com/old.jpg"
@@ -576,6 +577,48 @@ def test_renderer_respects_font_size():
         text_align = "middle"
         title_position = "bottom"
         font_size = 96
+
+    renderer = StoryRenderer()
+    result = renderer.render_frame(_Frame(), None)
+    img = PILImage.open(io.BytesIO(result))
+    assert img.size == (1080, 1920)
+
+
+def test_renderer_respects_text_halign_left():
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "text"
+        title = None
+        text = "Left aligned"
+        background_mode = "solid_dark"
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        text_halign = "left"
+        font_size = None
+
+    renderer = StoryRenderer()
+    result = renderer.render_frame(_Frame(), None)
+    img = PILImage.open(io.BytesIO(result))
+    assert img.size == (1080, 1920)
+
+
+def test_renderer_respects_text_halign_right():
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "text"
+        title = None
+        text = "Right aligned"
+        background_mode = "solid_dark"
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        text_halign = "right"
+        font_size = None
 
     renderer = StoryRenderer()
     result = renderer.render_frame(_Frame(), None)

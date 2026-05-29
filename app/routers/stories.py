@@ -116,6 +116,7 @@ def _story_to_resp(story: Story) -> StoryResponse:
                 text_color=f.text_color,
                 text_align=f.text_align,
                 title_position=f.title_position,
+                text_halign=f.text_halign,
                 font_size=f.font_size,
                 rendered_url=f.rendered_url,
                 instagram_frame_id=f.instagram_frame_id,
@@ -220,6 +221,7 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
         "text_color",
         "text_align",
         "title_position",
+        "text_halign",
         "font_size",
     }
     changes = body.model_dump(exclude_unset=True)

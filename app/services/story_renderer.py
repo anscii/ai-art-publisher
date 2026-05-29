@@ -99,6 +99,7 @@ def _draw_text_block(
     top_y: int,
     pad_x: int,
     color: tuple[int, int, int] = (255, 255, 255),
+    halign: str = "center",
 ) -> None:
     draw = ImageDraw.Draw(canvas, "RGBA")
     lh = _line_height(font)
@@ -106,7 +107,12 @@ def _draw_text_block(
     for line in lines:
         if line.strip():
             lw = int(font.getbbox(line)[2])
-            x = max((_CANVAS_W - lw) // 2, pad_x)
+            if halign == "left":
+                x = pad_x
+            elif halign == "right":
+                x = max(pad_x, _CANVAS_W - pad_x - lw)
+            else:
+                x = max((_CANVAS_W - lw) // 2, pad_x)
             # shadow
             draw.text(
                 (x + _SHADOW_OFFSET[0], y + _SHADOW_OFFSET[1]),
@@ -172,7 +178,6 @@ class StoryRenderer:
         if frame.title:
             title_pos = getattr(frame, "title_position", "bottom")
             rgba = canvas.convert("RGBA")
-            draw = ImageDraw.Draw(rgba, "RGBA")
 
             # Bar height: at least 22% of frame, grows to fit wrapped title text
             title_lines = _wrap_text(frame.title, self._title_font, _CANVAS_W - 2 * _PAD_H)
@@ -192,17 +197,30 @@ class StoryRenderer:
                 "solid_dark": (0, 0, 0, 217),
                 "solid_light": (245, 240, 230, 235),
                 "solid_accent": (184, 80, 31, 235),
+                "image_blur_dim": (0, 0, 0, 120),
             }
             title_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
 
             # image_clean draws floating shadowed text only (no bar rectangle)
             if bg_mode != "image_clean":
                 bar_fill = _BAR_FILL.get(bg_mode, (0, 0, 0, 120))
-                draw.rectangle([(0, bar_top), (_CANVAS_W, bar_bot)], fill=bar_fill)
+                bar_overlay = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), (0, 0, 0, 0))
+                ImageDraw.Draw(bar_overlay).rectangle(
+                    [(0, bar_top), (_CANVAS_W, bar_bot)], fill=bar_fill
+                )
+                rgba = Image.alpha_composite(rgba, bar_overlay)
             center_y = (bar_top + bar_bot) // 2
             top_y = center_y - text_h // 2
 
-            _draw_text_block(rgba, title_lines, self._title_font, top_y, _PAD_H, title_color)
+            _draw_text_block(
+                rgba,
+                title_lines,
+                self._title_font,
+                top_y,
+                _PAD_H,
+                title_color,
+                halign=getattr(frame, "text_halign", "center") or "center",
+            )
             canvas = rgba.convert("RGB")
 
         return _to_jpeg(canvas)
@@ -228,6 +246,7 @@ class StoryRenderer:
 
         text_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
         text_align = getattr(frame, "text_align", "middle")
+        text_halign = getattr(frame, "text_halign", "center") or "center"
         usable_w = _CANVAS_W - 2 * _PAD_H
 
         if frame.title:
@@ -240,16 +259,26 @@ class StoryRenderer:
                 + _block_height(body_lines, self._body_font)
             )
             top_y = _text_top_y(total_h, text_align)
-            _draw_text_block(canvas, title_lines, self._title_font, top_y, _PAD_H, text_color)
+            _draw_text_block(
+                canvas, title_lines, self._title_font, top_y, _PAD_H, text_color, halign=text_halign
+            )
             title_h = _block_height(title_lines, self._title_font)
             _draw_text_block(
-                canvas, body_lines, self._body_font, top_y + title_h + gap, _PAD_H, text_color
+                canvas,
+                body_lines,
+                self._body_font,
+                top_y + title_h + gap,
+                _PAD_H,
+                text_color,
+                halign=text_halign,
             )
         else:
             lines = _wrap_text(frame.text or "", self._body_font, usable_w)
             total_h = _block_height(lines, self._body_font)
             top_y = _text_top_y(total_h, text_align)
-            _draw_text_block(canvas, lines, self._body_font, top_y, _PAD_H, text_color)
+            _draw_text_block(
+                canvas, lines, self._body_font, top_y, _PAD_H, text_color, halign=text_halign
+            )
 
         if is_last_text_frame:
             _draw_latest_label(canvas, text_color)

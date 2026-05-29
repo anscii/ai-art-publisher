@@ -201,6 +201,9 @@ class StoryFrame(Base):
     title_position: Mapped[str] = mapped_column(String, default="bottom")
     # top | bottom
 
+    text_halign: Mapped[str] = mapped_column(String, default="center")
+    # left | center | right
+
     rendered_url: Mapped[str | None] = mapped_column(String, nullable=True)
     rendered_storage_key: Mapped[str | None] = mapped_column(String, nullable=True)
 

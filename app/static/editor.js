@@ -2869,8 +2869,8 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
       const barPos = 'se-frame-bar--' + pos;
       const PREVIEW_RATIO = 0.37;
       const sz = frame.font_size || 64;
-      const titleStyle = 'color:' + (frame.text_color || '#ffffff') + ';font-size:' + Math.round(sz * 1.25 * PREVIEW_RATIO) + 'px';
-      const BAR_BG = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)' };
+      const titleStyle = 'color:' + (frame.text_color || '#ffffff') + ';font-size:' + Math.round(sz * 1.25 * PREVIEW_RATIO) + 'px;text-align:' + (frame.text_halign || 'center');
+      const BAR_BG = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)', image_blur_dim: 'rgba(0,0,0,0.47)' };
       const bgMode = frame.background_mode || 'solid_dark';
       if (bgMode === 'image_clean') {
         // floating title — no bar, absolute text with shadow
@@ -2899,7 +2899,7 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
     if (frame.text || frame.title) {
       const ALIGN_MAP = { top: 'se-frame-text-block--top', middle: 'se-frame-text-block--middle', bottom: 'se-frame-text-block--bottom' };
       const alignCls = ALIGN_MAP[frame.text_align || 'middle'] || 'se-frame-text-block--middle';
-      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls });
+      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls, style: 'text-align:' + (frame.text_halign || 'center') });
       const color = frame.text_color || '#ffffff';
       const pRatio = 0.37;
       const pSz = frame.font_size || 64;
@@ -2938,7 +2938,7 @@ function _buildRail(body, frame, imgMap) {
       panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Background'));
       const opts = frame.frame_type === 'text'
         ? [['image_clean','Image'],['image_blur_dim','Blurred'],['solid_dark','Dark'],['solid_light','Light'],['solid_accent','Accent']]
-        : [['solid_dark','Dark bar'],['solid_light','Light bar'],['solid_accent','Accent bar'],['image_clean','Floating']];
+        : [['solid_dark','Dark bar'],['solid_light','Light bar'],['solid_accent','Accent bar'],['image_blur_dim','Dim bar'],['image_clean','Floating']];
       opts.forEach(([val, lbl]) => {
         const chip = h('span', { cls: 'se-rail__pick-chip' });
         _setBgChipStyle(chip, val, imgMap && imgMap[frame.source_image_id]);
@@ -2992,6 +2992,38 @@ function _buildRail(body, frame, imgMap) {
       document.addEventListener('click', closeOnOutside);
     });
     rail.appendChild(h('div', { cls: 'se-rail__pop' }, alignBtn));
+  }
+
+  // H-Align button — horizontal text alignment (left / center / right)
+  if (frame.frame_type === 'text' || frame.title) {
+    const halignBtn = h('button', { cls: 'se-rail__btn' },
+      h('span', { style: 'font-size:14px;line-height:1' }, '⇔'),
+      document.createTextNode('H-Align')
+    );
+    halignBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'H-Align'));
+      const opts = [['left','Left'],['center','Center'],['right','Right']];
+      const current = frame.text_halign || 'center';
+      opts.forEach(([val, lbl]) => {
+        const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));
+        pick.addEventListener('click', () => {
+          closePanel();
+          frame.text_halign = val;
+          frame.rendered_url = null;
+          _markFrameDirty(frame.id);
+          const phone = halignBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+        });
+        panel.appendChild(pick);
+      });
+      halignBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, halignBtn));
   }
 
   return rail;
