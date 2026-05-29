@@ -254,6 +254,12 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
     if not enabled_frames:
         raise HTTPException(status_code=400, detail="No enabled frames to render")
 
+    last_text_frame_id: str | None = None
+    for _f in reversed(enabled_frames):
+        if _f.frame_type == "text":
+            last_text_frame_id = _f.id
+            break
+
     renderer = StoryRenderer()
 
     # Batch-load all source images in one query (avoids N+1 PK lookups)
@@ -282,7 +288,11 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
             image_bytes = bytes_by_key[key]
 
         try:
-            rendered_bytes = renderer.render_frame(frame, image_bytes)
+            rendered_bytes = renderer.render_frame(
+                frame,
+                image_bytes,
+                is_last_text_frame=(frame.id == last_text_frame_id),
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=500, detail=f"Render failed for frame {frame.id}: {exc}"

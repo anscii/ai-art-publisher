@@ -606,6 +606,70 @@ def test_renderer_solid_accent_background():
     assert r_avg > 100  # orange-dominant (red channel high)
 
 
+def test_latest_post_label_changes_bottom_right():
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "text"
+        title = None
+        text = "Closing thought."
+        background_mode = "solid_dark"
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        font_size = None
+
+    renderer = StoryRenderer()
+    without_label = renderer.render_frame(_Frame(), None, is_last_text_frame=False)
+    with_label = renderer.render_frame(_Frame(), None, is_last_text_frame=True)
+
+    img_no = PILImage.open(io.BytesIO(without_label))
+    img_yes = PILImage.open(io.BytesIO(with_label))
+
+    crop_box = (780, 1780, 1080, 1880)
+    assert list(img_no.crop(crop_box).getdata()) != list(img_yes.crop(crop_box).getdata())
+
+
+def test_latest_post_label_ignored_for_image_frame():
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "image"
+        title = None
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        font_size = None
+        background_mode = "solid_dark"
+
+    renderer = StoryRenderer()
+    assert renderer.render_frame(_Frame(), None, is_last_text_frame=False) == renderer.render_frame(
+        _Frame(), None, is_last_text_frame=True
+    )
+
+
+def test_latest_post_label_default_is_false():
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "text"
+        title = None
+        text = "Default check."
+        background_mode = "solid_dark"
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        font_size = None
+
+    renderer = StoryRenderer()
+    assert renderer.render_frame(_Frame(), None) == renderer.render_frame(
+        _Frame(), None, is_last_text_frame=False
+    )
+
+
 # ── Publish idempotent retry ──────────────────────────────────────────────────
 
 

@@ -22,6 +22,8 @@ _SHADOW_OFFSET = (2, 3)
 _SHADOW_OPACITY = 160  # out of 255
 _DIM_OPACITY = 140  # dark overlay (0-255)
 _BLUR_RADIUS = 20
+_LABEL_SIZE = 26
+_LABEL_TEXT = "↘ latest post"
 
 _BG_COLORS = {
     "solid_dark": (18, 18, 18),
@@ -116,6 +118,22 @@ def _draw_text_block(
         y += lh
 
 
+def _draw_latest_label(canvas: Image.Image, color: tuple[int, int, int]) -> None:
+    font = _load_font(_FONT_BODY, _LABEL_SIZE)
+    bbox = font.getbbox(_LABEL_TEXT)
+    text_w = bbox[2] - bbox[0]
+    x = _CANVAS_W - _PAD_H - text_w
+    y = _CANVAS_H - 120
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.text(
+        (x + _SHADOW_OFFSET[0], y + _SHADOW_OFFSET[1]),
+        _LABEL_TEXT,
+        font=font,
+        fill=(0, 0, 0, _SHADOW_OPACITY),
+    )
+    draw.text((x, y), _LABEL_TEXT, font=font, fill=(*color, 255))
+
+
 def _text_top_y(total_h: int, align: str) -> int:
     if align == "top":
         return _SAFE_V
@@ -125,7 +143,9 @@ def _text_top_y(total_h: int, align: str) -> int:
 
 
 class StoryRenderer:
-    def render_frame(self, frame, image_bytes: bytes | None) -> bytes:
+    def render_frame(
+        self, frame, image_bytes: bytes | None, *, is_last_text_frame: bool = False
+    ) -> bytes:
         # Per-frame font size override; falls back to global defaults.
         # Fonts come from the module-level lru_cache, so this is cheap to call per frame.
         fs = getattr(frame, "font_size", None)
@@ -135,7 +155,7 @@ class StoryRenderer:
         self._title_font = _load_font(_FONT_TITLE, title_size)
         if frame.frame_type == "image":
             return self._render_image_frame(frame, image_bytes)
-        return self._render_text_frame(frame, image_bytes)
+        return self._render_text_frame(frame, image_bytes, is_last_text_frame=is_last_text_frame)
 
     def _base_image(self, image_bytes: bytes | None) -> Image.Image:
         if image_bytes:
@@ -187,7 +207,9 @@ class StoryRenderer:
 
         return _to_jpeg(canvas)
 
-    def _render_text_frame(self, frame, image_bytes: bytes | None) -> bytes:
+    def _render_text_frame(
+        self, frame, image_bytes: bytes | None, *, is_last_text_frame: bool = False
+    ) -> bytes:
         mode = getattr(frame, "background_mode", "image_blur_dim")
 
         if mode in _BG_COLORS:
@@ -229,6 +251,8 @@ class StoryRenderer:
             top_y = _text_top_y(total_h, text_align)
             _draw_text_block(canvas, lines, self._body_font, top_y, _PAD_H, text_color)
 
+        if is_last_text_frame:
+            _draw_latest_label(canvas, text_color)
         return _to_jpeg(canvas.convert("RGB"))
 
 
