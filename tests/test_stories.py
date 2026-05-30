@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from PIL import Image as PILImage
 
 from app.config import AppConfig
-from app.models import Post, Story
+from app.models import AppSettings, Post, Story
 from app.routers.stories import split_description
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -407,10 +407,8 @@ def test_fake_publish_no_real_api_called(client, db, monkeypatch):
     story_id = _setup_rendered_story(client, db, monkeypatch)
 
     with patch("app.routers.stories.InstagramService") as mock_ig:
-        with patch("app.routers.stories.FacebookService") as mock_fb:
-            client.post(f"/api/stories/{story_id}/publish")
-            mock_ig.assert_not_called()
-            mock_fb.assert_not_called()
+        client.post(f"/api/stories/{story_id}/publish")
+        mock_ig.assert_not_called()
 
 
 def test_publish_requires_rendered_frames(client, db, monkeypatch):
@@ -479,6 +477,12 @@ def test_story_facebook_posted_true_after_fake_publish(client, db, monkeypatch):
     monkeypatch.setattr(AppConfig, "fake_posting", True)
     story_id = _setup_rendered_story(client, db, monkeypatch)
 
+    # Configure a Facebook page so the cross-post path is triggered
+    settings = db.get(AppSettings, 1) or AppSettings(id=1)
+    settings.facebook_page_id = "123456789"
+    db.add(settings)
+    db.commit()
+
     client.post(f"/api/stories/{story_id}/publish")
 
     db.expire_all()
@@ -486,7 +490,7 @@ def test_story_facebook_posted_true_after_fake_publish(client, db, monkeypatch):
     sid = db.get(Post, story.post_id).series_id
     detail = client.get(f"/api/series/{sid}").json()
     ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
-    # fake mode posts to both IG and FB → facebook_result_json is set
+    # FB cross-post via IG API → facebook_result_json is set
     assert ig_post["story_facebook_posted"] is True
 
 
