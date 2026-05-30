@@ -350,7 +350,9 @@ async function loadSeriesDetail(id, { silent = false } = {}) {
     const s = await apiFetch('GET', '/api/series/' + id);
     if (token !== _loadDetailToken) return;
     App.currentSeries = s;
+    const savedScroll = silent ? panel.scrollTop : 0;
     renderEditor(s);
+    if (silent) panel.scrollTop = savedScroll;
     // Resume poller if activity is in progress (e.g., user navigated away and back)
     if (!_sendingPollerId) {
       const livePosts = (s.posts || []).filter(p => !p.deleted_at);

@@ -18,13 +18,18 @@ class FacebookService:
             resp = client.post(
                 f"{BASE}/{self._page_id}/photo_stories",
                 params={"access_token": self._token},
-                json={"file_url": image_url},
+                json={"url": image_url},
             )
             d = resp.json()
             if "id" not in d:
+                err = d.get("error", {})
                 return {
                     "ok": False,
-                    "description": d.get("error", {}).get("message", "Facebook story post failed"),
+                    "description": err.get("message", "Facebook story post failed"),
+                    "error_code": err.get("code"),
+                    "error_subcode": err.get("error_subcode"),
+                    "error_type": err.get("type"),
+                    "raw": d,
                 }
         return {"ok": True, "media_id": d["id"]}
 
