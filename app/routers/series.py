@@ -72,7 +72,10 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
     variants = sorted(s.ai_variants, key=lambda v: v.generated_at, reverse=True)
     active_posts = db.scalars(
         select(Post)
-        .options(selectinload(Post.post_images).selectinload(PostImage.image))
+        .options(
+            selectinload(Post.post_images).selectinload(PostImage.image),
+            selectinload(Post.story),
+        )
         .where(Post.series_id == s.id, Post.deleted_at.is_(None))
         .order_by(Post.created_at)
     ).all()

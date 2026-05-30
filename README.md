@@ -81,7 +81,8 @@ So I built a tool that:
 - **Multi-provider AI generation** — Anthropic Claude, OpenAI GPT, Google Gemini, DeepSeek; switch per-request, track cost per generation
 - **Structured caption output** — each AI variant includes English and Russian titles/descriptions, Instagram hashtags, SEO phrase layer, Pinterest title/description/board, Telegram hashtags, and archive classification keywords
 - **Variant selection** — generate 3 variants per series, compare them side-by-side, pick one as canonical, edit freely
-- **Multi-platform posting** — Telegram (media group), Instagram (carousel), Pinterest (pin), Facebook (page post)
+- **Multi-platform posting** — Telegram (media group), Instagram (carousel + Stories), Pinterest (pin), Facebook (page post + Stories)
+- **Instagram Stories** — create a story from a post's images; editor generates paired image/text frames, renders them to 1080×1920 JPEG via PIL with font controls, background modes (blurred, solid, accent, floating), and text positioning; publish sends each frame to IG Stories and optionally mirrors to Facebook
 - **Scheduled posting** — set a date/time; APScheduler fires even when the browser is closed
 - **Soft delete with Trash** — series and images go to Trash before permanent deletion; fully restorable
 - **Image status workflow** — `pending → queued → posted / skip`; only queued images are sent in a post
@@ -95,7 +96,7 @@ So I built a tool that:
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2 (SQLite + WAL) |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2 (SQLite + WAL), Pillow (story rendering) |
 | Frontend | Vanilla JS (ES2022), Bootstrap 5.3, SortableJS |
 | Image storage | Cloudflare R2 (S3-compatible, public bucket) |
 | Hosting | Fly.io (256 MB VM, persistent volume for SQLite) |
@@ -162,7 +163,7 @@ So I built a tool that:
 app/
   main.py          — FastAPI app, router wiring, session auth middleware, landing page, lifespan
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations()
-  models.py        — Collection, Series, Image, AIVariant, Post, PostImage, AppSettings ORM models
+  models.py        — Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
   schemas.py       — Pydantic request/response types
   config.py        — AppConfig (DATABASE_URL, DATA_DIR, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, FAKE_POSTING, FAKE_AI, etc.)
   scheduler.py     — APScheduler background job (hourly, fires due scheduled posts)
@@ -171,6 +172,7 @@ app/
     images.py      — upload, register, reorder, move, PATCH status, DELETE (soft)
     generate.py    — AI description generation (multi-provider, variant storage)
     posts.py       — create/execute posts to Telegram/Instagram/Pinterest/Facebook
+    stories.py     — Story + StoryFrame CRUD, /render (PIL), /publish (IG Stories + FB)
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
@@ -180,9 +182,10 @@ app/
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
+    story_renderer.py — PIL-based 1080×1920 JPEG renderer for story frames
     telegram.py    — TelegramService.post_media_group()
-    instagram.py   — InstagramService.post() (single + carousel)
-    facebook.py    — FacebookService.post()
+    instagram.py   — InstagramService.post() (single + carousel) + post_story()
+    facebook.py    — FacebookService.post() + post_story()
     pinterest.py   — PinterestService.post_pin()
   static/
     aap/           — AAP design system (tokens.css + app.css)
@@ -203,6 +206,7 @@ tests/             — pytest unit tests + Playwright E2E tests
 Collection (1) ──── (N) Series (1) ──── (N) Image
                                   (1) ──── (N) AIVariant
                                   (1) ──── (N) Post (1) ──── (N) PostImage
+                                                    (1) ──── (0..1) Story (1) ──── (N) StoryFrame
 AppSettings (singleton, id=1)
 ```
 

@@ -13,6 +13,21 @@ class FacebookService:
             return self._post_single(image_urls[0], caption)
         return self._post_album(image_urls[:10], caption)
 
+    def post_story(self, image_url: str) -> dict:
+        with httpx.Client(timeout=60) as client:
+            resp = client.post(
+                f"{BASE}/{self._page_id}/photo_stories",
+                params={"access_token": self._token},
+                json={"url": image_url},
+            )
+            d = resp.json()
+            if "id" not in d:
+                return {
+                    "ok": False,
+                    "description": d.get("error", {}).get("message", "Facebook story post failed"),
+                }
+        return {"ok": True, "media_id": d["id"]}
+
     def _post_single(self, image_url: str, caption: str) -> dict:
         with httpx.Client(timeout=60) as client:
             resp = client.post(

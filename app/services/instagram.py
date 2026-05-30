@@ -49,36 +49,52 @@ class InstagramService:
             logger.warning("Failed to fetch Instagram permalink for %s: %s", media_id, exc)
             return None
 
+    def _create_and_publish(
+        self,
+        client: httpx.Client,
+        create_json: dict,
+        *,
+        create_err: str = "Create failed",
+        publish_err: str = "Publish failed",
+    ) -> dict:
+        """Create a single media container, wait for it, then publish. Returns ok + media_id."""
+        resp = client.post(
+            f"{BASE}/{self._user_id}/media",
+            params={"access_token": self._token},
+            json=create_json,
+        )
+        data = resp.json()
+        if "id" not in data:
+            return {"ok": False, "description": data.get("error", {}).get("message", create_err)}
+        err = self._wait_for_container(client, data["id"])
+        if err:
+            return {"ok": False, "description": err}
+        resp2 = client.post(
+            f"{BASE}/{self._user_id}/media_publish",
+            params={"access_token": self._token},
+            json={"creation_id": data["id"]},
+        )
+        data2 = resp2.json()
+        if "id" not in data2:
+            return {"ok": False, "description": data2.get("error", {}).get("message", publish_err)}
+        return {"ok": True, "media_id": data2["id"]}
+
     def _post_single(self, image_url: str, caption: str) -> dict:
-        permalink: str | None = None
         with httpx.Client(timeout=60) as client:
-            resp = client.post(
-                f"{BASE}/{self._user_id}/media",
-                params={"access_token": self._token},
-                json={"image_url": image_url, "caption": caption},
+            result = self._create_and_publish(client, {"image_url": image_url, "caption": caption})
+            if not result.get("ok"):
+                return result
+            result["permalink"] = self._fetch_permalink(client, str(result["media_id"]))
+            return result
+
+    def post_story(self, image_url: str) -> dict:
+        with httpx.Client(timeout=60) as client:
+            return self._create_and_publish(
+                client,
+                {"image_url": image_url, "media_type": "STORIES"},
+                create_err="Story container create failed",
+                publish_err="Story publish failed",
             )
-            data = resp.json()
-            if "id" not in data:
-                return {
-                    "ok": False,
-                    "description": data.get("error", {}).get("message", "Create failed"),
-                }
-            err = self._wait_for_container(client, data["id"])
-            if err:
-                return {"ok": False, "description": err}
-            resp2 = client.post(
-                f"{BASE}/{self._user_id}/media_publish",
-                params={"access_token": self._token},
-                json={"creation_id": data["id"]},
-            )
-            data2 = resp2.json()
-            if "id" not in data2:
-                return {
-                    "ok": False,
-                    "description": data2.get("error", {}).get("message", "Publish failed"),
-                }
-            permalink = self._fetch_permalink(client, data2["id"])
-        return {"ok": True, "media_id": data2["id"], "permalink": permalink}
 
     def _post_carousel(self, image_urls: list[str], caption: str) -> dict:
         permalink: str | None = None

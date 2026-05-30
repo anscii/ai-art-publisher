@@ -6,7 +6,10 @@
 - Branch prefix must be `feat/` or `feature/` — never use Linear's auto-suggested branch name (it has a user-specific prefix like `murkycat/`).
 - Always use `origin/<branch>` refs (not local branch names) in `git log`/`git diff` for PR descriptions and release notes — local branches may be stale.
 - Run `make format` before every `git commit` — ruff-format pre-commit hook will fail and modify files mid-commit if skipped. After running `make format`, re-stage any modified files (`git add`) before committing — ruff modifies files in-place, leaving format changes unstaged.
+- The pre-commit hook runs **both** ruff-format and ruff-lint; either can auto-modify files and fail the commit. If commit fails with hook-modified files, `git add -A` and retry the commit.
 - **Before every `git push` and before creating any PR**: run `make format && make types && make test-back` (and `make test-front` if any JS changed). Never push or open a PR on a failing or unchecked suite.
+- **Verify current branch** (`git branch --show-current`) before every commit — never commit directly to `develop` or `master`.
+- Release PRs (`develop` → `master`) use `gh pr merge --merge` — never `--squash`. Squash is only for feature → `develop`.
 
 ## Running tests
 
@@ -31,7 +34,7 @@ E2E tests spin up a real `uvicorn` subprocess on port 18765 with `FAKE_POSTING=t
 app/
   main.py          — FastAPI app, router wiring, static files, lifespan, session auth middleware, landing page (cached at startup)
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations(), settings bootstrap
-  models.py        — Collection, Series, Image, AIVariant, Post, PostImage, AppSettings ORM models
+  models.py        — Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
   schemas.py       — Pydantic request/response types incl. TrashSeries/TrashImage/TrashResponse
   config.py        — AppConfig (DATABASE_URL, DATA_DIR, DEBUG, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, SCHEDULER_SECRET, BACKUP_TOKEN, FAKE_POSTING, FAKE_AI, LOCAL_STORAGE, etc.)
   routers/
@@ -43,19 +46,21 @@ app/
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
+    stories.py     — Story + StoryFrame CRUD, /render (PIL image generation), /publish (IG Stories + FB)
     landing.py     — public API: RecentPostCard + LandingRecentResponse for landing dispatch grid
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
+    story_renderer.py — PIL-based 1080×1920 JPEG renderer; fonts loaded via @lru_cache (process-wide)
     telegram.py    — TelegramService.post_media_group()
-    instagram.py   — InstagramService.post() (single + carousel)
+    instagram.py   — InstagramService.post() (single + carousel) + post_story()
   scheduler.py     — APScheduler background job (runs hourly, posts scheduled series)
   static/
     aap/           — AAP design system: tokens.css (CSS vars) + app.css (component styles)
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 21 migrations (001–021); latest: 021_post_url.py (Post.post_url field)
+  versions/        — 26 migrations (001–026); latest: 026_story_frame_font_size.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -77,6 +82,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - **Alembic migrations** — `scripts/migrate.py` is the entry point used by both `make migrate` and fly.toml `release_command`. On fresh installs it runs `create_all` + `stamp head`; on existing DBs it runs `upgrade head`. `_run_migrations()` in `database.py` is skipped for in-memory (test) DBs.
 - **Soft delete** — `Series.deleted_at` and `Image.deleted_at` (nullable DateTime). Soft-deleted items are hidden from all normal views and only visible in the Trash panel (`GET /api/trash`). Hard delete only happens from Trash (permanent delete / empty trash).
 - **Image status** — `Image.status` field: `pending` (default), `queued` (selected for next post), `posted` (sent), `skip` (excluded, rendered greyed-out). Posting routes only send `queued` + non-deleted images. After a successful post, `_after_post_success()` marks queued images as `posted` and sets series to `posted` or `partial_posted`.
+- **Stories** — a `Story` belongs to a `Post` (IG-only). Each story has N `StoryFrame` rows (frame_type: `image` or `text`, position-ordered). The render endpoint (`POST /api/stories/{id}/render`) uses `StoryRenderer` (PIL, 1080×1920) to generate JPEGs and upload them to R2. The publish endpoint posts each rendered frame as an IG Story (and mirrors to Facebook if configured). Story status: `draft → rendered → posted / failed`. Frame-level fields: `background_mode`, `text_color`, `text_align`/`title_position`, `font_size`; content changes auto-clear `rendered_url` to force re-render.
 - **Session cookie auth** — middleware in `main.py`. When `AUTH_USERNAME` + `AUTH_PASSWORD` set: unauthenticated `GET /` serves the landing page (HTML cached at startup); all other paths return 401. Cookie is HMAC-signed (`SESSION_SECRET`), 30-day TTL. Basic Auth header accepted as fallback for API/curl. Public paths bypassed: `/health`, `/internal/*`, `/auth/login`, `/auth/logout`, `/static/landing/`. Disabled (no-op) when env vars unset.
 
 ## Test fixtures
