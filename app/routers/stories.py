@@ -389,19 +389,13 @@ def _run_publish(story_id: str, db: Session) -> None:
 
     enabled_frames = [f for f in story.frames if f.is_enabled]
 
-    # Clear stale FB result so retries don't report a previously-succeeded
-    # FB post as successful when the current attempt never reached Facebook.
-    story.facebook_result_json = None
-
     fake = get_config().fake_posting
     ig_svc: InstagramService | None = None
-    fb_page_id: str | None = settings.facebook_page_id or None
 
     if not fake:
         ig_svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
 
     ig_results: list[dict[str, object]] = []
-    fb_results: list[dict[str, object]] = []
 
     for idx, frame in enumerate(enabled_frames):
         rendered_url = frame.rendered_url
@@ -414,26 +408,14 @@ def _run_publish(story_id: str, db: Session) -> None:
             db.commit()
             return
 
-        # Instagram — skip frames already posted (idempotent retry).
-        # FB cross-posting is atomic with IG publish, so treat it as done too.
-        already_posted = bool(frame.instagram_frame_id)
-        if already_posted:
+        if frame.instagram_frame_id:
             ig_result: dict[str, object] = {"ok": True, "media_id": frame.instagram_frame_id}
-            if fb_page_id:
-                fb_results.append({"ok": True, "via_ig_cross_post": True, "idempotent": True})
         elif fake:
-            ig_result = {
-                "ok": True,
-                "fake": True,
-                "media_id": f"fake-story-{frame.id}",
-            }
+            ig_result = {"ok": True, "fake": True, "media_id": f"fake-story-{frame.id}"}
             logger.info("[FAKE] Instagram story | story=%s | frame=%s", story.id, frame.id)
-            if fb_page_id:
-                fb_results.append({"ok": True, "fake": True, "via_ig_cross_post": True})
-                logger.info("[FAKE] Facebook cross-post | story=%s | frame=%s", story.id, frame.id)
         else:
             assert ig_svc is not None
-            ig_result = ig_svc.post_story(rendered_url, fb_page_id=fb_page_id)
+            ig_result = ig_svc.post_story(rendered_url)
 
         if not ig_result.get("ok"):
             story.status = "failed"
@@ -446,12 +428,6 @@ def _run_publish(story_id: str, db: Session) -> None:
         frame.instagram_frame_id = str(ig_result["media_id"]) if ig_result.get("media_id") else None
         ig_results.append(ig_result)
 
-        # Record successful FB cross-post for real (non-idempotent, non-fake) IG posts
-        if fb_page_id and not fake and not already_posted:
-            fb_results.append({"ok": True, "via_ig_cross_post": True})
-
-        # Delay between frames so IG can finalise the first story segment
-        # before accepting media_publish for the next one.
         if not fake and idx < len(enabled_frames) - 1:
             time.sleep(3)
 
@@ -461,8 +437,6 @@ def _run_publish(story_id: str, db: Session) -> None:
     story.updated_at = now
     story.error_message = None
     story.instagram_result_json = json.dumps(ig_results)
-    if fb_results:
-        story.facebook_result_json = json.dumps(fb_results)
     db.commit()
 
 

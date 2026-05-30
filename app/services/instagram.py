@@ -87,10 +87,8 @@ class InstagramService:
             result["permalink"] = self._fetch_permalink(client, str(result["media_id"]))
             return result
 
-    def post_story(self, image_url: str, fb_page_id: str | None = None) -> dict:
+    def post_story(self, image_url: str) -> dict:
         create_json: dict[str, object] = {"image_url": image_url, "media_type": "STORIES"}
-        if fb_page_id:
-            create_json["cross_post_to_fb_page_id"] = fb_page_id
         with httpx.Client(timeout=60) as client:
             return self._create_and_publish(
                 client,
