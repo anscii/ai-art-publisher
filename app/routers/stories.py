@@ -464,10 +464,14 @@ def _run_publish(story_id: str, db: Session) -> None:
                     fb_results.append(fb_result)
                 elif not fb_result.get("ok"):
                     logger.error(
-                        "Facebook story frame failed (story=%s frame=%s): %s",
+                        "Facebook story frame failed (story=%s frame=%s): %s | code=%s subcode=%s type=%s raw=%s",
                         story.id,
                         frame.id,
                         fb_result.get("description"),
+                        fb_result.get("error_code"),
+                        fb_result.get("error_subcode"),
+                        fb_result.get("error_type"),
+                        fb_result.get("raw"),
                     )
             except Exception as exc:
                 logger.error(
