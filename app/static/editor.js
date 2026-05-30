@@ -2794,8 +2794,12 @@ function _renderStoryEditorV2(body) {
     }, 'All');
     applyAllBtn.addEventListener('click', () => {
       const sz = parseInt(slider.value);
+      const color = frame.text_color || null;
+      const halign = frame.text_halign || null;
       frames.filter(f => f.frame_type === 'text').forEach(f => {
         f.font_size = sz;
+        if (color) f.text_color = color;
+        if (halign) f.text_halign = halign;
         f.rendered_url = null;
         _markFrameDirty(f.id);
       });
@@ -2888,9 +2892,11 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
     }
   } else {
     const mode = frame.background_mode || 'image_blur_dim';
-    const SOLID = { solid_dark: '#121212', solid_light: '#f0ede7', solid_accent: '#b8501f' };
-    if (SOLID[mode]) {
-      phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:' + SOLID[mode] }));
+    const SOLID_OVERLAY = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)' };
+    if (SOLID_OVERLAY[mode]) {
+      if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
+      else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+      phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:' + SOLID_OVERLAY[mode] }));
     } else {
       if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg' + (mode !== 'image_clean' ? ' se-frame-bg--blur' : ''), style: 'background-image:url(' + bgUrl + ')' }));
       else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));

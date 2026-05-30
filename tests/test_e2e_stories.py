@@ -260,3 +260,37 @@ def test_format_controls_do_not_crash(page, live_server, tmp_path):
     page.wait_for_timeout(300)
 
     assert js_errors == [], f"JS errors after using format controls: {js_errors}"
+
+
+def test_apply_all_propagates_color_and_halign(page, live_server, tmp_path):
+    """'All' button must copy font size, text_color, and text_halign to all text frames."""
+    _create_series_with_instagram_post(page, live_server, tmp_path, img_count=2)
+    _open_story_modal(page)
+
+    js_errors = []
+    page.on("pageerror", lambda e: js_errors.append(str(e)))
+
+    # Generate story (2 images → 4 frames: 2 image + 2 text)
+    page.locator("[data-story-generate-btn]").wait_for(timeout=5000)
+    page.locator("[data-story-generate-btn]").click()
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+
+    # Navigate to first text frame (chip index 1)
+    page.locator(".se-strip__chip").nth(1).click()
+    page.locator("[data-story-frame-text]").wait_for(timeout=5000)
+
+    # Pick a non-default text color via colorbar
+    page.locator(".se-swatch").nth(1).click()
+    page.wait_for_timeout(200)
+
+    # Pick a non-default H-Align
+    page.locator(".se-rail__btn").filter(has_text="H-Align").click()
+    page.locator(".se-rail__pick").filter(has_text="Left").wait_for(timeout=3000)
+    page.locator(".se-rail__pick").filter(has_text="Left").click()
+    page.wait_for_timeout(200)
+
+    # Click "All" to propagate size, color, halign to all text frames
+    page.locator("button[title='Apply this size to all frames']").click()
+    page.wait_for_timeout(300)
+
+    assert js_errors == [], f"JS errors after clicking All: {js_errors}"
