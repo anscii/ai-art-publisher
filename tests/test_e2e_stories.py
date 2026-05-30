@@ -200,7 +200,7 @@ def test_reset_button_reverts_unsaved_edits(page, live_server, tmp_path):
 
     textarea.fill("Completely different text that should vanish.")
 
-    page.get_by_role("button", name="Reset").click()
+    page.locator("button[title='Discard unsaved changes and revert to last saved state']").click()
     page.locator("[data-story-frames]").wait_for(timeout=8000)
 
     page.locator(".se-strip__chip").nth(1).click()
