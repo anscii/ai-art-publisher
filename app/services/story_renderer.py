@@ -25,10 +25,10 @@ _BLUR_RADIUS = 20
 _LABEL_SIZE = 36
 _LABEL_TEXT = "↘ latest post"
 
-_BG_COLORS = {
-    "solid_dark": (18, 18, 18),
-    "solid_light": (240, 235, 225),
-    "solid_accent": (184, 80, 31),
+_SOLID_OVERLAY: dict[str, tuple[int, int, int, int]] = {
+    "solid_dark": (0, 0, 0, 217),
+    "solid_light": (245, 240, 230, 235),
+    "solid_accent": (184, 80, 31, 235),
 }
 
 
@@ -230,19 +230,17 @@ class StoryRenderer:
     ) -> bytes:
         mode = getattr(frame, "background_mode", "image_blur_dim")
 
-        if mode in _BG_COLORS:
-            canvas: Image.Image = Image.new("RGB", (_CANVAS_W, _CANVAS_H), _BG_COLORS[mode])
-        else:
-            bg = self._base_image(image_bytes)
-            if mode != "image_clean":
-                bg = bg.filter(ImageFilter.GaussianBlur(radius=_BLUR_RADIUS))
-            canvas = bg
-
-        canvas = canvas.convert("RGBA")
-
+        bg = self._base_image(image_bytes)
         if mode == "image_blur_dim":
-            overlay = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), (0, 0, 0, _DIM_OPACITY))
+            bg = bg.filter(ImageFilter.GaussianBlur(radius=_BLUR_RADIUS))
+        canvas: Image.Image = bg.convert("RGBA")
+
+        if mode in _SOLID_OVERLAY:
+            overlay = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), _SOLID_OVERLAY[mode])
             canvas = Image.alpha_composite(canvas, overlay)
+        elif mode == "image_blur_dim":
+            dim = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), (0, 0, 0, _DIM_OPACITY))
+            canvas = Image.alpha_composite(canvas, dim)
 
         text_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
         text_align = getattr(frame, "text_align", "middle")
