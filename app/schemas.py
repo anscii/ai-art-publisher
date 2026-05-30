@@ -196,6 +196,8 @@ class PostResponse(BaseModel):
     seo: str | None = None
     variant_id: str | None = None
     post_url: str | None = None
+    story_id: str | None = None
+    story_status: str | None = None
 
 
 class PostCreate(BaseModel):
@@ -234,6 +236,62 @@ class PostUpdate(BaseModel):
 
 class PostScheduleRequest(BaseModel):
     datetime_utc: datetime
+
+
+# ── Stories ───────────────────────────────────────────────────────────────────
+
+
+class StoryFrameResponse(BaseModel):
+    id: str
+    story_id: str
+    position: int
+    frame_type: str
+    source_image_id: str | None
+    title: str | None
+    text: str | None
+    is_enabled: bool
+    background_mode: str
+    text_color: str
+    text_align: str
+    title_position: str
+    text_halign: str
+    font_size: int | None
+    rendered_url: str | None
+    instagram_frame_id: str | None
+    facebook_frame_id: str | None
+
+
+class StoryResponse(BaseModel):
+    id: str
+    post_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    rendered_at: datetime | None
+    posted_at: datetime | None
+    error_message: str | None
+    frames: list[StoryFrameResponse]
+
+
+class StoryCreateRequest(BaseModel):
+    image_ids: list[str]
+
+
+class StoryFrameUpdate(BaseModel):
+    text: str | None = None
+    title: str | None = None
+    is_enabled: bool | None = None
+    background_mode: str | None = None
+    source_image_id: str | None = None
+    text_color: str | None = None
+    text_align: str | None = None
+    title_position: str | None = None
+    text_halign: str | None = None
+    font_size: int | None = None
+
+
+class StoryReorderRequest(BaseModel):
+    frame_ids: list[str]
 
 
 # ── Series ────────────────────────────────────────────────────────────────────

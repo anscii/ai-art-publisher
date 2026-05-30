@@ -1756,6 +1756,19 @@ function buildPostsCard(series) {
   );
 }
 
+const STATUS_ICON_MAP = {
+  draft:     { cls: 'bi bi-pencil',           color: 'var(--aap-ink-mute)' },
+  scheduled: { cls: 'bi bi-calendar-check',   color: 'var(--aap-dot-active)' },
+  posted:    { cls: 'bi bi-check-lg',          color: 'var(--aap-dot-done)' },
+  failed:    { cls: 'bi bi-exclamation-circle',color: 'var(--aap-danger)' },
+};
+const STORY_STATUS_ICON = {
+  draft:    { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
+  rendered: { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
+  posted:   { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
+  failed:   { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
+};
+
 function buildPostRow(post, imgMap, series) {
   const PLAT_ICON = {
     telegram:  'bi bi-telegram',
@@ -1794,14 +1807,16 @@ function buildPostRow(post, imgMap, series) {
       : null;
   if (timeEl) platEl.appendChild(timeEl);
 
+  const si = STATUS_ICON_MAP[post.status];
   const statusEl = h('span', {
     cls: 'aap-post-row__status',
     style: '--status-color: ' + (STATUS_COLOR_MAP[post.status] || 'var(--aap-ink-mute)'),
+    title: post.status,
   },
     post.status === 'sending'
-      ? h('span', { cls: 'spinner-border spinner-border-sm me-1', 'aria-hidden': 'true' })
-      : h('span', { cls: 'aap-dot' }),
-    document.createTextNode(' ' + post.status)
+      ? h('span', { cls: 'spinner-border spinner-border-sm', 'aria-hidden': 'true' })
+      : si ? h('i', { cls: si.cls, style: 'color:' + si.color + ';font-size:14px' })
+           : h('span', { cls: 'aap-dot' })
   );
 
   const actions = h('div', { cls: 'aap-post-row__actions' });
@@ -1869,6 +1884,23 @@ function buildPostRow(post, imgMap, series) {
       icon('bi bi-trash'));
     delBtn.addEventListener('click', () => deletePost(post.id));
     actions.appendChild(delBtn);
+  }
+
+  if (post.platform === 'instagram') {
+    const storyChildren = [icon('bi bi-film')];
+    if (post.story_status) {
+      const si = STORY_STATUS_ICON[post.story_status];
+      if (si) storyChildren.push(h('i', { cls: si.cls, style: 'font-size:9px;color:' + si.color }));
+    }
+    const storyBtn = h('button', {
+      cls: 'aap-icon-btn',
+      style: 'flex-direction:column;gap:1px;height:auto;padding:4px 6px;min-width:28px',
+      title: post.story_id ? 'Story: ' + post.story_status : 'Create Story',
+      'aria-label': 'Story',
+      'data-story-btn': post.id,
+    }, ...storyChildren);
+    storyBtn.addEventListener('click', () => _openStoryModal(post, imgMap, series));
+    actions.appendChild(storyBtn);
   }
 
   const rowWrap = h('article', {
@@ -2213,4 +2245,867 @@ function showPostContent(post, imgMap, series) {
 
   document.getElementById('postViewBody').replaceChildren(...sections);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('postViewModal')).show();
+}
+
+
+// ── Stories ────────────────────────────────────────────────────────────────
+
+const _TEXT_COLORS = [
+  { hex: '#ffffff', label: 'White' },
+  { hex: '#0e0e10', label: 'Ink' },
+  { hex: '#f5e6d3', label: 'Cream' },
+  { hex: '#b8501f', label: 'Accent' },
+  { hex: '#9ab2c7', label: 'Steel' },
+];
+
+let _storyCtx = null;
+let _allTextMode = false;
+const _dirtyFrameIds = new Set();
+
+function _markFrameDirty(frameId) {
+  _dirtyFrameIds.add(frameId);
+  const pill = document.querySelector('[data-unsaved-pill]');
+  if (pill) pill.hidden = false;
+}
+
+function _openStoryModal(post, imgMap, series) {
+  _dirtyFrameIds.clear();
+  _allTextMode = false;
+  const modalEl = document.getElementById('storyEditorModal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  document.getElementById('storyEditorTitle').textContent = post.title || 'Story';
+  const body = document.getElementById('storyEditorBody');
+  body.replaceChildren();
+  _loadStoryModal(body, post, imgMap, series);
+  // Save unsaved changes to localStorage on close (only sent to server on render)
+  modalEl.addEventListener('hide.bs.modal', () => { if (_storyCtx) _saveDraftToLS(_storyCtx.story); }, { once: true });
+  modal.show();
+}
+
+async function _flushDirtyFrames() {
+  if (!_storyCtx || !_dirtyFrameIds.size) return;
+  const { story } = _storyCtx;
+  const ids = [..._dirtyFrameIds];
+  _dirtyFrameIds.clear();
+  for (const frameId of ids) {
+    const frame = story.frames.find(f => f.id === frameId);
+    if (!frame) continue;
+    try {
+      await apiFetch('PATCH', '/api/story-frames/' + frameId, {
+        text: frame.text,
+        title: frame.title,
+        background_mode: frame.background_mode,
+        text_color: frame.text_color,
+        text_align: frame.text_align,
+        title_position: frame.title_position,
+        text_halign: frame.text_halign,
+        font_size: frame.font_size,
+        is_enabled: frame.is_enabled,
+      });
+    } catch (e) {
+      showToast('Frame save failed: ' + e.message, 'danger');
+    }
+  }
+}
+
+function _lsKey(storyId) { return 'se_draft_' + storyId; }
+
+function _saveDraftToLS(story) {
+  if (!_dirtyFrameIds.size) { localStorage.removeItem(_lsKey(story.id)); return; }
+  const draft = {};
+  for (const fid of _dirtyFrameIds) {
+    const f = story.frames.find(fr => fr.id === fid);
+    if (f) draft[fid] = { text: f.text, title: f.title, background_mode: f.background_mode, text_color: f.text_color, text_align: f.text_align, title_position: f.title_position, text_halign: f.text_halign, font_size: f.font_size, is_enabled: f.is_enabled };
+  }
+  localStorage.setItem(_lsKey(story.id), JSON.stringify(draft));
+}
+
+function _loadDraftFromLS(story) {
+  const raw = localStorage.getItem(_lsKey(story.id));
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    for (const [fid, data] of Object.entries(draft)) {
+      const f = story.frames.find(fr => fr.id === fid);
+      if (!f) continue;
+      Object.assign(f, data);
+      _markFrameDirty(fid);
+    }
+  } catch (e) { /* ignore corrupt draft */ }
+}
+
+function _clearDraftFromLS(storyId) { localStorage.removeItem(_lsKey(storyId)); }
+
+async function _loadStoryModal(body, post, imgMap, series) {
+  if (post.story_id) {
+    try {
+      const story = await apiFetch('GET', '/api/stories/' + post.story_id);
+      _storyCtx = { post, imgMap, story, frameIdx: 0 };
+      _loadDraftFromLS(story);
+      _renderStoryEditorV2(body);
+    } catch (e) { showToast(e.message, 'danger'); }
+  } else {
+    _renderStoryPickerV2(body, post, imgMap, series);
+  }
+}
+
+function _renderStoryPickerV2(body, post, imgMap, series) {
+  const allImages = (post.image_ids || []).map((id, idx) => ({ id, url: imgMap[id], idx }));
+
+  const checkboxes = allImages.map(({ id, url, idx }) => {
+    const cb = h('input', { type: 'checkbox', cls: 'form-check-input', 'data-story-image-checkbox': id });
+    if (idx < 4) cb.checked = true;
+    const thumb = url
+      ? h('img', { src: url, style: 'width:36px;height:36px;object-fit:cover;border-radius:3px;flex-shrink:0' })
+      : h('span', { style: 'width:36px;height:36px;display:inline-block;background:var(--aap-panel-hi);border-radius:3px;flex-shrink:0' });
+    const label = h('label', { cls: 'form-check-label d-flex align-items-center gap-2 mb-2', style: 'cursor:pointer' },
+      cb, thumb, document.createTextNode('Image ' + (idx + 1)));
+    return { cb, label, id };
+  });
+
+  const genBtn = h('button', {
+    cls: 'va__btn va__btn--primary mt-2',
+    text: 'Generate Story Draft',
+    'data-story-generate-btn': post.id,
+  });
+
+  genBtn.addEventListener('click', async () => {
+    const imageIds = checkboxes.filter(({ cb }) => cb.checked).map(({ id }) => id);
+    if (!imageIds.length) { showToast('Select at least one image', 'warning'); return; }
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating…';
+    try {
+      const story = await apiFetch('POST', '/api/posts/' + post.id + '/stories', { image_ids: imageIds });
+      post.story_id = story.id;
+      const btn = document.querySelector('[data-story-btn="' + post.id + '"]');
+      if (btn) btn.title = 'Story';
+      _storyCtx = { post, imgMap, story, frameIdx: 0 };
+      _renderStoryEditorV2(body);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      genBtn.disabled = false;
+      genBtn.textContent = 'Generate Story Draft';
+    }
+  });
+
+  body.replaceChildren(
+    h('div', { cls: 'se-va', 'data-story-panel': post.id },
+      h('div', { cls: 'fw-semibold small mb-1' }, 'Choose images (first 4 selected):'),
+      h('div', {}, ...checkboxes.map(({ label }) => label)),
+      genBtn
+    )
+  );
+}
+
+function _splitLastLine(text) {
+  const lines = (text || '').split('\n');
+  if (lines.length > 1) return [lines.slice(0, -1).join('\n'), lines[lines.length - 1]];
+  const m = text.match(/^(.*[.!?…])\s+(.+)$/s);
+  if (m) return [m[1], m[2]];
+  return [text, ''];
+}
+
+function _splitFirstLine(text) {
+  const lines = (text || '').split('\n');
+  if (lines.length > 1) return [lines[0], lines.slice(1).join('\n')];
+  const m = text.match(/^(.+?[.!?…])\s+(.+)$/s);
+  if (m) return [m[1], m[2]];
+  return [text, ''];
+}
+
+function _parseAndDistribute(value, frames) {
+  const textFrames = frames.filter(f => f.frame_type === 'text');
+  const sections = value.split(/^─+\s*frame\s+\d+\s*─+\s*$/m);
+  sections.forEach((section, i) => {
+    if (i >= textFrames.length) return;
+    const f = textFrames[i];
+    f.text = section.trim();
+    f.rendered_url = null;
+    _markFrameDirty(f.id);
+  });
+}
+
+function _buildTextDragHandle(upperFrame, lowerFrame, upperTa, lowerTa) {
+  const handle = h('div', { cls: 'va__drag-handle' },
+    h('span', { cls: 'va__drag-handle__icon' }, '⠿')
+  );
+  const THRESHOLD = 28;
+  let startY = 0;
+
+  function onMove(currentY) {
+    const dy = currentY - startY;
+    const fit = () => [upperTa, lowerTa].forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+    if (dy > THRESHOLD) {
+      // drag down → separator moves down → upper grows: first line of lower → end of upper
+      const [taken, rest] = _splitFirstLine(lowerFrame.text || '');
+      if (!taken) return;
+      lowerFrame.text = rest; lowerFrame.rendered_url = null; _markFrameDirty(lowerFrame.id);
+      upperFrame.text = (upperFrame.text ? upperFrame.text + '\n' : '') + taken;
+      upperFrame.rendered_url = null; _markFrameDirty(upperFrame.id);
+      upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
+      fit(); startY = currentY;
+    } else if (dy < -THRESHOLD) {
+      // drag up → separator moves up → lower grows: last line of upper → start of lower
+      const [rest, taken] = _splitLastLine(upperFrame.text || '');
+      if (!taken) return;
+      upperFrame.text = rest; upperFrame.rendered_url = null; _markFrameDirty(upperFrame.id);
+      lowerFrame.text = taken + (lowerFrame.text ? '\n' + lowerFrame.text : '');
+      lowerFrame.rendered_url = null; _markFrameDirty(lowerFrame.id);
+      upperTa.value = upperFrame.text; lowerTa.value = lowerFrame.text;
+      fit(); startY = currentY;
+    }
+  }
+
+  handle.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+  handle.addEventListener('touchmove', e => { onMove(e.touches[0].clientY); }, { passive: true });
+
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    e.preventDefault();
+    const onMouseMove = e => onMove(e.clientY);
+    const onMouseUp = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
+  return handle;
+}
+
+function _renderStoryEditorV2(body) {
+  const { story, imgMap, post } = _storyCtx;
+  const frameIdx = _storyCtx.frameIdx;
+  const frames = story.frames;
+  const frame = frames[frameIdx];
+
+  const pill = h('span', {
+    cls: 'se-va__pill' + (story.status === 'draft' ? ' se-va__pill--ghost' : ''),
+    text: story.status.toUpperCase(),
+  });
+
+  const regenBtn = h('button', { cls: 'se-va__regen', text: 'Regenerate' });
+  regenBtn.addEventListener('click', () => {
+    _storyCtx = null;
+    post.story_id = null;
+    _renderStoryPickerV2(body, post, imgMap, null);
+  });
+
+  const allTextBtn = h('button', {
+    cls: 'se-va__regen',
+    text: _allTextMode ? '← Preview' : 'Edit all text',
+    style: _allTextMode ? 'border-color:var(--aap-accent);color:var(--aap-accent)' : '',
+    title: 'View and redistribute all frame text in one editor',
+  });
+  allTextBtn.addEventListener('click', () => { _allTextMode = !_allTextMode; _renderStoryEditorV2(body); });
+
+  const resetBtn = h('button', {
+    cls: 'se-va__regen',
+    text: 'Reset',
+    title: 'Discard unsaved changes and revert to last saved state',
+  });
+  resetBtn.addEventListener('click', async () => {
+    _dirtyFrameIds.clear();
+    _clearDraftFromLS(story.id);
+    try {
+      const fresh = await apiFetch('GET', '/api/stories/' + story.id);
+      _storyCtx.story = fresh;
+      _allTextMode = false;
+      _renderStoryEditorV2(body);
+    } catch (e) { showToast(e.message, 'danger'); }
+  });
+
+  const unsavedPill = h('span', { cls: 'se-va__unsaved', 'data-unsaved-pill': '', hidden: _dirtyFrameIds.size === 0 }, 'unsaved');
+  const pillGroup = h('div', { style: 'display:flex;flex-direction:column;gap:3px' }, pill, unsavedPill);
+  const topbar = h('div', { cls: 'se-va__topbar' }, pillGroup, h('span', { cls: 'se-va__rule' }), allTextBtn, resetBtn, regenBtn);
+
+  // ── Option C: stacked text canvas with drag handles ────────────────────────
+  if (_allTextMode) {
+    const textFrames = frames.filter(f => f.frame_type === 'text');
+
+    const _fitTa = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+
+    // Build textareas first so handles can reference adjacent ones
+    const items = textFrames.map(f => {
+      const ta = h('textarea', { cls: 'va__textarea va__all-text__area' });
+      ta.value = f.text || '';
+      ta.addEventListener('input', () => { f.text = ta.value; f.rendered_url = null; _markFrameDirty(f.id); _fitTa(ta); });
+      return { f, ta };
+    });
+
+    const canvas = h('div', { cls: 'va__all-text' });
+    items.forEach(({ f, ta }, i) => {
+      const frameNum = frames.indexOf(f) + 1;
+      canvas.appendChild(h('div', { cls: 'va__all-text__label' }, `Frame ${frameNum}`));
+      canvas.appendChild(ta);
+      if (i < items.length - 1) {
+        canvas.appendChild(_buildTextDragHandle(f, items[i + 1].f, ta, items[i + 1].ta));
+      }
+    });
+
+    const renderBtnAll = h('button', { cls: 'va__btn va__btn--primary', text: 'Render Preview', 'data-story-render-btn': story.id });
+    renderBtnAll.addEventListener('click', async () => {
+      renderBtnAll.disabled = true; renderBtnAll.textContent = 'Saving…';
+      try {
+        await _flushDirtyFrames();
+        _clearDraftFromLS(story.id);
+        renderBtnAll.textContent = 'Rendering…';
+        const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
+        _storyCtx.story = updated;
+        _allTextMode = false;
+        _renderStoryEditorV2(body);
+        showToast('Rendered ' + updated.frames.filter(f => f.is_enabled).length + ' frames', 'success');
+      } catch (e) { showToast(e.message, 'danger'); renderBtnAll.disabled = false; renderBtnAll.textContent = 'Render Preview'; }
+    });
+
+    body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id },
+      topbar, canvas, h('div', { cls: 'va__foot' }, renderBtnAll)
+    ));
+    // Fit all textareas to content after DOM insertion
+    items.forEach(({ ta }) => _fitTa(ta));
+    return;
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const prevBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Previous' }, '‹');
+  const nextBtn = h('button', { cls: 'se-head__nav', 'aria-label': 'Next' }, '›');
+  prevBtn.disabled = frameIdx === 0;
+  nextBtn.disabled = frameIdx === frames.length - 1;
+  prevBtn.addEventListener('click', () => { _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body); });
+  nextBtn.addEventListener('click', () => { _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body); });
+
+  const numStr = String(frameIdx + 1).padStart(2, '0');
+  const totalStr = String(frames.length).padStart(2, '0');
+  const kindLabel = frame.frame_type === 'image' ? (frame.title ? 'cover slide' : 'image slide') : 'text slide';
+
+  const head = h('div', { cls: 'se-head' },
+    prevBtn,
+    h('div', { cls: 'se-head__mid' },
+      h('span', { cls: 'se-head__count' },
+        document.createTextNode(numStr + ' '),
+        h('strong', {}, '/ ' + totalStr)
+      ),
+      h('span', { cls: 'se-head__kind' }, kindLabel)
+    ),
+    nextBtn
+  );
+
+  const phone = h('div', { cls: 'va__phone' });
+  _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+
+  const rail = _buildRail(body, frame, imgMap);
+  phone.appendChild(rail);
+
+  if (frame.rendered_url) phone.style.cursor = 'zoom-in';
+
+  // Tap zones + swipe on phone frame
+  let _swipeX = 0;
+  let _swipeMoved = false;
+  phone.addEventListener('touchstart', e => {
+    _swipeX = e.changedTouches[0].clientX;
+    _swipeMoved = false;
+  }, { passive: true });
+  phone.addEventListener('touchmove', () => { _swipeMoved = true; }, { passive: true });
+  phone.addEventListener('touchend', e => {
+    if (e.target.closest('.se-rail')) return;
+    const dx = e.changedTouches[0].clientX - _swipeX;
+    if (_swipeMoved && Math.abs(dx) >= 40) {
+      // swipe
+      if (dx < 0 && frameIdx < frames.length - 1) { _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body); }
+      else if (dx > 0 && frameIdx > 0) { _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body); }
+    }
+  }, { passive: true });
+
+  phone.addEventListener('click', e => {
+    if (e.target.closest('.se-rail')) return;
+    const rect = phone.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width;
+    if (xRatio < 0.3 && frameIdx > 0) {
+      _storyCtx.frameIdx = frameIdx - 1; _renderStoryEditorV2(body);
+    } else if (xRatio > 0.7 && frameIdx < frames.length - 1) {
+      _storyCtx.frameIdx = frameIdx + 1; _renderStoryEditorV2(body);
+    } else if (frame.rendered_url) {
+      // center tap → fullscreen
+      const rendered = frames.filter(f => f.rendered_url);
+      const idx = rendered.findIndex(f => f.id === frame.id);
+      _openStoryFullscreen(rendered.map(f => f.rendered_url), idx);
+    }
+  });
+
+  const showColorbar = frame.frame_type === 'text' || (frame.frame_type === 'image' && frame.title);
+  const colorbar = showColorbar ? _buildColorBar(body, frame) : null;
+
+  const strip = h('div', { cls: 'se-strip', 'data-story-frames': story.id });
+  frames.forEach((f, i) => {
+    const chip = h('div', {
+      cls: 'se-strip__chip' + (i === frameIdx ? ' is-on' : '') + (!f.is_enabled ? ' is-off' : ''),
+    },
+      h('span', { cls: 'se-strip__num' }, String(i + 1).padStart(2, '0')),
+      h('span', { cls: 'se-strip__kind' },
+        f.frame_type === 'image' ? (f.title ? 'cover' : 'image') : 'text'),
+      ...(!f.is_enabled ? [h('span', { cls: 'se-strip__skip' }, 'skip')] : [])
+    );
+    chip.addEventListener('click', () => { _storyCtx.frameIdx = i; _renderStoryEditorV2(body); });
+    strip.appendChild(chip);
+  });
+
+  let controlEl = null;
+  if (frame.frame_type === 'text') {
+    const prevTextFrame = frames.slice(0, frameIdx).reverse().find(f => f.frame_type === 'text' && f.is_enabled);
+    const nextTextFrame = frames.slice(frameIdx + 1).find(f => f.frame_type === 'text' && f.is_enabled);
+
+    const fromPrevBtn = h('button', { cls: 'va__transfer-btn', title: 'Send first line to previous text frame' }, '↑ to prev');
+    const updateToPrevState = () => {
+      const [first] = _splitFirstLine(frame.text || '');
+      fromPrevBtn.disabled = !prevTextFrame || !first;
+    };
+    updateToPrevState();
+    fromPrevBtn.addEventListener('click', () => {
+      const [taken, rest] = _splitFirstLine(frame.text || '');
+      if (!taken) return;
+      frame.text = rest; frame.rendered_url = null; _markFrameDirty(frame.id);
+      prevTextFrame.text = (prevTextFrame.text ? prevTextFrame.text + '\n' : '') + taken;
+      prevTextFrame.rendered_url = null; _markFrameDirty(prevTextFrame.id);
+      _renderStoryEditorV2(body);
+    });
+
+    const textarea = h('textarea', { cls: 'va__textarea', rows: '4', 'data-story-frame-text': frame.id });
+    textarea.value = frame.text || '';
+    const charCount = h('span', { style: 'font-family:var(--aap-font-mono);font-size:11px;color:var(--aap-ink-mute);text-align:right;display:block' });
+    const updateCount = () => { charCount.textContent = textarea.value.length; };
+    updateCount();
+    const toNextBtn = h('button', { cls: 'va__transfer-btn', title: 'Send last line to next text frame' }, '↓ to next');
+    const updateToNextState = () => {
+      const [, last] = _splitLastLine(frame.text || '');
+      toNextBtn.disabled = !nextTextFrame || !last;
+    };
+    updateToNextState();
+
+    textarea.addEventListener('input', () => {
+      updateCount();
+      frame.text = textarea.value;
+      frame.rendered_url = null;
+      _markFrameDirty(frame.id);
+      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+      updateToPrevState();
+      updateToNextState();
+    });
+    toNextBtn.addEventListener('click', () => {
+      const [rest, taken] = _splitLastLine(frame.text || '');
+      if (!taken) return;
+      frame.text = rest; frame.rendered_url = null; _markFrameDirty(frame.id);
+      nextTextFrame.text = taken + (nextTextFrame.text ? '\n' + nextTextFrame.text : '');
+      nextTextFrame.rendered_url = null; _markFrameDirty(nextTextFrame.id);
+      _renderStoryEditorV2(body);
+    });
+
+    controlEl = h('div', {}, fromPrevBtn, textarea, charCount, toNextBtn);
+  } else {
+    const titleInput = h('input', {
+      type: 'text', cls: 'form-control',
+      style: 'background:var(--aap-field-bg);border-color:var(--aap-rule);color:var(--aap-ink)',
+      placeholder: 'Title (leave empty for no title)',
+      'data-story-frame-title': frame.id,
+    });
+    titleInput.value = frame.title || '';
+    titleInput.addEventListener('input', () => {
+      frame.title = titleInput.value || null;
+      frame.rendered_url = null;
+      _markFrameDirty(frame.id);
+      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+    });
+    controlEl = titleInput;
+  }
+
+  const incCb = h('input', { type: 'checkbox', cls: 'form-check-input' });
+  incCb.checked = frame.is_enabled;
+  incCb.addEventListener('change', () => {
+    frame.is_enabled = incCb.checked;
+    _markFrameDirty(frame.id);
+    const chip = strip.children[frameIdx];
+    if (chip) {
+      chip.classList.toggle('is-off', !incCb.checked);
+      const skipEl = chip.querySelector('.se-strip__skip');
+      if (!incCb.checked && !skipEl) chip.appendChild(h('span', { cls: 'se-strip__skip' }, 'skip'));
+      else if (incCb.checked && skipEl) skipEl.remove();
+    }
+  });
+
+  const includeRow = h('div', { cls: 'd-flex align-items-center gap-2' },
+    h('label', { cls: 'form-check-label d-flex align-items-center gap-2', style: 'cursor:pointer;font-size:13px' },
+      incCb, document.createTextNode('Include frame'))
+  );
+
+  const renderBtn = h('button', { cls: 'va__btn va__btn--primary', text: 'Render Preview', 'data-story-render-btn': story.id });
+  renderBtn.addEventListener('click', async () => {
+    renderBtn.disabled = true;
+    renderBtn.textContent = 'Saving…';
+    try {
+      await _flushDirtyFrames();
+      _clearDraftFromLS(story.id);
+      renderBtn.textContent = 'Rendering…';
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/render');
+      _storyCtx.story = updated;
+      _renderStoryEditorV2(body);
+      showToast('Rendered ' + updated.frames.filter(f => f.is_enabled).length + ' frames', 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+      renderBtn.disabled = false;
+      renderBtn.textContent = 'Render Preview';
+    }
+  });
+
+  const publishBtn = h('button', { cls: 'va__btn', text: 'Publish Stories', 'data-story-publish-btn': story.id });
+  publishBtn.disabled = story.status !== 'rendered';
+  publishBtn.addEventListener('click', async () => {
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Publishing…';
+    try {
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/publish');
+      _storyCtx.story = updated;
+      _renderStoryEditorV2(body);
+      showToast('Story published', 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+      _renderStoryEditorV2(body);
+    }
+  });
+
+  // Font size slider (text frames + cover frames)
+  const showSizeSlider = frame.frame_type === 'text' || (frame.frame_type === 'image' && frame.title);
+  let sizeSlider = null;
+  if (showSizeSlider) {
+    const DEFAULT_SIZE = 64;
+    const slider = h('input', { type: 'range', min: '32', max: '120', step: '4', style: 'flex:1;accent-color:var(--aap-accent)' });
+    slider.value = String(frame.font_size || DEFAULT_SIZE);
+    const sizeLabel = h('span', { style: 'font-family:var(--aap-font-mono);font-size:11px;color:var(--aap-ink-mute);min-width:28px;text-align:right' });
+    sizeLabel.textContent = slider.value;
+    slider.addEventListener('input', () => {
+      const sz = parseInt(slider.value);
+      sizeLabel.textContent = sz;
+      frame.font_size = sz;
+      frame.rendered_url = null;
+      _markFrameDirty(frame.id);
+      const phoneEl = body.querySelector('.va__phone');
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
+    });
+
+    const applyAllBtn = h('button', {
+      style: 'font-family:var(--aap-font-mono);font-size:10px;color:var(--aap-ink-mute);background:transparent;border:1px solid var(--aap-rule);border-radius:4px;padding:2px 7px;cursor:pointer;white-space:nowrap',
+      title: 'Apply this size to all frames',
+    }, 'All');
+    applyAllBtn.addEventListener('click', () => {
+      const sz = parseInt(slider.value);
+      const color = frame.text_color || null;
+      const halign = frame.text_halign || null;
+      frames.filter(f => f.frame_type === 'text').forEach(f => {
+        f.font_size = sz;
+        if (color) f.text_color = color;
+        if (halign) f.text_halign = halign;
+        f.rendered_url = null;
+        _markFrameDirty(f.id);
+      });
+      const phoneEl = body.querySelector('.va__phone');
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
+    });
+
+    sizeSlider = h('div', { cls: 'd-flex align-items-center gap-2', style: 'padding:4px 0' },
+      h('span', { style: 'font-family:var(--aap-font-mono);font-size:10px;color:var(--aap-ink-mute);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap' }, 'Size'),
+      slider,
+      sizeLabel,
+      applyAllBtn
+    );
+  }
+
+  const children = [topbar, head, phone];
+  if (colorbar) children.push(colorbar);
+  if (sizeSlider) children.push(sizeSlider);
+  const addTextFrameBtn = h('button', {
+    cls: 'va__transfer-btn',
+    title: 'Add a new text frame, splitting current text evenly',
+    style: 'align-self:flex-end',
+  }, '＋ text frame');
+  addTextFrameBtn.addEventListener('click', async () => {
+    addTextFrameBtn.disabled = true;
+    addTextFrameBtn.textContent = 'Adding…';
+    try {
+      await _flushDirtyFrames();
+      _clearDraftFromLS(story.id);
+      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/frames');
+      _storyCtx.story = updated;
+      _storyCtx.frameIdx = updated.frames.length - 1;
+      _renderStoryEditorV2(body);
+    } catch (e) {
+      showToast(e.message, 'danger');
+      addTextFrameBtn.disabled = false;
+      addTextFrameBtn.textContent = '＋ text frame';
+    }
+  });
+
+  children.push(strip, h('div', { cls: 'd-flex justify-content-end' }, addTextFrameBtn), includeRow);
+  if (controlEl) children.push(controlEl);
+  children.push(h('div', { cls: 'va__foot' }, renderBtn, publishBtn));
+
+  body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id }, ...children));
+}
+
+function _isLastTextFrame(frame) {
+  if (!_storyCtx) return false;
+  const last = [..._storyCtx.story.frames].reverse().find(f => f.frame_type === 'text' && f.is_enabled);
+  return !!last && last.id === frame.id;
+}
+
+function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
+  const savedRail = phone.querySelector('.se-rail');
+  phone.replaceChildren();
+  const bgUrl = (imgMap && frame.source_image_id) ? imgMap[frame.source_image_id] : '';
+
+  if (frame.rendered_url) {
+    const img = document.createElement('img');
+    img.src = frame.rendered_url;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+    phone.appendChild(img);
+    return;
+  }
+
+  if (frame.frame_type === 'image') {
+    if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
+    else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+    if (frame.title) {
+      const pos = (frame.title_position === 'top' || frame.title_position === 'middle') ? frame.title_position : 'bottom';
+      const barPos = 'se-frame-bar--' + pos;
+      const PREVIEW_RATIO = 0.37;
+      const sz = frame.font_size || 64;
+      const titleStyle = 'color:' + (frame.text_color || '#ffffff') + ';font-size:' + Math.round(sz * 1.25 * PREVIEW_RATIO) + 'px;text-align:' + (frame.text_halign || 'center');
+      const BAR_BG = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)', image_blur_dim: 'rgba(0,0,0,0.47)' };
+      const bgMode = frame.background_mode || 'solid_dark';
+      if (bgMode === 'image_clean') {
+        // floating title — no bar, absolute text with shadow
+        const alignCls = 'se-frame-text-block se-frame-text-block--' + pos;
+        phone.appendChild(h('div', { cls: alignCls },
+          h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })
+        ));
+      } else {
+        const barBg = BAR_BG[bgMode] || 'rgba(0,0,0,0.5)';
+        phone.appendChild(h('div', { cls: 'se-frame-bar ' + barPos, style: 'background:' + barBg },
+          h('div', { cls: 'se-frame-title', text: frame.title, style: titleStyle })
+        ));
+      }
+    }
+  } else {
+    const mode = frame.background_mode || 'image_blur_dim';
+    const SOLID_OVERLAY = { solid_dark: 'rgba(0,0,0,0.85)', solid_light: 'rgba(245,240,230,0.92)', solid_accent: 'rgba(184,80,31,0.92)' };
+    if (SOLID_OVERLAY[mode]) {
+      if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
+      else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+      phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:' + SOLID_OVERLAY[mode] }));
+    } else {
+      if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg' + (mode !== 'image_clean' ? ' se-frame-bg--blur' : ''), style: 'background-image:url(' + bgUrl + ')' }));
+      else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
+      if (mode === 'image_blur_dim') phone.appendChild(h('div', { cls: 'se-frame-dim' }));
+    }
+
+    if (frame.text || frame.title) {
+      const ALIGN_MAP = { top: 'se-frame-text-block--top', middle: 'se-frame-text-block--middle', bottom: 'se-frame-text-block--bottom' };
+      const alignCls = ALIGN_MAP[frame.text_align || 'middle'] || 'se-frame-text-block--middle';
+      const _ha = frame.text_halign || 'center';
+      const _flexAlign = _ha === 'left' ? 'flex-start' : _ha === 'right' ? 'flex-end' : 'center';
+      const textEl = h('div', { cls: 'se-frame-text-block ' + alignCls, style: 'align-items:' + _flexAlign });
+      const color = frame.text_color || '#ffffff';
+      const pRatio = 0.37;
+      const pSz = frame.font_size || 64;
+      if (frame.title) textEl.appendChild(h('div', { cls: 'se-frame-title mb-1', text: frame.title, style: 'color:' + color + ';font-size:' + Math.round(pSz * 1.25 * pRatio) + 'px;text-align:' + _ha }));
+      if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px;text-align:' + _ha }, frame.text));
+      phone.appendChild(textEl);
+    }
+    if (isLastTextFrame) {
+      phone.appendChild(h('div', { cls: 'se-frame-label-latest', style: 'color:' + (frame.text_color || '#ffffff') }, '↘ latest post'));
+    }
+  }
+  if (savedRail) phone.appendChild(savedRail);
+}
+
+function _buildRail(body, frame, imgMap) {
+  let openPanel = null;
+  const rail = h('div', { cls: 'se-rail' });
+
+  const closePanel = () => {
+    if (openPanel) { openPanel.remove(); openPanel = null; }
+    document.removeEventListener('click', closeOnOutside);
+  };
+  const closeOnOutside = e => {
+    if (!rail.contains(e.target)) closePanel();
+  };
+
+  // BG button
+  if (frame.frame_type === 'text' || frame.title !== null) {
+    const bgChip = h('span', { style: 'width:16px;height:16px;border-radius:999px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45)' });
+    _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
+    const bgBtn = h('button', { cls: 'se-rail__btn' }, bgChip, document.createTextNode('BG'));
+    bgBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Background'));
+      const opts = frame.frame_type === 'text'
+        ? [['image_clean','Image'],['image_blur_dim','Blurred'],['solid_dark','Dark'],['solid_light','Light'],['solid_accent','Accent']]
+        : [['solid_dark','Dark bar'],['solid_light','Light bar'],['solid_accent','Accent bar'],['image_blur_dim','Dim bar'],['image_clean','Floating']];
+      opts.forEach(([val, lbl]) => {
+        const chip = h('span', { cls: 'se-rail__pick-chip' });
+        _setBgChipStyle(chip, val, imgMap && imgMap[frame.source_image_id]);
+        const pick = h('button', { cls: 'se-rail__pick' + (frame.background_mode === val ? ' is-on' : '') }, chip, document.createTextNode(lbl));
+        pick.addEventListener('click', () => {
+          closePanel();
+          frame.background_mode = val;
+          frame.rendered_url = null;
+          _markFrameDirty(frame.id);
+          const phone = bgBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+          _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
+        });
+        panel.appendChild(pick);
+      });
+      bgBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, bgBtn));
+  }
+
+  // Align button — hidden for image frames with no title (nothing to align)
+  if (frame.frame_type === 'text' || frame.title) {
+    const alignBtn = h('button', { cls: 'se-rail__btn' },
+      h('span', { style: 'font-size:14px;line-height:1' }, '≡'),
+      document.createTextNode('Align')
+    );
+    alignBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'Position'));
+      const opts = [['top','Top'],['middle','Middle'],['bottom','Bottom']];
+      const current = frame.frame_type === 'text' ? (frame.text_align || 'middle') : (frame.title_position || 'bottom');
+      opts.forEach(([val, lbl]) => {
+        const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));
+        pick.addEventListener('click', () => {
+          closePanel();
+          if (frame.frame_type === 'text') frame.text_align = val;
+          else frame.title_position = val;
+          frame.rendered_url = null;
+          _markFrameDirty(frame.id);
+          const phone = alignBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+        });
+        panel.appendChild(pick);
+      });
+      alignBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, alignBtn));
+  }
+
+  // H-Align button — horizontal text alignment (left / center / right)
+  if (frame.frame_type === 'text' || frame.title) {
+    const halignBtn = h('button', { cls: 'se-rail__btn' },
+      h('span', { style: 'font-size:14px;line-height:1' }, '⇔'),
+      document.createTextNode('H-Align')
+    );
+    halignBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (openPanel) { closePanel(); return; }
+      const panel = h('div', { cls: 'se-rail__panel' });
+      panel.appendChild(h('div', { cls: 'se-rail__panel-lbl' }, 'H-Align'));
+      const opts = [['left','Left'],['center','Center'],['right','Right']];
+      const current = frame.text_halign || 'center';
+      opts.forEach(([val, lbl]) => {
+        const pick = h('button', { cls: 'se-rail__pick' + (current === val ? ' is-on' : '') }, document.createTextNode(lbl));
+        pick.addEventListener('click', () => {
+          closePanel();
+          frame.text_halign = val;
+          frame.rendered_url = null;
+          _markFrameDirty(frame.id);
+          const phone = halignBtn.closest('.va__phone');
+          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+        });
+        panel.appendChild(pick);
+      });
+      halignBtn.after(panel);
+      openPanel = panel;
+      document.addEventListener('click', closeOnOutside);
+    });
+    rail.appendChild(h('div', { cls: 'se-rail__pop' }, halignBtn));
+  }
+
+  return rail;
+}
+
+function _setBgChipStyle(el, mode, imageUrl) {
+  el.style.backgroundImage = '';
+  el.style.filter = '';
+  if (mode === 'solid_dark') { el.style.background = '#121212'; return; }
+  if (mode === 'solid_light') { el.style.background = '#f0ede7'; return; }
+  if (mode === 'solid_accent') { el.style.background = '#b8501f'; return; }
+  if (imageUrl) {
+    el.style.background = '';
+    el.style.backgroundImage = 'url(' + imageUrl + ')';
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    if (mode === 'image_blur_dim') el.style.filter = 'blur(1.5px)';
+  } else {
+    el.style.background = '#333';
+  }
+}
+
+function _buildColorBar(body, frame) {
+  const swatches = _TEXT_COLORS.map(({ hex }) => {
+    const chip = h('span', { cls: 'se-swatch__chip', style: 'background:' + hex });
+    const swatch = h('button', { cls: 'se-swatch' + (frame.text_color === hex ? ' is-on' : ''), 'data-color-hex': hex }, chip);
+    swatch.addEventListener('click', () => {
+      frame.text_color = hex;
+      frame.rendered_url = null;
+      _markFrameDirty(frame.id);
+      body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
+      const phone = body.querySelector('.va__phone');
+      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap, _isLastTextFrame(frame));
+    });
+    return swatch;
+  });
+  return h('div', { cls: 'va__colorbar' },
+    h('span', { cls: 'va__colorbar-lbl' }, 'Text'),
+    ...swatches
+  );
+}
+
+function _openStoryFullscreen(urls, startIdx) {
+  let idx = startIdx ?? 0;
+  const overlay = h('div', {
+    style: 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:flex;align-items:center;justify-content:center',
+  });
+  const img = document.createElement('img');
+  img.style.cssText = 'max-width:calc(100% - 96px);max-height:100%;object-fit:contain;display:block';
+  const counter = h('div', {
+    style: 'position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;opacity:.7;pointer-events:none',
+  });
+  const btnStyle = 'position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);border:none;color:#fff;font-size:28px;padding:8px 14px;cursor:pointer;border-radius:4px;line-height:1;user-select:none';
+  const prevBtn = h('button', { style: btnStyle + ';left:12px', 'aria-label': 'Previous' }, '‹');
+  const nextBtn = h('button', { style: btnStyle + ';right:12px', 'aria-label': 'Next' }, '›');
+  function render() {
+    img.src = urls[idx];
+    const single = urls.length <= 1;
+    prevBtn.style.display = single ? 'none' : '';
+    nextBtn.style.display = single ? 'none' : '';
+    counter.textContent = single ? '' : (idx + 1) + ' / ' + urls.length;
+  }
+  prevBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx - 1 + urls.length) % urls.length; render(); });
+  nextBtn.addEventListener('click', e => { e.stopPropagation(); idx = (idx + 1) % urls.length; render(); });
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  overlay.addEventListener('click', close);
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft')  { idx = (idx - 1 + urls.length) % urls.length; render(); }
+    else if (e.key === 'ArrowRight') { idx = (idx + 1) % urls.length; render(); }
+  }
+  document.addEventListener('keydown', onKey);
+  overlay.append(img, prevBtn, nextBtn, counter);
+  render();
+  document.body.appendChild(overlay);
 }
