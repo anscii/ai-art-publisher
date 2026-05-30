@@ -460,6 +460,47 @@ def test_story_status_in_post_response(client):
     assert ig_post["story_status"] == "draft"
 
 
+def test_story_frame_count_in_post_response(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+
+    # No story yet
+    assert post["story_frame_count"] is None
+
+    # Story with 1 image → 2 frames (image + text)
+    _story(client, post["id"], [img_id])
+    detail = client.get(f"/api/series/{sid}").json()
+    ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
+    assert ig_post["story_frame_count"] == 2
+
+
+def test_story_facebook_posted_true_after_fake_publish(client, db, monkeypatch):
+    monkeypatch.setattr(AppConfig, "fake_posting", True)
+    story_id = _setup_rendered_story(client, db, monkeypatch)
+
+    client.post(f"/api/stories/{story_id}/publish")
+
+    db.expire_all()
+    story = db.get(Story, story_id)
+    sid = db.get(Post, story.post_id).series_id
+    detail = client.get(f"/api/series/{sid}").json()
+    ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
+    # fake mode posts to both IG and FB → facebook_result_json is set
+    assert ig_post["story_facebook_posted"] is True
+
+
+def test_story_facebook_posted_false_before_publish(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+    _story(client, post["id"], [img_id])
+
+    detail = client.get(f"/api/series/{sid}").json()
+    ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
+    assert ig_post["story_facebook_posted"] is False
+
+
 # ── GET story ─────────────────────────────────────────────────────────────────
 
 
