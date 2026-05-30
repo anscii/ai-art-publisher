@@ -47,6 +47,7 @@ def post_to_resp(p: Post) -> PostResponse:
         post_url=p.post_url,
         story_id=p.story.id if p.story else None,
         story_status=p.story.status if p.story else None,
+        story_error_message=p.story.error_message if p.story else None,
     )
 
 

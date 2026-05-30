@@ -198,6 +198,7 @@ class PostResponse(BaseModel):
     post_url: str | None = None
     story_id: str | None = None
     story_status: str | None = None
+    story_error_message: str | None = None
 
 
 class PostCreate(BaseModel):

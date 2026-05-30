@@ -5,14 +5,18 @@ let _sendingPollerId = null;
 function _startSendingPoller(seriesId) {
   if (_sendingPollerId) clearInterval(_sendingPollerId);
   const notified = new Set();
+  // Pre-populate story entries so settled-before-poller stories don't toast
+  (App.currentSeries?.posts || []).filter(p => !p.deleted_at).forEach(p => {
+    if (p.story_status && p.story_status !== 'publishing') notified.add('story:' + p.id);
+  });
   _sendingPollerId = setInterval(async () => {
     if (App.currentSeriesId !== seriesId) {
       clearInterval(_sendingPollerId); _sendingPollerId = null; return;
     }
     await loadSeriesDetail(seriesId, { silent: true });
     const posts = (App.currentSeries?.posts || []).filter(p => !p.deleted_at);
-    const hasSending = posts.some(p => p.status === 'sending');
-    if (!hasSending) {
+    const hasActivity = posts.some(p => p.status === 'sending' || p.story_status === 'publishing');
+    if (!hasActivity) {
       posts
         .filter(p => !notified.has(p.id) && (p.status === 'posted' || p.status === 'failed'))
         .forEach(p => {
@@ -22,6 +26,17 @@ function _startSendingPoller(seriesId) {
               ? 'Posted to ' + p.platform
               : 'Failed: ' + (p.error_message || p.platform),
             p.status === 'posted' ? 'success' : 'danger'
+          );
+        });
+      posts
+        .filter(p => !notified.has('story:' + p.id) && p.story_status && p.story_status !== 'publishing')
+        .forEach(p => {
+          notified.add('story:' + p.id);
+          showToast(
+            p.story_status === 'posted'
+              ? 'Story published'
+              : 'Story failed: ' + (p.story_error_message || 'unknown error'),
+            p.story_status === 'posted' ? 'success' : 'danger'
           );
         });
       clearInterval(_sendingPollerId); _sendingPollerId = null;
@@ -1763,10 +1778,11 @@ const STATUS_ICON_MAP = {
   failed:    { cls: 'bi bi-exclamation-circle',color: 'var(--aap-danger)' },
 };
 const STORY_STATUS_ICON = {
-  draft:    { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
-  rendered: { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
-  posted:   { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
-  failed:   { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
+  draft:      { cls: 'bi bi-clock',              color: 'var(--aap-ink-mute)' },
+  rendered:   { cls: 'bi bi-image',              color: 'var(--aap-dot-active)' },
+  publishing: { cls: 'bi bi-arrow-repeat',       color: 'var(--aap-dot-active)' },
+  posted:     { cls: 'bi bi-check-lg',           color: 'var(--aap-dot-done)' },
+  failed:     { cls: 'bi bi-exclamation-circle', color: 'var(--aap-danger)' },
 };
 
 function buildPostRow(post, imgMap, series) {
@@ -2754,18 +2770,22 @@ function _renderStoryEditorV2(body) {
   });
 
   const publishBtn = h('button', { cls: 'va__btn', text: 'Publish Stories', 'data-story-publish-btn': story.id });
-  publishBtn.disabled = story.status !== 'rendered';
+  publishBtn.disabled = story.status !== 'rendered' && story.status !== 'failed';
   publishBtn.addEventListener('click', async () => {
     publishBtn.disabled = true;
     publishBtn.textContent = 'Publishing…';
     try {
-      const updated = await apiFetch('POST', '/api/stories/' + story.id + '/publish');
-      _storyCtx.story = updated;
-      _renderStoryEditorV2(body);
-      showToast('Story published', 'success');
+      await apiFetch('POST', '/api/stories/' + story.id + '/publish');
+      const seriesId = _storyCtx?.post?.series_id || App.currentSeriesId;
+      bootstrap.Modal.getInstance(document.getElementById('storyEditorModal'))?.hide();
+      if (seriesId) {
+        _startSendingPoller(seriesId);
+        await loadSeriesDetail(seriesId, { silent: true });
+      }
     } catch (e) {
       showToast(e.message, 'danger');
-      _renderStoryEditorV2(body);
+      publishBtn.disabled = false;
+      publishBtn.textContent = 'Publish Stories';
     }
   });
 

@@ -394,7 +394,12 @@ def test_fake_publish_sets_posted(client, db, monkeypatch):
     story_id = _setup_rendered_story(client, db, monkeypatch)
     resp = client.post(f"/api/stories/{story_id}/publish")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "posted"
+    # Endpoint returns immediately with "publishing"; background task runs
+    # synchronously in TestClient so final DB state should be "posted".
+    assert resp.json()["status"] == "publishing"
+    db.expire_all()
+    story = db.get(Story, story_id)
+    assert story.status == "posted"
 
 
 def test_fake_publish_no_real_api_called(client, db, monkeypatch):

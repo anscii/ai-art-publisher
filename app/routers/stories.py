@@ -4,10 +4,11 @@ import re
 import time
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import app.database as _db_module
 from app.config import get_config
 from app.database import get_db
 from app.enums import Platform
@@ -379,21 +380,14 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
     return _story_to_resp(story)
 
 
-@router.post("/api/stories/{story_id}/publish", response_model=StoryResponse)
-def publish_story(story_id: str, db: Session = Depends(get_db)):
-    story = _get_story_or_404(story_id, db)
+def _run_publish(story_id: str, db: Session) -> None:
+    """Core publish loop shared by background task and fake-mode path."""
+    story = db.get(Story, story_id)
+    if not story:
+        return
     settings = get_or_create_settings(db)
 
     enabled_frames = [f for f in story.frames if f.is_enabled]
-    if not enabled_frames:
-        raise HTTPException(status_code=400, detail="No enabled frames to publish")
-
-    unrendered = [f for f in enabled_frames if not f.rendered_url]
-    if unrendered:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{len(unrendered)} frame(s) not yet rendered — call /render first",
-        )
 
     fake = get_config().fake_posting
     ig_svc: InstagramService | None = None
@@ -407,7 +401,7 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
     ig_results: list[dict[str, object]] = []
     fb_results: list[dict[str, object]] = []
 
-    for frame in enabled_frames:
+    for idx, frame in enumerate(enabled_frames):
         rendered_url: str = frame.rendered_url  # type: ignore[assignment]
 
         # Instagram — skip frames already posted (idempotent retry)
@@ -430,7 +424,7 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
             story.updated_at = datetime.now(UTC).replace(tzinfo=None)
             story.instagram_result_json = json.dumps(ig_results)
             db.commit()
-            raise HTTPException(status_code=502, detail=story.error_message)
+            return
 
         frame.instagram_frame_id = str(ig_result["media_id"]) if ig_result.get("media_id") else None
         ig_results.append(ig_result)
@@ -456,16 +450,21 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
                     )
                     fb_results.append(fb_result)
                 elif not fb_result.get("ok"):
-                    logger.warning(
+                    logger.error(
                         "Facebook story frame failed (story=%s frame=%s): %s",
                         story.id,
                         frame.id,
                         fb_result.get("description"),
                     )
             except Exception as exc:
-                logger.warning(
+                logger.error(
                     "Facebook story exception (story=%s frame=%s): %s", story.id, frame.id, exc
                 )
+
+        # Delay between frames so IG can finalise the first story segment
+        # before accepting media_publish for the next one.
+        if not fake and idx < len(enabled_frames) - 1:
+            time.sleep(3)
 
     now = datetime.now(UTC).replace(tzinfo=None)
     story.status = "posted"
@@ -476,5 +475,52 @@ def publish_story(story_id: str, db: Session = Depends(get_db)):
     if fb_results:
         story.facebook_result_json = json.dumps(fb_results)
     db.commit()
+
+
+def _publish_story_background(story_id: str) -> None:
+    db = _db_module.SessionLocal()
+    try:
+        _run_publish(story_id, db)
+    except Exception as exc:
+        logger.exception("Background story publish failed story=%s: %s", story_id, exc)
+        try:
+            s = db.get(Story, story_id)
+            if s and s.status == "publishing":
+                s.status = "failed"
+                s.error_message = str(exc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+@router.post("/api/stories/{story_id}/publish", response_model=StoryResponse)
+def publish_story(
+    story_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    story = _get_story_or_404(story_id, db)
+
+    enabled_frames = [f for f in story.frames if f.is_enabled]
+    if not enabled_frames:
+        raise HTTPException(status_code=400, detail="No enabled frames to publish")
+
+    unrendered = [f for f in enabled_frames if not f.rendered_url]
+    if unrendered:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{len(unrendered)} frame(s) not yet rendered — call /render first",
+        )
+
+    if story.status == "publishing":
+        return _story_to_resp(story)
+
+    story.status = "publishing"
+    story.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
     db.refresh(story)
+
+    background_tasks.add_task(_publish_story_background, story_id)
     return _story_to_resp(story)
