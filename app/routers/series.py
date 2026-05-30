@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import AIVariant, Image, Post, PostImage, Series
+from app.models import AIVariant, Image, Post, PostImage, Series, Story
 from app.routers.posts import post_to_resp
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -74,7 +74,7 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         select(Post)
         .options(
             selectinload(Post.post_images).selectinload(PostImage.image),
-            selectinload(Post.story),
+            selectinload(Post.story).selectinload(Story.frames),
         )
         .where(Post.series_id == s.id, Post.deleted_at.is_(None))
         .order_by(Post.created_at)

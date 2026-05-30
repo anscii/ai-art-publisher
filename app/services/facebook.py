@@ -18,7 +18,7 @@ class FacebookService:
             resp = client.post(
                 f"{BASE}/{self._page_id}/photo_stories",
                 params={"access_token": self._token},
-                json={"url": image_url},
+                json={"file_url": image_url},
             )
             d = resp.json()
             if "id" not in d:
