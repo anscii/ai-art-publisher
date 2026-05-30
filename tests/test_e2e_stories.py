@@ -21,11 +21,13 @@ def _create_series_with_instagram_post(page, live_server, tmp_path, img_count=1)
     page.get_by_role("button", name="New series").click()
     page.locator("#editorTitle").wait_for()
 
-    for _ in range(img_count):
+    for i in range(img_count):
         with page.expect_file_chooser() as fc:
             page.get_by_role("button", name="Add images").click()
         fc.value.set_files(str(png_path))
-        page.locator("[data-image-id]").last.wait_for(timeout=20000)
+        # Wait for exactly i+1 images — "last" returns immediately when prior images still
+        # exist, causing a race where selections are wiped by the subsequent loadSeriesDetail.
+        expect(page.locator("[data-image-id]")).to_have_count(i + 1, timeout=20000)
 
     for btn in page.locator("[data-select-btn]").all():
         btn.click()

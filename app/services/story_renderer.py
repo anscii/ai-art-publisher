@@ -46,10 +46,12 @@ def _cover_crop(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     scale = max(target_w / src_w, target_h / src_h)
     new_w = int(src_w * scale)
     new_h = int(src_h * scale)
-    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     left = (new_w - target_w) // 2
     top = (new_h - target_h) // 2
-    return img.crop((left, top, left + target_w, top + target_h))
+    cropped = resized.crop((left, top, left + target_w, top + target_h))
+    resized.close()
+    return cropped
 
 
 def _parse_color(hex_color: str) -> tuple[int, int, int]:
@@ -167,6 +169,11 @@ class StoryRenderer:
         if image_bytes:
             try:
                 src = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                # Cap source resolution: images larger than 2× canvas waste memory during resize.
+                # A 4000px source decodes to ~45 MB; capping to 3840px costs nothing visually.
+                _MAX_SRC = max(_CANVAS_W, _CANVAS_H) * 2
+                if max(src.size) > _MAX_SRC:
+                    src.thumbnail((_MAX_SRC, _MAX_SRC), Image.Resampling.LANCZOS)
                 return _cover_crop(src, _CANVAS_W, _CANVAS_H)
             except Exception:
                 pass
@@ -208,7 +215,10 @@ class StoryRenderer:
                 ImageDraw.Draw(bar_overlay).rectangle(
                     [(0, bar_top), (_CANVAS_W, bar_bot)], fill=bar_fill
                 )
-                rgba = Image.alpha_composite(rgba, bar_overlay)
+                composited = Image.alpha_composite(rgba, bar_overlay)
+                bar_overlay.close()
+                rgba.close()
+                rgba = composited
             center_y = (bar_top + bar_bot) // 2
             top_y = center_y - text_h // 2
 
@@ -237,10 +247,16 @@ class StoryRenderer:
 
         if mode in _SOLID_OVERLAY:
             overlay = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), _SOLID_OVERLAY[mode])
-            canvas = Image.alpha_composite(canvas, overlay)
+            composited = Image.alpha_composite(canvas, overlay)
+            overlay.close()
+            canvas.close()
+            canvas = composited
         elif mode == "image_blur_dim":
             dim = Image.new("RGBA", (_CANVAS_W, _CANVAS_H), (0, 0, 0, _DIM_OPACITY))
-            canvas = Image.alpha_composite(canvas, dim)
+            composited = Image.alpha_composite(canvas, dim)
+            dim.close()
+            canvas.close()
+            canvas = composited
 
         text_color = _parse_color(getattr(frame, "text_color", "#ffffff"))
         text_align = getattr(frame, "text_align", "middle")
