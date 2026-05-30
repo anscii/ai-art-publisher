@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 import app.database as _db_module
@@ -389,6 +390,10 @@ def _run_publish(story_id: str, db: Session) -> None:
 
     enabled_frames = [f for f in story.frames if f.is_enabled]
 
+    # Clear stale FB result so retries don't report a previously-succeeded
+    # FB post as successful when the current attempt never reached Facebook.
+    story.facebook_result_json = None
+
     fake = get_config().fake_posting
     ig_svc: InstagramService | None = None
     fb_svc: FacebookService | None = None
@@ -402,7 +407,15 @@ def _run_publish(story_id: str, db: Session) -> None:
     fb_results: list[dict[str, object]] = []
 
     for idx, frame in enumerate(enabled_frames):
-        rendered_url: str = frame.rendered_url  # type: ignore[assignment]
+        rendered_url = frame.rendered_url
+        if not rendered_url:
+            story.status = "failed"
+            story.error_message = (
+                f"Frame {frame.id} has no rendered URL — re-render before publishing"
+            )
+            story.updated_at = datetime.now(UTC).replace(tzinfo=None)
+            db.commit()
+            return
 
         # Instagram — skip frames already posted (idempotent retry)
         if frame.instagram_frame_id:
@@ -484,6 +497,7 @@ def _publish_story_background(story_id: str) -> None:
     except Exception as exc:
         logger.exception("Background story publish failed story=%s: %s", story_id, exc)
         try:
+            db.rollback()
             s = db.get(Story, story_id)
             if s and s.status == "publishing":
                 s.status = "failed"
@@ -514,13 +528,18 @@ def publish_story(
             detail=f"{len(unrendered)} frame(s) not yet rendered — call /render first",
         )
 
-    if story.status == "publishing":
+    # Atomic update: only transition to "publishing" if not already there or posted.
+    # Prevents two concurrent requests from both queuing a background task.
+    result = db.execute(
+        sa_update(Story)
+        .where(Story.id == story_id, Story.status.not_in(["publishing", "posted"]))
+        .values(status="publishing", updated_at=datetime.now(UTC).replace(tzinfo=None))
+    )
+    db.commit()
+    if result.rowcount == 0:
+        db.refresh(story)
         return _story_to_resp(story)
 
-    story.status = "publishing"
-    story.updated_at = datetime.now(UTC).replace(tzinfo=None)
-    db.commit()
     db.refresh(story)
-
     background_tasks.add_task(_publish_story_background, story_id)
     return _story_to_resp(story)

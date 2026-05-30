@@ -2790,6 +2790,7 @@ function _renderStoryEditorV2(body) {
       showToast(e.message, 'danger');
       publishBtn.disabled = false;
       publishBtn.textContent = 'Publish Stories';
+      _renderStoryEditorV2(body);
     }
   });
 

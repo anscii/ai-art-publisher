@@ -351,6 +351,13 @@ async function loadSeriesDetail(id, { silent = false } = {}) {
     if (token !== _loadDetailToken) return;
     App.currentSeries = s;
     renderEditor(s);
+    // Resume poller if activity is in progress (e.g., user navigated away and back)
+    if (!_sendingPollerId) {
+      const livePosts = (s.posts || []).filter(p => !p.deleted_at);
+      if (livePosts.some(p => p.status === 'sending' || p.story_status === 'publishing')) {
+        _startSendingPoller(id);
+      }
+    }
   } catch (e) {
     if (token !== _loadDetailToken) return;
     panel.replaceChildren(h('div', { cls: 'alert alert-danger', text: e.message }));
