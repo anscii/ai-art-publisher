@@ -5,8 +5,9 @@ let _sendingPollerId = null;
 function _startSendingPoller(seriesId) {
   if (_sendingPollerId) clearInterval(_sendingPollerId);
   const notified = new Set();
-  // Pre-populate story entries so settled-before-poller stories don't toast
+  // Snapshot all currently settled items — only transitions after this point toast
   (App.currentSeries?.posts || []).filter(p => !p.deleted_at).forEach(p => {
+    if (p.status !== 'sending') notified.add(p.id);
     if (p.story_status && p.story_status !== 'publishing') notified.add('story:' + p.id);
   });
   _sendingPollerId = setInterval(async () => {
@@ -32,9 +33,12 @@ function _startSendingPoller(seriesId) {
         .filter(p => !notified.has('story:' + p.id) && p.story_status && p.story_status !== 'publishing')
         .forEach(p => {
           notified.add('story:' + p.id);
+          const n = p.story_frame_count ?? '';
+          const frames = n ? ' (' + n + ' frame' + (n === 1 ? '' : 's') + ')' : '';
+          const platforms = 'Instagram' + (p.story_facebook_posted ? ' + Facebook' : '');
           showToast(
             p.story_status === 'posted'
-              ? 'Story published'
+              ? 'Story published to ' + platforms + frames
               : 'Story failed: ' + (p.story_error_message || 'unknown error'),
             p.story_status === 'posted' ? 'success' : 'danger'
           );
