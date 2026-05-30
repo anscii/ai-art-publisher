@@ -5,7 +5,7 @@ async function postNow(postId) {
       showToast('Sending…', 'info');
       if (App.currentSeriesId) {
         await loadSeriesDetail(App.currentSeriesId);
-        _startSendingPoller(App.currentSeriesId);
+        _startSendingPoller(App.currentSeriesId, { watchedPostIds: new Set([postId]) });
       }
     } catch (e) { showToast(e.message, 'danger'); }
   });

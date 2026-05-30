@@ -2,12 +2,14 @@
 // Polls loadSeriesDetail every 3 s while any post has status="sending".
 // Clears itself when all posts settle (posted/failed) or user navigates away.
 let _sendingPollerId = null;
-function _startSendingPoller(seriesId) {
+function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
   if (_sendingPollerId) clearInterval(_sendingPollerId);
   const notified = new Set();
-  // Snapshot all currently settled items — only transitions after this point toast
+  // Snapshot settled items so only new transitions toast.
+  // watchedPostIds are never pre-populated — they're the posts we just kicked off
+  // and must toast even if the background task completes before the first poll.
   (App.currentSeries?.posts || []).filter(p => !p.deleted_at).forEach(p => {
-    if (p.status !== 'sending') notified.add(p.id);
+    if (p.status !== 'sending' && !watchedPostIds.has(p.id)) notified.add(p.id);
     if (p.story_status && p.story_status !== 'publishing') notified.add('story:' + p.id);
   });
   _sendingPollerId = setInterval(async () => {
@@ -2118,7 +2120,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
       showToast(posts.length + ' post(s) sending…', 'info');
       onClose();
       await loadSeriesDetail(series.id);
-      _startSendingPoller(series.id);
+      _startSendingPoller(series.id, { watchedPostIds: new Set(posts.map(p => p.id)) });
     } catch (e) {
       showToast(e.message, 'danger');
       saveAndSendBtn.disabled = false;
