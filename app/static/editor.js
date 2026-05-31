@@ -992,10 +992,6 @@ function buildDescriptionsCard(series) {
       variantRow.appendChild(pill);
     });
   }
-  const addPill = h('button', { cls: 'aap-variant-add', type: 'button', text: '\uff0b Generate' });
-  addPill.addEventListener('click', () => document.getElementById('generateBtn')?.click());
-  variantRow.appendChild(addPill);
-
   const descEn    = h('textarea', { cls: 'aap-lang-textarea', id: 'f_desc_en', rows: '5', 'aria-label': 'EN Instagram description' });
   descEn.value    = series.description_en || '';
   descEn.addEventListener('input', () => _autoGrow(descEn));
