@@ -939,23 +939,55 @@ async function deleteImage(imageId) {
 
 async function deleteVariant(variantId, cascade = false) {
   const path = '/api/ai_variants/' + variantId + (cascade ? '?cascade=true' : '');
-  try {
-    const updated = await apiFetch('DELETE', path);
-    App.currentSeries = updated;
-    renderEditor(updated);
-    showToast('Variant deleted', 'success');
-  } catch (e) {
-    if (e.status === 409 && e.body?.detail?.cascade_required) {
-      const n = e.body.detail.dependent_count;
-      showConfirm(
-        'This draft has ' + n + ' dependent full variant' + (n === 1 ? '' : 's') +
-        ' that will also be deleted. Proceed?',
-        () => deleteVariant(variantId, true),
-      );
-    } else {
+
+  if (cascade) {
+    try {
+      const updated = await apiFetch('DELETE', path);
+      App.currentSeries = updated;
+      renderEditor(updated);
+      showToast('Variant deleted', 'success');
+    } catch (e) {
       showToast(e.message, 'danger');
     }
+    return;
   }
+
+  const savedSeries = {
+    ...App.currentSeries,
+    ai_variants: [...App.currentSeries.ai_variants],
+  };
+  App.currentSeries = {
+    ...App.currentSeries,
+    ai_variants: App.currentSeries.ai_variants.filter(v => v.id !== variantId),
+    chosen_variant_id: App.currentSeries.chosen_variant_id === variantId
+      ? null
+      : App.currentSeries.chosen_variant_id,
+  };
+  renderEditor(App.currentSeries);
+
+  showUndoToast('Variant deleted', async () => {
+    try {
+      const updated = await apiFetch('DELETE', path);
+      App.currentSeries = updated;
+      renderEditor(updated);
+    } catch (e) {
+      App.currentSeries = savedSeries;
+      renderEditor(savedSeries);
+      if (e.status === 409 && e.body?.detail?.cascade_required) {
+        const n = e.body.detail.dependent_count;
+        showConfirm(
+          'This draft has ' + n + ' dependent full variant' + (n === 1 ? '' : 's') +
+          ' that will also be deleted. Proceed?',
+          () => deleteVariant(variantId, true),
+        );
+      } else {
+        showToast(e.message, 'danger');
+      }
+    }
+  }, () => {
+    App.currentSeries = savedSeries;
+    renderEditor(savedSeries);
+  });
 }
 
 // ── Descriptions card ─────────────────────────────────────────────────────────
