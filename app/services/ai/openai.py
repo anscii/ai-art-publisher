@@ -75,8 +75,20 @@ class OpenAIProvider(AIProvider):
                 json.dumps(messages, ensure_ascii=False),
             )
         resp = self._call_api(model, messages, self._step1_response_format(num_variants, language))
+        if not resp.choices:
+            logger.error("provider returned no choices | model=%s | response=%s", model, resp)
+            raise ValueError(f"Provider returned no choices for model '{model}'")
         text = resp.choices[0].message.content
-        assert text is not None
+        if text is None:
+            logger.error(
+                "provider returned null content | model=%s | finish_reason=%s | response=%s",
+                model,
+                resp.choices[0].finish_reason,
+                resp,
+            )
+            raise ValueError(
+                f"Provider returned null content for model '{model}' (finish_reason={resp.choices[0].finish_reason})"
+            )
         logger.debug("openai response | model=%s | text=%s", model, text)
         raw = parse_ai_response(text, "openai", model)
         variants = [AIVariantData.from_llm_dict(v) for v in raw]
@@ -110,8 +122,20 @@ class OpenAIProvider(AIProvider):
                 json.dumps(messages, ensure_ascii=False),
             )
         resp = self._call_api(model, messages, self._step2_response_format(language))
+        if not resp.choices:
+            logger.error("provider returned no choices | model=%s | response=%s", model, resp)
+            raise ValueError(f"Provider returned no choices for model '{model}'")
         text = resp.choices[0].message.content
-        assert text is not None
+        if text is None:
+            logger.error(
+                "provider returned null content | model=%s | finish_reason=%s | response=%s",
+                model,
+                resp.choices[0].finish_reason,
+                resp,
+            )
+            raise ValueError(
+                f"Provider returned null content for model '{model}' (finish_reason={resp.choices[0].finish_reason})"
+            )
         logger.debug("openai expand response | model=%s | text=%s", model, text)
         raw = parse_ai_object(text, "openai", model)
         data = AIVariantData.from_llm_dict(raw)
