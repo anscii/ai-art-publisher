@@ -44,6 +44,8 @@ class Series(Base):
     chosen_variant_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    generation_status: Mapped[str] = mapped_column(String, default="idle")
+    generation_error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     collection: Mapped["Collection | None"] = relationship("Collection", back_populates="series")
     images: Mapped[list["Image"]] = relationship(

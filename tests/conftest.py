@@ -122,7 +122,7 @@ def client(db):
         try:
             yield db
         finally:
-            pass
+            db.expire_all()
 
     app.dependency_overrides[get_db] = _override
     with TestClient(app, raise_server_exceptions=True) as c:

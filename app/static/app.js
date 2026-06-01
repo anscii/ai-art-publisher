@@ -122,6 +122,31 @@ function showToast(msg, type) {
   wrap.addEventListener('hidden.bs.toast', () => wrap.remove());
 }
 
+function showUndoToast(msg, onExpire, onUndo) {
+  const wrap = h('div', { cls: 'toast text-bg-success', role: 'alert' });
+  const inner = h('div', { cls: 'd-flex align-items-center' });
+  const body = h('div', { cls: 'toast-body flex-grow-1', text: msg });
+  const undoBtn = h('button', { cls: 'btn btn-sm btn-outline-light me-2', type: 'button', text: 'Undo' });
+  undoBtn.setAttribute('data-undo-toast', '');
+  const close = h('button', { cls: 'btn-close btn-close-white me-2', type: 'button' });
+  close.setAttribute('data-bs-dismiss', 'toast');
+  let acted = false;
+  undoBtn.addEventListener('click', () => {
+    acted = true;
+    t.hide();
+    onUndo();
+  });
+  inner.append(body, undoBtn, close);
+  wrap.appendChild(inner);
+  document.getElementById('toastContainer').appendChild(wrap);
+  const t = new bootstrap.Toast(wrap, { delay: 5000 });
+  t.show();
+  wrap.addEventListener('hidden.bs.toast', () => {
+    wrap.remove();
+    if (!acted) onExpire();
+  });
+}
+
 // ── Error Service ─────────────────────────────────────────────────────────────
 const ErrorService = (() => {
   const _log = [];
@@ -285,6 +310,13 @@ function buildSeriesItem(s) {
       ? s.collection_name.slice(0, 21) + '…'
       : s.collection_name;
     metaChildren.push(h('span', { cls: 'aap-collection-tag', text: '↪ ' + label }));
+  }
+  if (s.generation_status === 'generating_draft' || s.generation_status === 'generating_full') {
+    metaChildren.push(h('span', {
+      cls: 'spinner-border spinner-border-sm text-secondary',
+      style: 'width:0.65rem;height:0.65rem;border-width:2px',
+      title: 'Generating…',
+    }));
   }
 
   return h('article', {

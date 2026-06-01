@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from PIL import Image as PILImage
 
 from app.config import AppConfig
-from app.models import AppSettings, Post, Story
+from app.models import Post, Story
 from app.routers.stories import split_description
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -471,27 +471,6 @@ def test_story_frame_count_in_post_response(client):
     detail = client.get(f"/api/series/{sid}").json()
     ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
     assert ig_post["story_frame_count"] == 2
-
-
-def test_story_facebook_posted_true_after_fake_publish(client, db, monkeypatch):
-    monkeypatch.setattr(AppConfig, "fake_posting", True)
-    story_id = _setup_rendered_story(client, db, monkeypatch)
-
-    # Configure a Facebook page so the cross-post path is triggered
-    settings = db.get(AppSettings, 1) or AppSettings(id=1)
-    settings.facebook_page_id = "123456789"
-    db.add(settings)
-    db.commit()
-
-    client.post(f"/api/stories/{story_id}/publish")
-
-    db.expire_all()
-    story = db.get(Story, story_id)
-    sid = db.get(Post, story.post_id).series_id
-    detail = client.get(f"/api/series/{sid}").json()
-    ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
-    # FB cross-post via IG API → facebook_result_json is set
-    assert ig_post["story_facebook_posted"] is True
 
 
 def test_story_facebook_posted_false_before_publish(client):

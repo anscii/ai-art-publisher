@@ -336,6 +336,7 @@ class SeriesListItem(BaseModel):
     name: str
     title: str
     status: str
+    generation_status: str = "idle"
     collection_name: str | None
     collection_name_ru: str | None
     collection_number: str | None
@@ -363,6 +364,8 @@ class SeriesDetail(BaseModel):
     tags_instagram: list[str]
     tags_telegram: list[str]
     status: str
+    generation_status: str = "idle"
+    generation_error: str | None = None
     chosen_variant_id: str | None
     collection: CollectionRef | None
     collection_index: int | None
