@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -237,10 +237,14 @@ def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db
 
 
 @router.get("/{series_id}/generation-status")
-def get_generation_status(series_id: str, db: Session = Depends(get_db)) -> dict:
+def get_generation_status(
+    series_id: str, response: Response, db: Session = Depends(get_db)
+) -> dict:
     s = db.get(Series, series_id)
     if not s or s.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Series not found")
+    if s.generation_status == "generating":
+        response.status_code = 202
     return {"generation_status": s.generation_status, "generation_error": s.generation_error}
 
 
