@@ -9,14 +9,13 @@ function _startGeneratingPoller(seriesId, { savedSelection = null, prevVariantCo
     if (App.currentSeriesId !== seriesId) {
       clearInterval(_generatingPollerId); _generatingPollerId = null; return;
     }
-    // Fetch status without re-rendering editor — just update list card spinner.
-    let s;
+    // Fetch only generation_status — avoids loading full series on every tick.
+    let statusData;
     try {
-      s = await apiFetch('GET', '/api/series/' + seriesId);
+      statusData = await apiFetch('GET', '/api/series/' + seriesId + '/generation-status');
     } catch (_) { return; }
-    App.currentSeries = s;
-    updateSeriesItem(s);
-    if (s.generation_status === 'generating') return;
+    if (App.currentSeries) App.currentSeries.generation_status = statusData.generation_status;
+    if (statusData.generation_status === 'generating') return;
 
     // Generation settled — now do full reload + render.
     clearInterval(_generatingPollerId); _generatingPollerId = null;

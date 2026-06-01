@@ -236,6 +236,14 @@ def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db
     return series_to_detail(s, db)
 
 
+@router.get("/{series_id}/generation-status")
+def get_generation_status(series_id: str, db: Session = Depends(get_db)) -> dict:
+    s = db.get(Series, series_id)
+    if not s or s.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Series not found")
+    return {"generation_status": s.generation_status, "generation_error": s.generation_error}
+
+
 @router.get("/{series_id}")
 def get_series(series_id: str, db: Session = Depends(get_db)) -> SeriesDetail:
     s = db.get(Series, series_id)
