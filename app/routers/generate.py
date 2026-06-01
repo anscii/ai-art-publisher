@@ -27,13 +27,21 @@ _GENERATION_TIMEOUT = 180  # 3 minutes
 
 
 def _call_with_timeout(fn, *args, timeout: int = _GENERATION_TIMEOUT, **kwargs):
-    """Run fn(*args, **kwargs) in a thread; raise TimeoutError if it exceeds timeout seconds."""
+    """Run fn(*args, **kwargs) in a thread; raise TimeoutError if it exceeds timeout seconds.
+
+    Uses a 2-second grace period after the deadline: if the future completed at the
+    boundary (race condition), we return its result instead of raising.
+    """
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(fn, *args, **kwargs)
         try:
             return future.result(timeout=timeout)
         except concurrent.futures.TimeoutError:
-            raise TimeoutError(f"AI call timed out after {timeout}s")
+            # Grace period: thread may have finished at the exact timeout boundary.
+            try:
+                return future.result(timeout=2)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(f"AI call timed out after {timeout}s")
 
 
 router = APIRouter(prefix="/api/series", tags=["generate"])
