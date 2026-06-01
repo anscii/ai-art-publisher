@@ -1,15 +1,17 @@
 import base64
+import concurrent.futures
 import json
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+import app.database as _db_module
 from app.database import get_db
 from app.models import AIVariant, Series
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
-    AIVariantResponse,
     AIVariantSemanticUpdate,
     GenerateFullRequest,
     GenerateRequest,
@@ -18,6 +20,29 @@ from app.schemas import (
 from app.services.ai.base import AIProvider
 from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
+
+logger = logging.getLogger("app.generate")
+
+_GENERATION_TIMEOUT = 300  # 5 minutes
+
+
+def _call_with_timeout(fn, *args, timeout: int = _GENERATION_TIMEOUT, **kwargs):
+    """Run fn(*args, **kwargs) in a thread; raise TimeoutError if it exceeds timeout seconds.
+
+    Uses a 2-second grace period after the deadline: if the future completed at the
+    boundary (race condition), we return its result instead of raising.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            # Grace period: thread may have finished at the exact timeout boundary.
+            try:
+                return future.result(timeout=2)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(f"AI call timed out after {timeout}s")
+
 
 router = APIRouter(prefix="/api/series", tags=["generate"])
 variants_router = APIRouter(prefix="/api/ai_variants", tags=["ai_variants"])
@@ -75,64 +100,67 @@ def _resolve_actual_provider_model(
     return provider_name, actual_model or model
 
 
-@router.post("/{series_id}/generate", status_code=201)
-def generate_descriptions(
-    series_id: str,
-    body: GenerateRequest,
-    db: Session = Depends(get_db),
-) -> list[AIVariantResponse]:
+def _build_board_context(settings) -> str:
+    if not settings.pinterest_board_map:
+        return ""
+    try:
+        _bm = json.loads(settings.pinterest_board_map)
+        if _bm:
+            names = ", ".join(_bm.keys())
+            return (
+                f"\n\nExisting Pinterest boards: {names}. "
+                "For the pinterest.board field, prefer one of these names; "
+                "suggest a new board name only if none fit this artwork."
+            )
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return ""
+
+
+def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None:
+    """Core logic for generating draft variants. Runs in a background task or directly in tests."""
     s = db.get(Series, series_id)
     if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
-    if not body.include_images and not body.hint:
-        raise HTTPException(status_code=400, detail="Hint is required when not including images")
-    if body.include_images and not s.images:
-        raise HTTPException(status_code=400, detail="Series has no images")
+        return
 
     settings = get_or_create_settings(db)
-    provider_name = body.provider or settings.default_provider
+    provider_name = body_data.get("provider") or settings.default_provider
     model = (
-        body.model
+        body_data.get("model")
         or getattr(settings, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
-    from app.config import get_config
 
     api_key = _get_api_key(settings, provider_name)
-    if not api_key and not get_config().fake_ai:
-        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
+    include_images = body_data.get("include_images", False)
+    selected_image_ids = body_data.get("selected_image_ids")
     images_b64: list[str] = []
-    if body.include_images:
+    if include_images:
         storage = get_storage_from_settings(settings)
         active = {i.id: i for i in s.images if i.deleted_at is None}
-        if body.selected_image_ids:
-            ordered = [active[id] for id in body.selected_image_ids if id in active][:3]
+        if selected_image_ids:
+            ordered = [active[id] for id in selected_image_ids if id in active][:3]
         else:
             ordered = sorted(active.values(), key=lambda i: i.order_index)[:3]
         for img in ordered:
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 
-    board_context = ""
-    if settings.pinterest_board_map:
-        try:
-            _bm = json.loads(settings.pinterest_board_map)
-            if _bm:
-                names = ", ".join(_bm.keys())
-                board_context = (
-                    f"\n\nExisting Pinterest boards: {names}. "
-                    "For the pinterest.board field, prefer one of these names; "
-                    "suggest a new board name only if none fit this artwork."
-                )
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    augmented_hint = (body.hint or "") + board_context if board_context else body.hint
+    board_context = _build_board_context(settings)
+    hint = body_data.get("hint")
+    augmented_hint = (hint or "") + board_context if board_context else hint
 
     provider = get_provider(provider_name, api_key)
-    variants_data = provider.generate_variants(
-        images_b64, model, augmented_hint, num_variants=body.num_variants, language=body.language
+    num_variants = body_data.get("num_variants", 1)
+    language = body_data.get("language", "en")
+    variants_data = _call_with_timeout(
+        provider.generate_variants,
+        images_b64,
+        model,
+        augmented_hint,
+        num_variants=num_variants,
+        language=language,
     )
 
     for vd in variants_data:
@@ -149,7 +177,7 @@ def generate_descriptions(
             description_ru=vd.description_ru,
             tags_instagram=json.dumps(vd.tags_instagram),
             tags_telegram=json.dumps(vd.tags_telegram),
-            hint=body.hint,
+            hint=hint,
             cost_usd=vd.cost_usd,
             instagram_seo=vd.instagram_seo or None,
             pinterest_title=vd.pinterest_title or None,
@@ -158,84 +186,65 @@ def generate_descriptions(
             archive_metadata=json.dumps(vd.archive_metadata) if vd.archive_metadata else None,
         )
         db.add(v)
+
+    s.generation_status = "idle"
+    s.generation_error = None
     db.commit()
-    return series_to_detail(s, db).ai_variants
 
 
-@router.post("/{series_id}/generate-full", status_code=201)
-def generate_full(
-    series_id: str,
-    body: GenerateFullRequest,
-    db: Session = Depends(get_db),
-) -> SeriesDetail:
+def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
+    """Core logic for generate-full. Runs in a background task or directly in tests."""
     s = db.get(Series, series_id)
     if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
-    if not body.description.strip():
-        raise HTTPException(status_code=400, detail="description is required")
+        return
 
     settings = get_or_create_settings(db)
-    provider_name = body.provider or settings.default_provider
+    provider_name = body_data.get("provider") or settings.default_provider
     model = (
-        body.model
+        body_data.get("model")
         or getattr(settings, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
-    from app.config import get_config
 
     api_key = _get_api_key(settings, provider_name)
-    if not api_key and not get_config().fake_ai:
-        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
-
-    board_context = ""
-    if settings.pinterest_board_map:
-        try:
-            _bm = json.loads(settings.pinterest_board_map)
-            if _bm:
-                names = ", ".join(_bm.keys())
-                board_context = (
-                    f"\n\nExisting Pinterest boards: {names}. "
-                    "For the pinterest.board field, prefer one of these names; "
-                    "suggest a new board name only if none fit this artwork."
-                )
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    augmented_hint = (body.hint or "") + board_context if board_context else body.hint
+    board_context = _build_board_context(settings)
+    hint = body_data.get("hint")
+    augmented_hint = (hint or "") + board_context if board_context else hint
 
     provider = get_provider(provider_name, api_key)
-    vd = provider.expand_variant(body.description, body.language, model, augmented_hint)
+    description = body_data["description"]
+    language = body_data.get("language", "en")
+    vd = _call_with_timeout(provider.expand_variant, description, language, model, augmented_hint)
     used_provider, used_model = _resolve_actual_provider_model(
         vd.actual_model, provider_name, model
     )
-    if body.language == "en":
-        vd.description_en = body.description
+    if language == "en":
+        vd.description_en = description
     else:
-        vd.description_ru = body.description
+        vd.description_ru = description
 
-    if body.variant_id:
-        existing = db.get(AIVariant, body.variant_id)
+    variant_id = body_data.get("variant_id")
+    if variant_id:
+        existing = db.get(AIVariant, variant_id)
         if not existing or existing.series_id != series_id:
-            raise HTTPException(status_code=404, detail="Variant not found")
+            s.generation_status = "failed"
+            s.generation_error = f"Variant {variant_id} not found"
+            db.commit()
+            return
         is_draft = existing.title == "" and existing.title_ru == ""
         same_pipeline = existing.provider == used_provider and existing.model == used_model
         if is_draft and same_pipeline:
-            # First full-gen on this draft, same provider/model — update in-place
             v = existing
         else:
-            # Different provider/model, or variant already has full content — preserve
-            # the existing record and create a new one seeded with the draft description.
-            v = AIVariant(
-                series_id=series_id, provider=used_provider, model=used_model, hint=body.hint
-            )
-            if body.language == "en":
-                v.description_en = body.description
+            v = AIVariant(series_id=series_id, provider=used_provider, model=used_model, hint=hint)
+            if language == "en":
+                v.description_en = description
             else:
-                v.description_ru = body.description
-            v.draft_id = body.variant_id
+                v.description_ru = description
+            v.draft_id = variant_id
             db.add(v)
     else:
-        v = AIVariant(series_id=series_id, provider=used_provider, model=used_model, hint=body.hint)
+        v = AIVariant(series_id=series_id, provider=used_provider, model=used_model, hint=hint)
         db.add(v)
 
     v.provider = used_provider
@@ -246,14 +255,122 @@ def generate_full(
     v.description_ru = vd.description_ru
     v.tags_instagram = json.dumps(vd.tags_instagram)
     v.tags_telegram = json.dumps(vd.tags_telegram)
-    v.hint = body.hint
+    v.hint = hint
     v.cost_usd = vd.cost_usd
     v.instagram_seo = vd.instagram_seo or None
     v.pinterest_title = vd.pinterest_title or None
     v.pinterest_description = vd.pinterest_description or None
     v.pinterest_board = vd.pinterest_board or None
     v.archive_metadata = json.dumps(vd.archive_metadata) if vd.archive_metadata else None
+
+    s.generation_status = "idle"
+    s.generation_error = None
     db.commit()
+
+
+def _generate_variants_background(series_id: str, body_data: dict) -> None:
+    db = _db_module.SessionLocal()
+    try:
+        _run_generate_variants(series_id, body_data, db)
+    except Exception as exc:
+        logger.exception("Background generation failed for series %s: %s", series_id, exc)
+        try:
+            _s = db.get(Series, series_id)
+            if _s and _s.generation_status.startswith("generating"):
+                _s.generation_status = "failed"
+                _s.generation_error = str(exc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+def _generate_full_background(series_id: str, body_data: dict) -> None:
+    db = _db_module.SessionLocal()
+    try:
+        _run_generate_full(series_id, body_data, db)
+    except Exception as exc:
+        logger.exception("Background generate-full failed for series %s: %s", series_id, exc)
+        try:
+            _s = db.get(Series, series_id)
+            if _s and _s.generation_status.startswith("generating"):
+                _s.generation_status = "failed"
+                _s.generation_error = str(exc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+@router.post("/{series_id}/generate", status_code=202)
+def generate_descriptions(
+    series_id: str,
+    body: GenerateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> SeriesDetail:
+    s = db.get(Series, series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Series not found")
+    if not body.include_images and not body.hint:
+        raise HTTPException(status_code=400, detail="Hint is required when not including images")
+    if body.include_images and not s.images:
+        raise HTTPException(status_code=400, detail="Series has no images")
+    if s.generation_status in ("generating_draft", "generating_full"):
+        raise HTTPException(status_code=409, detail="Generation already in progress")
+
+    settings = get_or_create_settings(db)
+    provider_name = body.provider or settings.default_provider
+    from app.config import get_config
+
+    api_key = _get_api_key(settings, provider_name)
+    if not api_key and not get_config().fake_ai:
+        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
+
+    s.generation_status = "generating_draft"
+    s.generation_error = None
+    db.commit()
+
+    background_tasks.add_task(_generate_variants_background, series_id, body.model_dump())
+    return series_to_detail(s, db)
+
+
+@router.post("/{series_id}/generate-full", status_code=202)
+def generate_full(
+    series_id: str,
+    body: GenerateFullRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> SeriesDetail:
+    s = db.get(Series, series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Series not found")
+    if not body.description.strip():
+        raise HTTPException(status_code=400, detail="description is required")
+    if s.generation_status in ("generating_draft", "generating_full"):
+        raise HTTPException(status_code=409, detail="Generation already in progress")
+
+    # Validate variant_id upfront so we can return 404 synchronously.
+    if body.variant_id:
+        existing = db.get(AIVariant, body.variant_id)
+        if not existing or existing.series_id != series_id:
+            raise HTTPException(status_code=404, detail="Variant not found")
+
+    settings = get_or_create_settings(db)
+    provider_name = body.provider or settings.default_provider
+    from app.config import get_config
+
+    api_key = _get_api_key(settings, provider_name)
+    if not api_key and not get_config().fake_ai:
+        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
+
+    s.generation_status = "generating_full"
+    s.generation_error = None
+    db.commit()
+
+    background_tasks.add_task(_generate_full_background, series_id, body.model_dump())
     return series_to_detail(s, db)
 
 

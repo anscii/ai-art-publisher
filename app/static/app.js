@@ -311,6 +311,13 @@ function buildSeriesItem(s) {
       : s.collection_name;
     metaChildren.push(h('span', { cls: 'aap-collection-tag', text: '↪ ' + label }));
   }
+  if (s.generation_status === 'generating_draft' || s.generation_status === 'generating_full') {
+    metaChildren.push(h('span', {
+      cls: 'spinner-border spinner-border-sm text-secondary',
+      style: 'width:0.65rem;height:0.65rem;border-width:2px',
+      title: 'Generating…',
+    }));
+  }
 
   return h('article', {
     cls: 'aap-series-row',

@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -101,6 +101,8 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
         tags_instagram=json.loads(s.tags_instagram),
         tags_telegram=json.loads(s.tags_telegram),
         status=s.status,
+        generation_status=s.generation_status,
+        generation_error=s.generation_error,
         collection=collection_ref,
         chosen_variant_id=s.chosen_variant_id,
         collection_index=s.collection_index,
@@ -127,6 +129,7 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
         name=s.name,
         title=s.title,
         status=s.status,
+        generation_status=s.generation_status,
         collection_name=coll.name if coll else None,
         collection_name_ru=coll.name_ru if coll else None,
         collection_number=s.collection_number,
@@ -193,7 +196,13 @@ def list_series(
         q = q.where(Series.name.ilike(f"%{search}%") | Series.title.ilike(f"%{search}%"))
     if collection_id:
         q = q.where(Series.collection_id == collection_id)
-    q = q.order_by(Series.created_at.asc())
+    from sqlalchemy import case as _case
+
+    _generating_first = _case(
+        (Series.generation_status.in_(["generating_draft", "generating_full"]), 0),
+        else_=1,
+    )
+    q = q.order_by(_generating_first, Series.created_at.asc())
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
     settings = get_or_create_settings(db)
@@ -231,6 +240,18 @@ def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db
         img.status = "queued" if img.id in selected else "pending"
     db.commit()
     return series_to_detail(s, db)
+
+
+@router.get("/{series_id}/generation-status")
+def get_generation_status(
+    series_id: str, response: Response, db: Session = Depends(get_db)
+) -> dict:
+    s = db.get(Series, series_id)
+    if not s or s.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Series not found")
+    if s.generation_status in ("generating_draft", "generating_full"):
+        response.status_code = 202
+    return {"generation_status": s.generation_status, "generation_error": s.generation_error}
 
 
 @router.get("/{series_id}")

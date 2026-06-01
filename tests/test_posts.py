@@ -408,9 +408,9 @@ def test_create_posts_copies_seo_from_chosen_variant(client):
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=fake_with_seo)
         mp.return_value = p
-        variants = client.post(f"/api/series/{sid}/generate", json={"hint": "test"}).json()
+        client.post(f"/api/series/{sid}/generate", json={"hint": "test"})
 
-    vid = variants[0]["id"]
+    vid = client.get(f"/api/series/{sid}").json()["ai_variants"][0]["id"]
     # set chosen_variant_id
     client.put(f"/api/series/{sid}", json={"chosen_variant_id": vid})
 

@@ -18,8 +18,8 @@ def test_generate_drafts(page, live_server):
     page.locator("#genHint").fill("A fox spirit in a rain-soaked library")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
-    assert page.locator("#toastContainer").get_by_text("drafts").is_visible()
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
+    assert page.locator("#toastContainer").get_by_text("draft").is_visible()
 
 
 def test_generate_drafts_then_apply_fills_description_field(page, live_server):
@@ -30,7 +30,7 @@ def test_generate_drafts_then_apply_fills_description_field(page, live_server):
     page.locator("#genHint").fill("Dark academia gothic horror")
     page.locator("#generateBtn").click()
 
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # Click the first draft variant to load its description_en
     page.locator("[data-variant-idx]").first.click()
@@ -45,7 +45,7 @@ def test_generate_full_fills_all_fields(page, live_server):
 
     page.locator("#genHint").fill("A ghost in a clockwork city")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # Apply a draft
     page.locator("[data-variant-idx]").first.click()
@@ -103,7 +103,7 @@ def test_generate_preserves_image_selection(page, live_server, tmp_path):
 
     page.locator("#genHint").fill("A fox spirit")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # selected image must still be selected and first in strip
     assert page.locator(".aap-thumb.is-selected").count() >= 1
@@ -120,13 +120,23 @@ def test_variant_delete_button_hidden_when_used_in_post(page, live_server):
     assert r.ok, r.text()
     series_id = r.json()["id"]
 
+    import time
+
     r = page.request.post(
         f"{live_server}/api/series/{series_id}/generate",
         data='{"hint": "test", "num_variants": 2}',
         headers={"Content-Type": "application/json"},
     )
     assert r.ok, r.text()
-    variants = r.json()
+    # Generation is async — poll until settled (HTTP 200), then fetch variants.
+    for _ in range(20):
+        sr = page.request.get(f"{live_server}/api/series/{series_id}/generation-status")
+        if sr.status == 200:
+            break
+        time.sleep(0.3)
+    r2 = page.request.get(f"{live_server}/api/series/{series_id}")
+    assert r2.ok, r2.text()
+    variants = r2.json()["ai_variants"]
     assert len(variants) >= 2
     vid = variants[0]["id"]
 
@@ -162,7 +172,7 @@ def test_reset_to_saved_restores_fields(page, live_server):
 
     page.locator("#genHint").fill("A ghost in a clockwork city")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # Apply draft then generate full to get desc_en filled
     page.locator("[data-variant-idx]").first.click()
@@ -191,7 +201,7 @@ def test_applying_draft_clears_other_fields(page, live_server):
     # Generate full content so all fields are populated
     page.locator("#genHint").fill("A fox spirit")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
     page.locator("[data-variant-idx]").first.click()
     page.locator("#generateFullBtn").click()
     page.locator("#toastContainer").get_by_text("Full content generated").wait_for(timeout=15000)
@@ -203,10 +213,10 @@ def test_applying_draft_clears_other_fields(page, live_server):
 
     # Generate new EN drafts — applying the draft must clear derived fields
     # Wait for previous 'drafts' toast to auto-dismiss before triggering a new one
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(state="hidden", timeout=10000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(state="hidden", timeout=10000)
     page.locator("#genHint").fill("New hint")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # Draft auto-applied: description_en filled, everything else cleared
     assert page.locator("#f_desc_en").input_value()
@@ -224,7 +234,7 @@ def test_applying_draft_restores_hint(page, live_server):
     hint_text = "A ghost in a clockwork city"
     page.locator("#genHint").fill(hint_text)
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # renderEditor rebuilds genHint from scratch; applyVariant must restore it from v.hint
     assert page.locator("#genHint").input_value() == hint_text
@@ -243,7 +253,7 @@ def test_generate_card_settings_persist_after_reload(page, live_server):
 
     page.locator("#genHint").fill("test persistence")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     # After card rebuild, all selections must be preserved
     assert page.locator("#genProvider").input_value() == "anthropic"
@@ -283,6 +293,6 @@ def test_generate_error_clears_on_success(page, live_server):
     # Now fill hint and generate successfully
     page.locator("#genHint").fill("A fox spirit in the rain")
     page.locator("#generateBtn").click()
-    page.locator("#toastContainer").get_by_text("drafts").wait_for(timeout=15000)
+    page.locator("#toastContainer").get_by_text("draft").wait_for(timeout=15000)
 
     assert not page.locator("#genError").is_visible()

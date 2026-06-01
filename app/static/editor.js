@@ -1,3 +1,51 @@
+// ── Generating poller ─────────────────────────────────────────────────────────
+// Polls generation_status every 3 s WITHOUT re-rendering the editor on each tick
+// (avoids resetting the user's active variant view mid-generation).
+// Only does a full loadSeriesDetail when generation settles.
+let _generatingPollerId = null;
+function _startGeneratingPoller(seriesId, { savedSelection = null, prevVariantCount = 0, fullGen = false, targetVariantId = null } = {}) {
+  if (_generatingPollerId) clearInterval(_generatingPollerId);
+  _generatingPollerId = setInterval(async () => {
+    if (App.currentSeriesId !== seriesId) {
+      clearInterval(_generatingPollerId); _generatingPollerId = null; return;
+    }
+    // Fetch only generation_status — avoids loading full series on every tick.
+    let statusData;
+    try {
+      statusData = await apiFetch('GET', '/api/series/' + seriesId + '/generation-status');
+    } catch (_) { return; }
+    if (App.currentSeries) App.currentSeries.generation_status = statusData.generation_status;
+    if (statusData.generation_status.startsWith('generating')) return;
+
+    // Generation settled — now do full reload + render.
+    clearInterval(_generatingPollerId); _generatingPollerId = null;
+    await loadSeriesDetail(seriesId, { silent: true });
+    const status = App.currentSeries?.generation_status;
+    if (status === 'idle') {
+      const variants = App.currentSeries?.ai_variants || [];
+      ErrorService.clear('generate');
+      if (fullGen) {
+        const idx = targetVariantId ? variants.findIndex(v => v.id === targetVariantId) : variants.length - 1;
+        if (idx >= 0) applyVariant(idx);
+        const cost = variants[idx >= 0 ? idx : variants.length - 1]?.cost_usd;
+        const costLabel = cost > 0 ? ' · $' + cost.toFixed(4) : '';
+        showToast('Full content generated' + costLabel, 'success');
+      } else {
+        if (variants.length > 0) applyVariant(0);
+        if (savedSelection) _restoreSelectionAfterRender(savedSelection, seriesId);
+        const newCount = variants.length - prevVariantCount;
+        const n = newCount > 0 ? newCount : variants.length;
+        const cost = variants[0]?.cost_usd;
+        const costLabel = cost > 0 ? ' · $' + cost.toFixed(4) : '';
+        showToast('Generated ' + n + ' draft' + (n !== 1 ? 's' : '') + costLabel, 'success');
+      }
+    } else if (status === 'failed') {
+      const err = App.currentSeries?.generation_error || 'Generation failed';
+      ErrorService.record('generate', err);
+    }
+  }, 3000);
+}
+
 // ── Sending poller ────────────────────────────────────────────────────────────
 // Polls loadSeriesDetail every 3 s while any post has status="sending".
 // Clears itself when all posts settle (posted/failed) or user navigates away.
@@ -216,6 +264,14 @@ function renderEditor(series) {
   restoreDraft(series.id);
   _updateSaveDescBtn();
   _autoGrowDescTextareas();
+  // Restart poller if series is still generating but no active poller (e.g. navigate-away/back).
+  const _gs = series.generation_status;
+  if ((_gs === 'generating_draft' || _gs === 'generating_full') && _generatingPollerId === null) {
+    _startGeneratingPoller(series.id, {
+      fullGen: _gs === 'generating_full',
+      prevVariantCount: (series.ai_variants || []).length,
+    });
+  }
 }
 
 async function saveTitle(seriesId) {
@@ -1287,6 +1343,11 @@ function _restoreSelectionAfterRender(savedSel, seriesId) {
 
 // ── Generate card ─────────────────────────────────────────────────────────────
 function buildGenerateCard(seriesId) {
+  const _genStatus = App.currentSeries?.generation_status ?? 'idle';
+  const isGeneratingDraft = _genStatus === 'generating_draft';
+  const isGeneratingFull  = _genStatus === 'generating_full';
+  const isGenerating      = isGeneratingDraft || isGeneratingFull;
+
   const hintInput = h('input', {
     type: 'text', cls: 'form-control aap-input', id: 'genHint',
     placeholder: 'e.g. astronaut on lost space station sees a Hand. Outside.',
@@ -1337,15 +1398,27 @@ function buildGenerateCard(seriesId) {
 
   const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
 
-  const genBtn = h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn' },
-    document.createTextNode('\u2736 Generate '),
-    numVariantsInput,
-    document.createTextNode(' drafts')
-  );
-  genBtn.addEventListener('click', () => generateDrafts(seriesId));
+  const genBtn = isGeneratingDraft
+    ? h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn', disabled: 'true' },
+        h('span', { cls: 'spinner-border spinner-border-sm me-1' }),
+        document.createTextNode('Generating\u2026')
+      )
+    : h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn' },
+        document.createTextNode('\u2736 Generate '),
+        numVariantsInput,
+        document.createTextNode(' drafts')
+      );
+  if (isGeneratingFull) genBtn.disabled = true;
+  if (!isGenerating) genBtn.addEventListener('click', () => generateDrafts(seriesId));
 
-  const genFullBtn = h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
-  genFullBtn.addEventListener('click', () => generateFull(seriesId));
+  const genFullBtn = isGeneratingFull
+    ? h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', disabled: 'true' },
+        h('span', { cls: 'spinner-border spinner-border-sm me-1' }),
+        document.createTextNode('Generating\u2026')
+      )
+    : h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
+  if (isGeneratingDraft) genFullBtn.disabled = true;
+  if (!isGenerating) genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const errorBadge = h('a', { cls: 'ms-auto small text-warning d-none', id: 'genErrorBadge', style: 'cursor:pointer' });
   errorBadge.setAttribute('data-bs-toggle', 'collapse');
@@ -1429,20 +1502,17 @@ async function generateDrafts(seriesId) {
       ? orderedThumbIds.filter(id => _selectedImages.has(id)).slice(0, 3)
       : [..._selectedImages].slice(0, 3);
   }
+  const savedSelection = new Set(_selectedImages);
+  const prevVariantCount = (App.currentSeries?.ai_variants || []).length;
   try {
-    const newVariants = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
+    const updatedSeries = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
       provider: provider || null, model: model || null, hint: hint || null,
       include_images: includeImages, selected_image_ids: selectedImageIds, language, num_variants: numVariants,
     });
-    const savedSelection = new Set(_selectedImages);
-    await loadSeriesDetail(seriesId);
-    // Variants sorted newest-first — new drafts are always at index 0
-    if ((App.currentSeries?.ai_variants || []).length > 0) applyVariant(0);
-    _restoreSelectionAfterRender(savedSelection, seriesId);
-    const cost = newVariants[0]?.cost_usd;
-    const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
-    ErrorService.clear('generate');
-    showToast(`Generated ${newVariants.length} drafts${costLabel}`, 'success');
+    App.currentSeries = updatedSeries;
+    updateSeriesItem(updatedSeries);
+    loadSeries();
+    _startGeneratingPoller(seriesId, { savedSelection, prevVariantCount });
   } catch (e) {
     ErrorService.record('generate', e.message);
     if (btn) {
@@ -1468,22 +1538,17 @@ async function generateFull(seriesId) {
   const provider = document.getElementById('genProvider')?.value || null;
   const model = document.getElementById('genModel')?.value?.trim() || null;
   const hint = document.getElementById('genHint')?.value?.trim() || null;
+  const targetVariantId = App.activeVariantId || null;
   try {
-    const updated = await apiFetch('POST', '/api/series/' + seriesId + '/generate-full', {
+    const updatedSeries = await apiFetch('POST', '/api/series/' + seriesId + '/generate-full', {
       description, language,
-      variant_id: App.activeVariantId || null,
+      variant_id: targetVariantId,
       provider: provider || null, model: model || null, hint: hint || null,
     });
-    App.currentSeries = updated;
-    const variants = updated.ai_variants || [];
-    const targetId = App.activeVariantId;
-    const idx = targetId ? variants.findIndex(v => v.id === targetId) : variants.length - 1;
-    renderEditor(updated);
-    if (idx >= 0) applyVariant(idx);
-    const cost = variants[idx >= 0 ? idx : variants.length - 1]?.cost_usd;
-    const costLabel = cost > 0 ? ` · $${cost.toFixed(4)}` : '';
-    ErrorService.clear('generate');
-    showToast(`Full content generated${costLabel}`, 'success');
+    App.currentSeries = updatedSeries;
+    updateSeriesItem(updatedSeries);
+    loadSeries();
+    _startGeneratingPoller(seriesId, { fullGen: true, targetVariantId });
   } catch (e) {
     ErrorService.record('generate', e.message);
     if (btn) {

@@ -13,6 +13,7 @@ PROVIDER_MODEL_PRICING: dict[str, tuple[float, float]] = {
     # OpenRouter free tier — no cost
     "openrouter/free": (0.0, 0.0),
     "openrouter/owl-alpha": (0.0, 0.0),
+    "nvidia/nemotron-3-super-120b-a12b-20230311:free": (0.0, 0.0),
     "google/gemma-4-31b-it:free": (0.0, 0.0),
     "openai/gpt-oss-120b:free": (0.0, 0.0),
     "deepseek/deepseek-v4-flash:free": (0.0, 0.0),
@@ -48,6 +49,10 @@ PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
     "openrouter": [
         {"id": "openrouter/free", "label": "Auto-select free model"},
         {"id": "openrouter/owl-alpha", "label": "Owl Alpha"},
+        {
+            "id": "nvidia/nemotron-3-super-120b-a12b-20230311:free",
+            "label": "Nvidia Nemotron 3 Super 120b (free)",
+        },
         {"id": "google/gemma-4-31b-it:free", "label": "Gemma 4 31B (free)"},
         {"id": "openai/gpt-oss-120b:free", "label": "GPT OSS 120B (free)"},
         {"id": "deepseek/deepseek-v4-flash:free", "label": "DeepSeek V4 Flash (free)"},

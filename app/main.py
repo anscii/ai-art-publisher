@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import app.database as _db_module
 from app.config import get_config
 from app.database import init_db
-from app.models import Post
+from app.models import Post, Series
 from app.routers import auth as auth_router
 from app.routers import backup as backup_router
 from app.routers import collections as collections_router
@@ -39,7 +39,8 @@ def _configure_app_logging() -> None:
         handler = logging.StreamHandler()
         handler.setFormatter(
             logging.Formatter(
-                "%(asctime)s %(levelname)-5.5s [%(name)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+                "%(asctime)s.%(msecs)03d %(levelname)-5.5s [%(name)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
             )
         )
         app_logger.addHandler(handler)
@@ -63,6 +64,17 @@ async def lifespan(app: FastAPI):
         if stuck:
             _db.commit()
             _main_logger.warning("Reset %d stuck 'sending' post(s) to 'failed'", len(stuck))
+        stuck_gen = (
+            _db.query(Series)
+            .filter(Series.generation_status.in_(["generating_draft", "generating_full"]))
+            .all()
+        )
+        for _s in stuck_gen:
+            _s.generation_status = "failed"
+            _s.generation_error = "Server restarted during generation"
+        if stuck_gen:
+            _db.commit()
+            _main_logger.warning("Reset %d stuck 'generating' series to 'failed'", len(stuck_gen))
     except Exception as exc:
         _main_logger.exception("Failed to reset stuck 'sending' posts: %s", exc)
     finally:

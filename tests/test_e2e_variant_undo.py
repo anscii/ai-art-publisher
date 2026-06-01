@@ -8,6 +8,8 @@ pytestmark = pytest.mark.e2e
 
 
 def _create_series_with_variant(page, live_server):
+    import time
+
     r = page.request.post(
         f"{live_server}/api/series",
         data=json.dumps({}),
@@ -22,7 +24,15 @@ def _create_series_with_variant(page, live_server):
         headers={"Content-Type": "application/json"},
     )
     assert r.ok, r.text()
-    variants = r.json()
+    # Generation runs in background — poll status endpoint until settled (HTTP 200).
+    for _ in range(20):
+        sr = page.request.get(f"{live_server}/api/series/{series_id}/generation-status")
+        if sr.status == 200:
+            break
+        time.sleep(0.3)
+    r2 = page.request.get(f"{live_server}/api/series/{series_id}")
+    assert r2.ok, r2.text()
+    variants = r2.json()["ai_variants"]
     assert variants, "FAKE_AI should produce at least one variant"
     return series_id, variants[0]["id"]
 
