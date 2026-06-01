@@ -243,7 +243,7 @@ def get_generation_status(
     s = db.get(Series, series_id)
     if not s or s.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Series not found")
-    if s.generation_status == "generating":
+    if s.generation_status in ("generating_draft", "generating_full"):
         response.status_code = 202
     return {"generation_status": s.generation_status, "generation_error": s.generation_error}
 

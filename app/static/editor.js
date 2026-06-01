@@ -15,7 +15,7 @@ function _startGeneratingPoller(seriesId, { savedSelection = null, prevVariantCo
       statusData = await apiFetch('GET', '/api/series/' + seriesId + '/generation-status');
     } catch (_) { return; }
     if (App.currentSeries) App.currentSeries.generation_status = statusData.generation_status;
-    if (statusData.generation_status === 'generating') return;
+    if (statusData.generation_status.startsWith('generating')) return;
 
     // Generation settled — now do full reload + render.
     clearInterval(_generatingPollerId); _generatingPollerId = null;
@@ -264,6 +264,14 @@ function renderEditor(series) {
   restoreDraft(series.id);
   _updateSaveDescBtn();
   _autoGrowDescTextareas();
+  // Restart poller if series is still generating but no active poller (e.g. navigate-away/back).
+  const _gs = series.generation_status;
+  if ((_gs === 'generating_draft' || _gs === 'generating_full') && _generatingPollerId === null) {
+    _startGeneratingPoller(series.id, {
+      fullGen: _gs === 'generating_full',
+      prevVariantCount: (series.ai_variants || []).length,
+    });
+  }
 }
 
 async function saveTitle(seriesId) {
@@ -1335,7 +1343,10 @@ function _restoreSelectionAfterRender(savedSel, seriesId) {
 
 // ── Generate card ─────────────────────────────────────────────────────────────
 function buildGenerateCard(seriesId) {
-  const isGenerating = App.currentSeries?.generation_status === 'generating';
+  const _genStatus = App.currentSeries?.generation_status ?? 'idle';
+  const isGeneratingDraft = _genStatus === 'generating_draft';
+  const isGeneratingFull  = _genStatus === 'generating_full';
+  const isGenerating      = isGeneratingDraft || isGeneratingFull;
 
   const hintInput = h('input', {
     type: 'text', cls: 'form-control aap-input', id: 'genHint',
@@ -1387,7 +1398,7 @@ function buildGenerateCard(seriesId) {
 
   const imgCheck = h('input', { type: 'checkbox', cls: 'form-check-input m-0', id: 'genIncludeImages' });
 
-  const genBtn = isGenerating
+  const genBtn = isGeneratingDraft
     ? h('button', { cls: 'btn aap-btn aap-btn-primary w-100', id: 'generateBtn', disabled: 'true' },
         h('span', { cls: 'spinner-border spinner-border-sm me-1' }),
         document.createTextNode('Generating\u2026')
@@ -1397,11 +1408,17 @@ function buildGenerateCard(seriesId) {
         numVariantsInput,
         document.createTextNode(' drafts')
       );
+  if (isGeneratingFull) genBtn.disabled = true;
   if (!isGenerating) genBtn.addEventListener('click', () => generateDrafts(seriesId));
 
-  const genFullBtn = h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
-  if (isGenerating) genFullBtn.disabled = true;
-  else genFullBtn.addEventListener('click', () => generateFull(seriesId));
+  const genFullBtn = isGeneratingFull
+    ? h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', disabled: 'true' },
+        h('span', { cls: 'spinner-border spinner-border-sm me-1' }),
+        document.createTextNode('Generating\u2026')
+      )
+    : h('button', { cls: 'btn aap-btn w-100', id: 'generateFullBtn', text: 'Generate full \u2192' });
+  if (isGeneratingDraft) genFullBtn.disabled = true;
+  if (!isGenerating) genFullBtn.addEventListener('click', () => generateFull(seriesId));
 
   const errorBadge = h('a', { cls: 'ms-auto small text-warning d-none', id: 'genErrorBadge', style: 'cursor:pointer' });
   errorBadge.setAttribute('data-bs-toggle', 'collapse');

@@ -94,7 +94,7 @@ def test_generate_uses_provider_default_model(client):
         mp.return_value = p
         resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
     assert resp.status_code == 202
-    assert resp.json()["generation_status"] == "generating"
+    assert resp.json()["generation_status"] == "generating_draft"
     variants = client.get(f"/api/series/{sid}").json()["ai_variants"]
     assert all(v["model"] == "claude-opus-4-7" for v in variants)
 
@@ -1463,7 +1463,7 @@ def test_generate_step1_draft_id_is_none(client):
 
 
 def test_generate_returns_generating_status_immediately(client):
-    """POST /generate responds with generation_status='generating' before BG task runs."""
+    """POST /generate responds with generation_status='generating_draft' before BG task runs."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     with patch("app.routers.generate.get_provider") as mp:
@@ -1472,7 +1472,7 @@ def test_generate_returns_generating_status_immediately(client):
         mp.return_value = p
         resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
     assert resp.status_code == 202
-    assert resp.json()["generation_status"] == "generating"
+    assert resp.json()["generation_status"] == "generating_draft"
 
 
 def test_generate_409_when_already_generating(client, db):
@@ -1483,7 +1483,7 @@ def test_generate_409_when_already_generating(client, db):
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     # Manually set generation_status to simulate an in-progress generation.
     s = db.get(_Series, sid)
-    s.generation_status = "generating"
+    s.generation_status = "generating_draft"
     db.commit()
     resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
     assert resp.status_code == 409
@@ -1496,7 +1496,7 @@ def test_generate_full_409_when_already_generating(client, db):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     s = db.get(_Series, sid)
-    s.generation_status = "generating"
+    s.generation_status = "generating_full"
     db.commit()
     resp = client.post(
         f"/api/series/{sid}/generate-full",
@@ -1513,7 +1513,7 @@ def test_generate_background_sets_idle_on_success(client, db):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     s = db.get(_Series, sid)
-    s.generation_status = "generating"
+    s.generation_status = "generating_draft"
     db.commit()
     db.expire_all()
 
@@ -1550,7 +1550,7 @@ def test_generate_full_background_sets_idle_on_success(client, db):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
     s = db.get(_Series, sid)
-    s.generation_status = "generating"
+    s.generation_status = "generating_full"
     db.commit()
     db.expire_all()
 

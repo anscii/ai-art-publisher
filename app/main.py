@@ -64,7 +64,11 @@ async def lifespan(app: FastAPI):
         if stuck:
             _db.commit()
             _main_logger.warning("Reset %d stuck 'sending' post(s) to 'failed'", len(stuck))
-        stuck_gen = _db.query(Series).filter(Series.generation_status == "generating").all()
+        stuck_gen = (
+            _db.query(Series)
+            .filter(Series.generation_status.in_(["generating_draft", "generating_full"]))
+            .all()
+        )
         for _s in stuck_gen:
             _s.generation_status = "failed"
             _s.generation_error = "Server restarted during generation"

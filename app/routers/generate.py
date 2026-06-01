@@ -23,7 +23,7 @@ from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.generate")
 
-_GENERATION_TIMEOUT = 180  # 3 minutes
+_GENERATION_TIMEOUT = 300  # 5 minutes
 
 
 def _call_with_timeout(fn, *args, timeout: int = _GENERATION_TIMEOUT, **kwargs):
@@ -276,7 +276,7 @@ def _generate_variants_background(series_id: str, body_data: dict) -> None:
         logger.exception("Background generation failed for series %s: %s", series_id, exc)
         try:
             _s = db.get(Series, series_id)
-            if _s and _s.generation_status == "generating":
+            if _s and _s.generation_status.startswith("generating"):
                 _s.generation_status = "failed"
                 _s.generation_error = str(exc)
                 db.commit()
@@ -294,7 +294,7 @@ def _generate_full_background(series_id: str, body_data: dict) -> None:
         logger.exception("Background generate-full failed for series %s: %s", series_id, exc)
         try:
             _s = db.get(Series, series_id)
-            if _s and _s.generation_status == "generating":
+            if _s and _s.generation_status.startswith("generating"):
                 _s.generation_status = "failed"
                 _s.generation_error = str(exc)
                 db.commit()
@@ -318,7 +318,7 @@ def generate_descriptions(
         raise HTTPException(status_code=400, detail="Hint is required when not including images")
     if body.include_images and not s.images:
         raise HTTPException(status_code=400, detail="Series has no images")
-    if s.generation_status == "generating":
+    if s.generation_status in ("generating_draft", "generating_full"):
         raise HTTPException(status_code=409, detail="Generation already in progress")
 
     settings = get_or_create_settings(db)
@@ -329,7 +329,7 @@ def generate_descriptions(
     if not api_key and not get_config().fake_ai:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
-    s.generation_status = "generating"
+    s.generation_status = "generating_draft"
     s.generation_error = None
     db.commit()
 
@@ -349,7 +349,7 @@ def generate_full(
         raise HTTPException(status_code=404, detail="Series not found")
     if not body.description.strip():
         raise HTTPException(status_code=400, detail="description is required")
-    if s.generation_status == "generating":
+    if s.generation_status in ("generating_draft", "generating_full"):
         raise HTTPException(status_code=409, detail="Generation already in progress")
 
     # Validate variant_id upfront so we can return 404 synchronously.
@@ -366,7 +366,7 @@ def generate_full(
     if not api_key and not get_config().fake_ai:
         raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
 
-    s.generation_status = "generating"
+    s.generation_status = "generating_full"
     s.generation_error = None
     db.commit()
 
