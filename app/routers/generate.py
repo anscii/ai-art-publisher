@@ -304,7 +304,7 @@ def _generate_full_background(series_id: str, body_data: dict) -> None:
         db.close()
 
 
-@router.post("/{series_id}/generate", status_code=201)
+@router.post("/{series_id}/generate", status_code=202)
 def generate_descriptions(
     series_id: str,
     body: GenerateRequest,
@@ -337,7 +337,7 @@ def generate_descriptions(
     return series_to_detail(s, db)
 
 
-@router.post("/{series_id}/generate-full", status_code=201)
+@router.post("/{series_id}/generate-full", status_code=202)
 def generate_full(
     series_id: str,
     body: GenerateFullRequest,
