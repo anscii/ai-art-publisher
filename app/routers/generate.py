@@ -1,4 +1,5 @@
 import base64
+import concurrent.futures
 import json
 import logging
 
@@ -21,6 +22,19 @@ from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.generate")
+
+_GENERATION_TIMEOUT = 180  # 3 minutes
+
+
+def _call_with_timeout(fn, *args, timeout: int = _GENERATION_TIMEOUT, **kwargs):
+    """Run fn(*args, **kwargs) in a thread; raise TimeoutError if it exceeds timeout seconds."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"AI call timed out after {timeout}s")
+
 
 router = APIRouter(prefix="/api/series", tags=["generate"])
 variants_router = APIRouter(prefix="/api/ai_variants", tags=["ai_variants"])
@@ -132,8 +146,13 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
     provider = get_provider(provider_name, api_key)
     num_variants = body_data.get("num_variants", 1)
     language = body_data.get("language", "en")
-    variants_data = provider.generate_variants(
-        images_b64, model, augmented_hint, num_variants=num_variants, language=language
+    variants_data = _call_with_timeout(
+        provider.generate_variants,
+        images_b64,
+        model,
+        augmented_hint,
+        num_variants=num_variants,
+        language=language,
     )
 
     for vd in variants_data:
@@ -187,7 +206,7 @@ def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
     provider = get_provider(provider_name, api_key)
     description = body_data["description"]
     language = body_data.get("language", "en")
-    vd = provider.expand_variant(description, language, model, augmented_hint)
+    vd = _call_with_timeout(provider.expand_variant, description, language, model, augmented_hint)
     used_provider, used_model = _resolve_actual_provider_model(
         vd.actual_model, provider_name, model
     )
