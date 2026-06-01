@@ -39,7 +39,8 @@ def _configure_app_logging() -> None:
         handler = logging.StreamHandler()
         handler.setFormatter(
             logging.Formatter(
-                "%(asctime)s %(levelname)-5.5s [%(name)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+                "%(asctime)s.%(msecs)03d %(levelname)-5.5s [%(name)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
             )
         )
         app_logger.addHandler(handler)
