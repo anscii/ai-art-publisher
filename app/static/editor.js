@@ -1505,10 +1505,13 @@ async function generateDrafts(seriesId) {
   const savedSelection = new Set(_selectedImages);
   const prevVariantCount = (App.currentSeries?.ai_variants || []).length;
   try {
-    await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
+    const updatedSeries = await apiFetch('POST', '/api/series/' + seriesId + '/generate', {
       provider: provider || null, model: model || null, hint: hint || null,
       include_images: includeImages, selected_image_ids: selectedImageIds, language, num_variants: numVariants,
     });
+    App.currentSeries = updatedSeries;
+    updateSeriesItem(updatedSeries);
+    loadSeries();
     _startGeneratingPoller(seriesId, { savedSelection, prevVariantCount });
   } catch (e) {
     ErrorService.record('generate', e.message);
@@ -1537,11 +1540,14 @@ async function generateFull(seriesId) {
   const hint = document.getElementById('genHint')?.value?.trim() || null;
   const targetVariantId = App.activeVariantId || null;
   try {
-    await apiFetch('POST', '/api/series/' + seriesId + '/generate-full', {
+    const updatedSeries = await apiFetch('POST', '/api/series/' + seriesId + '/generate-full', {
       description, language,
       variant_id: targetVariantId,
       provider: provider || null, model: model || null, hint: hint || null,
     });
+    App.currentSeries = updatedSeries;
+    updateSeriesItem(updatedSeries);
+    loadSeries();
     _startGeneratingPoller(seriesId, { fullGen: true, targetVariantId });
   } catch (e) {
     ErrorService.record('generate', e.message);

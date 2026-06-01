@@ -196,7 +196,13 @@ def list_series(
         q = q.where(Series.name.ilike(f"%{search}%") | Series.title.ilike(f"%{search}%"))
     if collection_id:
         q = q.where(Series.collection_id == collection_id)
-    q = q.order_by(Series.created_at.asc())
+    from sqlalchemy import case as _case
+
+    _generating_first = _case(
+        (Series.generation_status.in_(["generating_draft", "generating_full"]), 0),
+        else_=1,
+    )
+    q = q.order_by(_generating_first, Series.created_at.asc())
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.offset((page - 1) * limit).limit(limit)).all()
     settings = get_or_create_settings(db)
