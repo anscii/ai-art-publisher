@@ -10,6 +10,7 @@
 - **Before every `git push` and before creating any PR**: run `make format && make types && make test-back` (and `make test-front` if any JS changed). Never push or open a PR on a failing or unchecked suite.
 - **Verify current branch** (`git branch --show-current`) before every commit — never commit directly to `develop` or `master`.
 - Release PRs (`develop` → `master`) use `gh pr merge --merge` — never `--squash`. Squash is only for feature → `develop`.
+- To check CI status on a PR: `gh pr view <number> --json statusCheckRollup` — `gh pr checks --json` is not a valid flag.
 
 ## Running tests
 
@@ -46,13 +47,14 @@ app/
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
-    stories.py     — Story + StoryFrame CRUD, /render (PIL image generation), /publish (IG Stories + FB)
+    stories.py     — Story + StoryFrame CRUD, /render (PIL image generation), /publish (IG Stories or Telegram Stories)
     landing.py     — public API: RecentPostCard + LandingRecentResponse for landing dispatch grid
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
     story_renderer.py — PIL-based 1080×1920 JPEG renderer; fonts loaded via @lru_cache (process-wide)
     telegram.py    — TelegramService.post_media_group()
+    telegram_stories.py — MTProto story posting via Telethon; post_stories(images) batches N frames in one session
     instagram.py   — InstagramService.post() (single + carousel) + post_story()
   scheduler.py     — APScheduler background job (runs hourly, posts scheduled series)
   static/
@@ -60,11 +62,12 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 26 migrations (001–026); latest: 026_story_frame_font_size.py
+  versions/        — 29 migrations (001–029); latest: 029_telegram_stories.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
   test_generation.py   — local CLI to test AI generation (--hint required, --provider/--model optional)
+  telegram_auth.py     — one-shot interactive CLI to generate a Telegram MTProto session string
 tests/             — pytest, in-memory SQLite via StaticPool conftest
 data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 ```
@@ -82,7 +85,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - **Alembic migrations** — `scripts/migrate.py` is the entry point used by both `make migrate` and fly.toml `release_command`. On fresh installs it runs `create_all` + `stamp head`; on existing DBs it runs `upgrade head`. `_run_migrations()` in `database.py` is skipped for in-memory (test) DBs.
 - **Soft delete** — `Series.deleted_at` and `Image.deleted_at` (nullable DateTime). Soft-deleted items are hidden from all normal views and only visible in the Trash panel (`GET /api/trash`). Hard delete only happens from Trash (permanent delete / empty trash).
 - **Image status** — `Image.status` field: `pending` (default), `queued` (selected for next post), `posted` (sent), `skip` (excluded, rendered greyed-out). Posting routes only send `queued` + non-deleted images. After a successful post, `_after_post_success()` marks queued images as `posted` and sets series to `posted` or `partial_posted`.
-- **Stories** — a `Story` belongs to a `Post` (IG-only). Each story has N `StoryFrame` rows (frame_type: `image` or `text`, position-ordered). The render endpoint (`POST /api/stories/{id}/render`) uses `StoryRenderer` (PIL, 1080×1920) to generate JPEGs and upload them to R2. The publish endpoint posts each rendered frame as an IG Story (and mirrors to Facebook if configured). Story status: `draft → rendered → posted / failed`. Frame-level fields: `background_mode`, `text_color`, `text_align`/`title_position`, `font_size`; content changes auto-clear `rendered_url` to force re-render.
+- **Stories** — a `Story` belongs to a `Post` (Instagram or Telegram). Each story has N `StoryFrame` rows (frame_type: `image` or `text`, position-ordered). The render endpoint (`POST /api/stories/{id}/render`) uses `StoryRenderer` (PIL, 1080×1920) to generate JPEGs and upload them to R2. The publish endpoint posts each rendered frame as an IG Story, or as a Telegram channel story via MTProto (`app/services/telegram_stories.py`, Telethon); all Telegram frames are posted in a single client session. Story status: `draft → rendered → posted / failed`. Frame-level `platform_frame_id` tracks the posted frame's ID for idempotency. Frame-level fields: `background_mode`, `text_color`, `text_align`/`title_position`, `font_size`; content changes auto-clear `rendered_url` to force re-render.
 - **Session cookie auth** — middleware in `main.py`. When `AUTH_USERNAME` + `AUTH_PASSWORD` set: unauthenticated `GET /` serves the landing page (HTML cached at startup); all other paths return 401. Cookie is HMAC-signed (`SESSION_SECRET`), 30-day TTL. Basic Auth header accepted as fallback for API/curl. Public paths bypassed: `/health`, `/internal/*`, `/auth/login`, `/auth/logout`, `/static/landing/`. Disabled (no-op) when env vars unset.
 
 ## Test fixtures

@@ -183,21 +183,74 @@ def test_create_story_replaces_existing(client):
     assert first["id"] != second["id"]
 
 
-def test_create_story_rejects_non_instagram_post(client):
+def _telegram_post(
+    client, sid, img_ids, description="Абзац один.\n\nАбзац два.", title="Ночь", title_ru="Ночь"
+):
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram"],
+            "title": title,
+            "title_ru": title_ru,
+            "description_telegram": description,
+            "description_other": description,
+            "image_ids": img_ids,
+        },
+    ).json()
+    return next(p for p in posts if p["platform"] == "telegram")
+
+
+def test_create_story_allowed_for_telegram_post(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    resp = client.post(f"/api/posts/{tg_post['id']}/stories", json={"image_ids": [img_id]})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "draft"
+
+
+def test_create_story_telegram_uses_title_ru(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id], title="Night", title_ru="Ночь")
+    data = client.post(f"/api/posts/{tg_post['id']}/stories", json={"image_ids": [img_id]}).json()
+    image_frame = next(f for f in data["frames"] if f["frame_type"] == "image")
+    assert image_frame["title"] == "Ночь"
+
+
+def test_create_story_allowed_for_instagram_post(client):
     sid = _series(client)
     img_id = _image(client, sid)
     posts = client.post(
         f"/api/series/{sid}/posts",
         json={
-            "platforms": ["telegram"],
+            "platforms": ["instagram"],
             "title": "T",
             "description_telegram": "Text",
             "description_other": "Text",
             "image_ids": [img_id],
         },
     ).json()
-    tg_post = next(p for p in posts if p["platform"] == "telegram")
-    resp = client.post(f"/api/posts/{tg_post['id']}/stories", json={"image_ids": [img_id]})
+    ig_post = next(p for p in posts if p["platform"] == "instagram")
+    resp = client.post(f"/api/posts/{ig_post['id']}/stories", json={"image_ids": [img_id]})
+    assert resp.status_code == 200
+
+
+def test_create_story_rejects_unsupported_platform(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["facebook"],
+            "title": "T",
+            "description_telegram": "Text",
+            "description_other": "Text",
+            "image_ids": [img_id],
+        },
+    ).json()
+    fb_post = next(p for p in posts if p["platform"] == "facebook")
+    resp = client.post(f"/api/posts/{fb_post['id']}/stories", json={"image_ids": [img_id]})
     assert resp.status_code == 400
 
 
@@ -473,15 +526,29 @@ def test_story_frame_count_in_post_response(client):
     assert ig_post["story_frame_count"] == 2
 
 
-def test_story_facebook_posted_false_before_publish(client):
+def test_fake_publish_telegram_story(client, db, monkeypatch):
+    """Telegram story publish in fake mode sets status=posted without calling Telethon."""
+    monkeypatch.setattr(AppConfig, "fake_posting", True)
     sid = _series(client)
     img_id = _image(client, sid)
-    post = _instagram_post(client, sid, [img_id])
-    _story(client, post["id"], [img_id])
+    tg_post = _telegram_post(client, sid, [img_id])
+    story_data = _story(client, tg_post["id"], [img_id])
 
-    detail = client.get(f"/api/series/{sid}").json()
-    ig_post = next(p for p in detail["posts"] if p["platform"] == "instagram")
-    assert ig_post["story_facebook_posted"] is False
+    story = db.get(Story, story_data["id"])
+    for frame in story.frames:
+        frame.rendered_url = f"https://r2.example.com/frame_{frame.id}.jpg"
+        frame.rendered_storage_key = f"stories/test/frame_{frame.id}.jpg"
+    story.status = "rendered"
+    db.commit()
+
+    with patch("app.routers.stories.tg_stories_svc") as mock_tg:
+        resp = client.post(f"/api/stories/{story_data['id']}/publish")
+        mock_tg.post_stories.assert_not_called()
+
+    assert resp.status_code == 200
+    db.expire_all()
+    story = db.get(Story, story_data["id"])
+    assert story.status == "posted"
 
 
 # ── GET story ─────────────────────────────────────────────────────────────────
@@ -746,13 +813,13 @@ def test_latest_post_label_default_is_false():
 
 
 def test_publish_skips_already_posted_frames(client, db, monkeypatch):
-    """Frames with instagram_frame_id already set are not re-posted on retry."""
+    """Frames with platform_frame_id already set are not re-posted on retry."""
     monkeypatch.setattr(AppConfig, "fake_posting", True)
     story_id = _setup_rendered_story(client, db, monkeypatch)
 
     story = db.get(Story, story_id)
     first_frame = story.frames[0]
-    first_frame.instagram_frame_id = "already-posted-id"
+    first_frame.platform_frame_id = "already-posted-id"
     db.commit()
 
     with patch("app.routers.stories.InstagramService") as mock_ig:
@@ -761,17 +828,13 @@ def test_publish_skips_already_posted_frames(client, db, monkeypatch):
             "ok": True,
             "media_id": "new-id",
         }
-        # Even with real posting, first frame should not call post_story
-        # because instagram_frame_id is set. Other frames will call via mock.
-        # We just verify no crash and the idempotent frame is preserved.
         monkeypatch.setattr(AppConfig, "fake_posting", True)
         resp = client.post(f"/api/stories/{story_id}/publish")
 
     assert resp.status_code == 200
     result = resp.json()
-    # The frame that had instagram_frame_id pre-set should keep it
     pre_set_frame = next(
-        f for f in result["frames"] if f.get("instagram_frame_id") == "already-posted-id"
+        f for f in result["frames"] if f.get("platform_frame_id") == "already-posted-id"
     )
     assert pre_set_frame is not None
 
@@ -858,3 +921,36 @@ def test_add_text_frame_inherits_text_format(client):
 def test_add_text_frame_404_on_unknown_story(client):
     resp = client.post("/api/stories/nonexistent-id/frames")
     assert resp.status_code == 404
+
+
+# ── telegram_stories service unit tests ──────────────────────────────────────
+
+
+def test_telegram_stories_post_stories_calls_telethon():
+    """post_stories passes args to _post_stories_async via asyncio.run."""
+    from unittest.mock import MagicMock, patch
+
+    mock_results = [{"ok": True, "story_id": 42}, {"ok": True, "story_id": 43}]
+    fake_coro = MagicMock(name="coro")
+
+    with (
+        patch(
+            "app.services.telegram_stories._post_stories_async",
+            new=MagicMock(return_value=fake_coro),
+        ) as mock_fn,
+        patch("app.services.telegram_stories.asyncio") as mock_asyncio,
+    ):
+        mock_asyncio.run.return_value = mock_results
+        from app.services.telegram_stories import post_stories
+
+        result = post_stories(
+            api_id=12345,
+            api_hash="abc",
+            session_string="session",
+            channel_id="@mychannel",
+            images=[b"fake1", b"fake2"],
+        )
+
+    assert result == mock_results
+    mock_fn.assert_called_once_with(12345, "abc", "session", "@mychannel", [b"fake1", b"fake2"])
+    mock_asyncio.run.assert_called_once_with(fake_coro)

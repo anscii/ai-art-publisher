@@ -379,6 +379,22 @@
                 <input type="text" class="form-control aap-input" id="s_telegram_channel_id" placeholder="@yourchannel" aria-label="Telegram Channel ID">
               </div>
               <div class="aap-field-block">
+                <span class="aap-field-block__label">Telegram &middot; API ID</span>
+                <input type="text" class="form-control aap-input aap-input--mono" id="s_telegram_api_id" placeholder="12345678" aria-label="Telegram API ID">
+              </div>
+            </div>
+            <div class="aap-secret-row">
+              <span class="aap-secret-row__label">Telegram &middot; API Hash</span>
+              <input type="password" class="form-control aap-input aap-input--secret" id="s_telegram_api_hash" aria-label="Telegram API Hash" autocomplete="off">
+              <button type="button" class="aap-icon-btn" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+            </div>
+            <div class="aap-secret-row">
+              <span class="aap-secret-row__label">Telegram &middot; Session String</span>
+              <input type="password" class="form-control aap-input aap-input--secret" id="s_telegram_session_string" aria-label="Telegram Session String" autocomplete="off">
+              <button type="button" class="aap-icon-btn" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+            </div>
+            <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr;">
+              <div class="aap-field-block">
                 <span class="aap-field-block__label">Instagram &middot; User ID</span>
                 <input type="text" class="form-control aap-input aap-input--mono" id="s_instagram_user_id" aria-label="Instagram User ID">
               </div>

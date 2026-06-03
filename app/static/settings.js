@@ -40,7 +40,9 @@ async function loadSettings() {
     const s = await apiFetch('GET', '/api/settings');
     const fields = [
       'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key',
-      'telegram_bot_token', 'telegram_channel_id', 'instagram_access_token', 'instagram_user_id',
+      'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
+      'telegram_api_hash', 'telegram_session_string',
+      'instagram_access_token', 'instagram_user_id',
       'facebook_page_access_token', 'facebook_page_id',
       'pinterest_access_token', 'pinterest_default_board_id',
       'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
@@ -64,7 +66,9 @@ async function saveSettings() {
   const fields = [
     'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key', 'default_provider',
     'anthropic_default_model', 'openai_default_model', 'google_default_model', 'deepseek_default_model', 'openrouter_default_model',
-    'telegram_bot_token', 'telegram_channel_id', 'instagram_access_token', 'instagram_user_id',
+    'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
+    'telegram_api_hash', 'telegram_session_string',
+    'instagram_access_token', 'instagram_user_id',
     'facebook_page_access_token', 'facebook_page_id',
     'pinterest_access_token', 'pinterest_default_board_id',
     'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
