@@ -82,7 +82,7 @@ So I built a tool that:
 - **Structured caption output** — each AI variant includes English and Russian titles/descriptions, Instagram hashtags, SEO phrase layer, Pinterest title/description/board, Telegram hashtags, and archive classification keywords
 - **Variant selection** — generate 3 variants per series, compare them side-by-side, pick one as canonical, edit freely
 - **Multi-platform posting** — Telegram (media group), Instagram (carousel + Stories), Pinterest (pin), Facebook (page post + Stories)
-- **Instagram Stories** — create a story from a post's images; editor generates paired image/text frames, renders them to 1080×1920 JPEG via PIL with font controls, background modes (blurred, solid, accent, floating), and text positioning; publish sends each frame to IG Stories and optionally mirrors to Facebook
+- **Stories (Instagram + Telegram)** — create a story from a post's images; editor generates paired image/text frames, renders them to 1080×1920 JPEG via PIL with font controls, background modes (blurred, solid, accent, floating), and text positioning; publish sends each frame to IG Stories or as a Telegram channel story (MTProto, via Telethon); all frames posted in a single authenticated session
 - **Scheduled posting** — set a date/time; APScheduler fires even when the browser is closed
 - **Soft delete with Trash** — series and images go to Trash before permanent deletion; fully restorable
 - **Image status workflow** — `pending → queued → posted / skip`; only queued images are sent in a post
@@ -102,7 +102,7 @@ So I built a tool that:
 | Hosting | Fly.io (256 MB VM, persistent volume for SQLite) |
 | Scheduling | APScheduler 3.x (in-process, interval trigger) |
 | AI providers | Anthropic Claude, OpenAI, Google Gemini, DeepSeek |
-| Social APIs | Telegram Bot API, Instagram Graph API, Pinterest API v5, Facebook Graph API |
+| Social APIs | Telegram Bot API, Telegram MTProto (Telethon), Instagram Graph API, Pinterest API v5, Facebook Graph API |
 | Migrations | Alembic |
 | Testing | pytest, Playwright (E2E via browser), pytest-cov |
 | CI/CD | GitHub Actions (test → deploy on push to `master`) |
@@ -172,7 +172,7 @@ app/
     images.py      — upload, register, reorder, move, PATCH status, DELETE (soft)
     generate.py    — AI description generation (multi-provider, variant storage)
     posts.py       — create/execute posts to Telegram/Instagram/Pinterest/Facebook
-    stories.py     — Story + StoryFrame CRUD, /render (PIL), /publish (IG Stories + FB)
+    stories.py     — Story + StoryFrame CRUD, /render (PIL), /publish (IG Stories or Telegram Stories)
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
@@ -184,6 +184,7 @@ app/
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
     story_renderer.py — PIL-based 1080×1920 JPEG renderer for story frames
     telegram.py    — TelegramService.post_media_group()
+    telegram_stories.py — MTProto story posting via Telethon (batches N frames in one session)
     instagram.py   — InstagramService.post() (single + carousel) + post_story()
     facebook.py    — FacebookService.post() + post_story()
     pinterest.py   — PinterestService.post_pin()
@@ -192,11 +193,12 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS), landing.html
 alembic/
-  versions/        — 21 migrations (001 through 021)
+  versions/        — 29 migrations (001 through 029)
 scripts/
   import_local.py  — bulk import CLI (direct R2 upload + API register)
   migrate.py       — DB migration entry point (used by Fly.io release_command)
   test_generation.py — local CLI for testing AI prompts
+  telegram_auth.py — one-shot CLI to generate a Telegram MTProto session string
 tests/             — pytest unit tests + Playwright E2E tests
 ```
 
@@ -339,8 +341,11 @@ Set `LOCAL_STORAGE=true` to skip R2 entirely and store uploads in `DATA_DIR/uplo
 
 | Variable | Description |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather (media group posts) |
 | `TELEGRAM_CHANNEL_ID` | Channel username e.g. `@mychannel` |
+| `TELEGRAM_API_ID` | MTProto app API ID — required for Stories (see [telegram_auth.py](#obtaining-a-telegram-session-string)) |
+| `TELEGRAM_API_HASH` | MTProto app API hash — required for Stories |
+| `TELEGRAM_SESSION_STRING` | MTProto session string — generate with `scripts/telegram_auth.py` |
 | `INSTAGRAM_ACCESS_TOKEN` | Long-lived Page access token |
 | `INSTAGRAM_USER_ID` | Instagram Business account ID |
 | `FACEBOOK_PAGE_ID` | Facebook Page ID |
@@ -524,6 +529,30 @@ fly secrets set INSTAGRAM_ACCESS_TOKEN="<long-lived-token>"
 ```
 
 Or update it in the Settings UI (⚙️) without redeploying. The app does not auto-renew expiring tokens.
+
+---
+
+## Obtaining a Telegram Session String
+
+Telegram Stories use the MTProto API (not the Bot API), which requires a user-account session. Run the interactive auth script once to generate a session string, then store it in Settings or as a secret.
+
+**Prerequisites:** a Telegram app registered at [my.telegram.org/apps](https://my.telegram.org/apps) — copy the `App api_id` (integer) and `App api_hash`. Your personal account must be an admin of the channel.
+
+```bash
+.venv/bin/python scripts/telegram_auth.py
+```
+
+The script walks through:
+1. Enter `api_id` and `api_hash`
+2. Enter channel username/ID for access verification
+3. Complete the phone/code/2FA flow
+4. Prints the session string — paste into **Settings → Telegram Session String**
+
+The session string is long-lived and does not expire unless you revoke it from Telegram's active sessions list. Store it via the Settings UI or:
+
+```bash
+fly secrets set TELEGRAM_SESSION_STRING="<session-string>"
+```
 
 ---
 

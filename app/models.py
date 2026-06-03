@@ -155,8 +155,7 @@ class Story(Base):
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    instagram_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    facebook_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     post: Mapped["Post"] = relationship("Post", back_populates="story")
     frames: Mapped[list["StoryFrame"]] = relationship(
@@ -209,8 +208,7 @@ class StoryFrame(Base):
     rendered_url: Mapped[str | None] = mapped_column(String, nullable=True)
     rendered_storage_key: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    instagram_frame_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    facebook_frame_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    platform_frame_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -265,6 +263,9 @@ class AppSettings(Base):
     openrouter_default_model: Mapped[str] = mapped_column(String, default="")
     telegram_bot_token: Mapped[str] = mapped_column(String, default="")
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
+    telegram_api_id: Mapped[str] = mapped_column(String, default="")
+    telegram_api_hash: Mapped[str] = mapped_column(String, default="")
+    telegram_session_string: Mapped[str] = mapped_column(Text, default="")
     instagram_access_token: Mapped[str] = mapped_column(String, default="")
     instagram_user_id: Mapped[str] = mapped_column(String, default="")
     facebook_page_id: Mapped[str] = mapped_column(String, default="")

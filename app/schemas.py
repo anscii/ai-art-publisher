@@ -23,6 +23,9 @@ class SettingsResponse(BaseModel):
     openrouter_default_model: str
     telegram_bot_token: str
     telegram_channel_id: str
+    telegram_api_id: str
+    telegram_api_hash: str
+    telegram_session_string: str
     instagram_access_token: str
     instagram_user_id: str
     facebook_page_id: str
@@ -48,6 +51,9 @@ class SettingsUpdate(BaseModel):
     openrouter_default_model: str | None = None
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
+    telegram_api_id: str | None = None
+    telegram_api_hash: str | None = None
+    telegram_session_string: str | None = None
     instagram_access_token: str | None = None
     instagram_user_id: str | None = None
     facebook_page_id: str | None = None
@@ -200,7 +206,6 @@ class PostResponse(BaseModel):
     story_status: str | None = None
     story_error_message: str | None = None
     story_frame_count: int | None = None
-    story_facebook_posted: bool = False
 
 
 class PostCreate(BaseModel):
@@ -260,8 +265,7 @@ class StoryFrameResponse(BaseModel):
     text_halign: str
     font_size: int | None
     rendered_url: str | None
-    instagram_frame_id: str | None
-    facebook_frame_id: str | None
+    platform_frame_id: str | None
 
 
 class StoryResponse(BaseModel):

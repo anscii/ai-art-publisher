@@ -22,6 +22,7 @@ from app.schemas import (
     StoryReorderRequest,
     StoryResponse,
 )
+from app.services import telegram_stories as tg_stories_svc
 from app.services.instagram import InstagramService
 from app.services.storage import get_storage_from_settings
 
@@ -120,8 +121,7 @@ def _story_to_resp(story: Story) -> StoryResponse:
                 text_halign=f.text_halign,
                 font_size=f.font_size,
                 rendered_url=f.rendered_url,
-                instagram_frame_id=f.instagram_frame_id,
-                facebook_frame_id=f.facebook_frame_id,
+                platform_frame_id=f.platform_frame_id,
             )
             for f in story.frames
         ],
@@ -150,8 +150,11 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
     post = db.get(Post, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    if post.platform != Platform.instagram:
-        raise HTTPException(status_code=400, detail="Stories only supported for Instagram posts")
+    if post.platform not in (Platform.instagram, Platform.telegram):
+        raise HTTPException(
+            status_code=400,
+            detail="Stories only supported for Instagram and Telegram posts",
+        )
 
     valid_image_ids = {pi.image_id for pi in post.post_images}
     for iid in body.image_ids:
@@ -175,6 +178,9 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
     db.add(story)
     db.flush()
 
+    first_title = (
+        (post.title_ru or post.title) if post.platform == Platform.telegram else post.title
+    )
     for i, img in enumerate(images):
         db.add(
             StoryFrame(
@@ -182,7 +188,7 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
                 position=i * 2,
                 frame_type="image",
                 source_image_id=img.id,
-                title=post.title if i == 0 else None,
+                title=first_title if i == 0 else None,
                 created_at=now,
                 updated_at=now,
             )
@@ -386,20 +392,43 @@ def _run_publish(story_id: str, db: Session) -> None:
     if not story:
         return
     settings = get_or_create_settings(db)
+    platform = story.post.platform
 
     enabled_frames = [f for f in story.frames if f.is_enabled]
 
     fake = get_config().fake_posting
     ig_svc: InstagramService | None = None
+    storage = get_storage_from_settings(settings) if not fake else None
 
-    if not fake:
+    if not fake and platform == Platform.instagram:
         ig_svc = InstagramService(settings.instagram_access_token, settings.instagram_user_id)
 
-    ig_results: list[dict[str, object]] = []
+    results: list[dict[str, object]] = []
+
+    # Pre-batch Telegram frames in a single MTProto session to avoid N connect/disconnect cycles
+    _tg_frame_results: dict[str, dict[str, object]] = {}
+    if (
+        not fake
+        and platform == Platform.telegram
+        and storage is not None
+        and settings.telegram_api_id
+    ):
+        tg_frames = [
+            f for f in enabled_frames if not f.platform_frame_id and f.rendered_storage_key
+        ]
+        if tg_frames:
+            images = [storage.download_bytes(f.rendered_storage_key or "") for f in tg_frames]
+            batch = tg_stories_svc.post_stories(
+                api_id=int(settings.telegram_api_id),
+                api_hash=settings.telegram_api_hash,
+                session_string=settings.telegram_session_string,
+                channel_id=settings.telegram_channel_id,
+                images=images,
+            )
+            _tg_frame_results = dict(zip((f.id for f in tg_frames), batch))
 
     for idx, frame in enumerate(enabled_frames):
-        rendered_url = frame.rendered_url
-        if not rendered_url:
+        if not frame.rendered_url:
             story.status = "failed"
             story.error_message = (
                 f"Frame {frame.id} has no rendered URL — re-render before publishing"
@@ -408,25 +437,36 @@ def _run_publish(story_id: str, db: Session) -> None:
             db.commit()
             return
 
-        if frame.instagram_frame_id:
-            ig_result: dict[str, object] = {"ok": True, "media_id": frame.instagram_frame_id}
+        if frame.platform_frame_id:
+            result: dict[str, object] = {"ok": True, "id": frame.platform_frame_id}
         elif fake:
-            ig_result = {"ok": True, "fake": True, "media_id": f"fake-story-{frame.id}"}
-            logger.info("[FAKE] Instagram story | story=%s | frame=%s", story.id, frame.id)
+            result = {"ok": True, "fake": True, "id": f"fake-story-{frame.id}"}
+            logger.info("[FAKE] %s story | story=%s | frame=%s", platform, story.id, frame.id)
+        elif platform == Platform.telegram:
+            if not frame.rendered_storage_key:
+                result = {"ok": False, "description": "No rendered_storage_key for Telegram upload"}
+            elif not settings.telegram_api_id:
+                result = {"ok": False, "description": "Telegram API ID not configured in settings"}
+            else:
+                result = _tg_frame_results.get(
+                    frame.id,
+                    {"ok": False, "description": "Frame missing from Telegram batch results"},
+                )
         else:
             assert ig_svc is not None
-            ig_result = ig_svc.post_story(rendered_url)
+            result = ig_svc.post_story(frame.rendered_url)
 
-        if not ig_result.get("ok"):
+        if not result.get("ok"):
             story.status = "failed"
-            story.error_message = str(ig_result.get("description", "Instagram story post failed"))
+            story.error_message = str(result.get("description", f"{platform} story post failed"))
             story.updated_at = datetime.now(UTC).replace(tzinfo=None)
-            story.instagram_result_json = json.dumps(ig_results)
+            story.platform_result_json = json.dumps(results)
             db.commit()
             return
 
-        frame.instagram_frame_id = str(ig_result["media_id"]) if ig_result.get("media_id") else None
-        ig_results.append(ig_result)
+        _fid = result.get("id") or result.get("media_id") or result.get("story_id")
+        frame.platform_frame_id = str(_fid) if _fid is not None else None
+        results.append(result)
 
         if not fake and idx < len(enabled_frames) - 1:
             time.sleep(3)
@@ -436,7 +476,7 @@ def _run_publish(story_id: str, db: Session) -> None:
     story.posted_at = now
     story.updated_at = now
     story.error_message = None
-    story.instagram_result_json = json.dumps(ig_results)
+    story.platform_result_json = json.dumps(results)
     db.commit()
 
 
