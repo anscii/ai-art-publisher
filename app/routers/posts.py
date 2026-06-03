@@ -25,11 +25,12 @@ router = APIRouter(tags=["posts"])
 
 def post_to_resp(p: Post) -> PostResponse:
     ordered = sorted(p.post_images, key=lambda pi: pi.order_index)
+    display_title = (p.title_ru or p.title) if p.platform == Platform.telegram else p.title
     return PostResponse(
         id=p.id,
         series_id=p.series_id,
         platform=Platform(p.platform),
-        title=p.title,
+        title=display_title,
         title_ru=p.title_ru,
         description=p.description,
         tags=json.loads(p.tags),
@@ -162,7 +163,7 @@ def _do_pinterest(post: Post, settings, db: Session) -> dict:
     return svc.post_pins(board_id, urls, title, description)
 
 
-def _auto_mark_images_posted(series: Series, db: Session) -> None:
+def _auto_mark_images_posted(series: Series) -> None:
     """Mark images as posted when they appear in both a posted Telegram and a posted visual post."""
     telegram_ids: set[str] = set()
     visual_ids: set[str] = set()
@@ -182,7 +183,14 @@ def _auto_mark_images_posted(series: Series, db: Session) -> None:
             img.status = "posted"
 
 
-def _maybe_mark_series_posted(series: Series, db: Session) -> None:
+def _mark_series_active(series: Series) -> None:
+    """Mark series as active if any image is posted."""
+    if series.status in ("skip", "posted"):
+        return
+    series.status = "active"
+
+
+def _maybe_mark_series_posted(series: Series) -> None:
     """Mark series as posted if all non-skip, non-deleted images are posted."""
     if series.status == "skip":
         return
@@ -266,8 +274,9 @@ def execute_post(post: Post, db: Session, settings) -> PostResult:
         post.post_url = post_url_value
         post.error_message = ""
         db.commit()
-        _auto_mark_images_posted(post.series, db)
-        _maybe_mark_series_posted(post.series, db)
+        _auto_mark_images_posted(post.series)
+        _mark_series_active(post.series)
+        _maybe_mark_series_posted(post.series)
         db.commit()
         prefix = "[FAKE] " if result.get("fake") else ""
         return PostResult(success=True, message=f"{prefix}Posted to {platform}")

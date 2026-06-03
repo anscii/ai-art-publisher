@@ -1,9 +1,10 @@
 """Tests for Post CRUD and scheduling via /api/series/{id}/posts and /api/posts/{id}."""
 
 import json as _json
+import types
 
 from app.models import Post as _Post
-from app.routers.posts import _build_caption
+from app.routers.posts import _build_caption, _mark_series_active
 
 
 def _series_with_image(client, title="Test Series"):
@@ -567,6 +568,43 @@ def test_auto_mark_image_posted_telegram_plus_pinterest(client):
         assert img["status"] == "posted"
 
 
+# ── _mark_series_active ───────────────────────────────────────────────────────
+
+
+def test_mark_series_active_sets_active():
+    s = types.SimpleNamespace(status="pending")
+    _mark_series_active(s)
+    assert s.status == "active"
+
+
+def test_mark_series_active_preserves_skip():
+    s = types.SimpleNamespace(status="skip")
+    _mark_series_active(s)
+    assert s.status == "skip"
+
+
+def test_mark_series_active_preserves_posted():
+    s = types.SimpleNamespace(status="posted")
+    _mark_series_active(s)
+    assert s.status == "posted"
+
+
+def test_series_becomes_active_after_single_platform_post(client):
+    import respx
+
+    from tests.test_posting import _mock_settings
+
+    sid, img_id = _series_with_image(client)
+    settings = _mock_settings()
+
+    with respx.mock:
+        tg_pid = _create_platform_post(client, sid, [img_id], "telegram")
+        _fake_execute(client, tg_pid, settings)
+
+    detail = client.get(f"/api/series/{sid}").json()
+    assert detail["status"] == "active"
+
+
 def test_create_pinterest_post_valid_platform(client):
     sid, img_id = _series_with_image(client)
     posts = _make_posts(client, sid, img_id, ["pinterest"])
@@ -674,3 +712,59 @@ def test_build_caption_tags_joined_by_space():
         platform="telegram", title="T", description="D", tags=_json.dumps(["#a", "#b", "#c"])
     )
     assert _build_caption(p).endswith("#a #b #c")
+
+
+# ── post_to_resp title display ────────────────────────────────────────────────
+
+
+def test_post_to_resp_telegram_uses_title_ru(client):
+    sid, img_id = _series_with_image(client)
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram"],
+            "title": "Forest Dawn",
+            "title_ru": "Лесной рассвет",
+            "description_telegram": "desc",
+            "description_other": "desc",
+            "tags_telegram": [],
+            "tags_other": [],
+            "image_ids": [img_id],
+        },
+    ).json()
+    assert posts[0]["title"] == "Лесной рассвет"
+
+
+def test_post_to_resp_telegram_falls_back_to_en_title_when_no_ru(client):
+    sid, img_id = _series_with_image(client)
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["telegram"],
+            "title": "Forest Dawn",
+            "description_telegram": "desc",
+            "description_other": "desc",
+            "tags_telegram": [],
+            "tags_other": [],
+            "image_ids": [img_id],
+        },
+    ).json()
+    assert posts[0]["title"] == "Forest Dawn"
+
+
+def test_post_to_resp_instagram_always_uses_en_title(client):
+    sid, img_id = _series_with_image(client)
+    posts = client.post(
+        f"/api/series/{sid}/posts",
+        json={
+            "platforms": ["instagram"],
+            "title": "Forest Dawn",
+            "title_ru": "Лесной рассвет",
+            "description_telegram": "desc",
+            "description_other": "desc",
+            "tags_telegram": [],
+            "tags_other": [],
+            "image_ids": [img_id],
+        },
+    ).json()
+    assert posts[0]["title"] == "Forest Dawn"
