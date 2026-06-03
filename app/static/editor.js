@@ -1383,6 +1383,8 @@ function buildGenerateCard(seriesId) {
   numVariantsInput.addEventListener('change', () => {
     App.generateNumVariants = parseInt(numVariantsInput.value, 10) || 1;
   });
+  numVariantsInput.addEventListener('click', e => e.stopPropagation());
+  numVariantsInput.addEventListener('touchend', e => e.stopPropagation());
 
   const langEn = h('button', { type: 'button', cls: 'is-active', id: 'genLangEn', 'data-lang': 'EN', text: 'EN' });
   const langRu = h('button', { type: 'button', id: 'genLangRu', 'data-lang': 'RU', text: 'RU' });
