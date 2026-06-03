@@ -10,6 +10,7 @@
 - **Before every `git push` and before creating any PR**: run `make format && make types && make test-back` (and `make test-front` if any JS changed). Never push or open a PR on a failing or unchecked suite.
 - **Verify current branch** (`git branch --show-current`) before every commit — never commit directly to `develop` or `master`.
 - Release PRs (`develop` → `master`) use `gh pr merge --merge` — never `--squash`. Squash is only for feature → `develop`.
+- To check CI status on a PR: `gh pr view <number> --json statusCheckRollup` — `gh pr checks --json` is not a valid flag.
 
 ## Running tests
 

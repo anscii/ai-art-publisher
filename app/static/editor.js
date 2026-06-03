@@ -85,7 +85,7 @@ function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
           notified.add('story:' + p.id);
           const n = p.story_frame_count ?? '';
           const frames = n ? ' (' + n + ' frame' + (n === 1 ? '' : 's') + ')' : '';
-          const platforms = 'Instagram' + (p.story_facebook_posted ? ' + Facebook' : '');
+          const platforms = p.platform === 'telegram' ? 'Telegram' : 'Instagram';
           showToast(
             p.story_status === 'posted'
               ? 'Story published to ' + platforms + frames
@@ -2001,7 +2001,7 @@ function buildPostRow(post, imgMap, series) {
     actions.appendChild(delBtn);
   }
 
-  if (post.platform === 'instagram') {
+  if (post.platform === 'instagram' || post.platform === 'telegram') {
     const storyChildren = [icon('bi bi-film')];
     if (post.story_status) {
       const si = STORY_STATUS_ICON[post.story_status];

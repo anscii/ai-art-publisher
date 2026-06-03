@@ -50,7 +50,6 @@ def post_to_resp(p: Post) -> PostResponse:
         story_status=p.story.status if p.story else None,
         story_error_message=p.story.error_message if p.story else None,
         story_frame_count=sum(1 for f in p.story.frames if f.is_enabled) if p.story else None,
-        story_facebook_posted=bool(p.story.facebook_result_json) if p.story else False,
     )
 
 

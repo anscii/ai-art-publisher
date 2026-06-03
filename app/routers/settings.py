@@ -21,6 +21,8 @@ _SECRET_FIELDS = {
     "deepseek_api_key",
     "openrouter_api_key",
     "telegram_bot_token",
+    "telegram_api_hash",
+    "telegram_session_string",
     "instagram_access_token",
     "facebook_page_access_token",
     "pinterest_access_token",
