@@ -50,7 +50,7 @@ function _startGeneratingPoller(seriesId, { savedSelection = null, prevVariantCo
 // Polls loadSeriesDetail every 3 s while any post has status="sending".
 // Clears itself when all posts settle (posted/failed) or user navigates away.
 let _sendingPollerId = null;
-function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
+function _startSendingPoller(seriesId, { watchedPostIds = new Set(), watchedStoryPostIds = new Set() } = {}) {
   if (_sendingPollerId) clearInterval(_sendingPollerId);
   const notified = new Set();
   // Snapshot settled items so only new transitions toast.
@@ -58,7 +58,7 @@ function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
   // and must toast even if the background task completes before the first poll.
   (App.currentSeries?.posts || []).filter(p => !p.deleted_at).forEach(p => {
     if (p.status !== 'sending' && !watchedPostIds.has(p.id)) notified.add(p.id);
-    if (p.story_status && p.story_status !== 'publishing') notified.add('story:' + p.id);
+    if (p.story_status && p.story_status !== 'publishing' && !watchedStoryPostIds.has(p.id)) notified.add('story:' + p.id);
   });
   _sendingPollerId = setInterval(async () => {
     if (App.currentSeriesId !== seriesId) {
@@ -2880,9 +2880,10 @@ function _renderStoryEditorV2(body) {
     try {
       await apiFetch('POST', '/api/stories/' + story.id + '/publish');
       const seriesId = _storyCtx?.post?.series_id || App.currentSeriesId;
+      const postId = _storyCtx?.post?.id;
       bootstrap.Modal.getInstance(document.getElementById('storyEditorModal'))?.hide();
       if (seriesId) {
-        _startSendingPoller(seriesId);
+        _startSendingPoller(seriesId, postId ? { watchedStoryPostIds: new Set([postId]) } : {});
         await loadSeriesDetail(seriesId, { silent: true });
       }
     } catch (e) {
