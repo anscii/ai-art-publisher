@@ -264,6 +264,31 @@ def test_format_controls_do_not_crash(page, live_server, tmp_path):
     assert js_errors == [], f"JS errors after using format controls: {js_errors}"
 
 
+def test_frame_strip_scrolls_to_selected_chip(page, live_server, tmp_path):
+    """Clicking a chip that overflows the strip must scroll it into view."""
+    _create_series_with_instagram_post(page, live_server, tmp_path, img_count=4)
+    _open_story_modal(page)
+    page.locator("[data-story-generate-btn]").wait_for(timeout=5000)
+    page.locator("[data-story-generate-btn]").click()
+    page.locator("[data-story-frames]").wait_for(timeout=8000)
+
+    chips = page.locator(".se-strip__chip")
+    last_idx = chips.count() - 1
+    chips.nth(last_idx).click()
+    page.wait_for_timeout(200)
+
+    # Active chip must be within the strip's visible horizontal bounds
+    is_visible = page.evaluate("""() => {
+        const strip = document.querySelector('.se-strip');
+        const active = document.querySelector('.se-strip__chip.is-on');
+        if (!strip || !active) return false;
+        const sr = strip.getBoundingClientRect();
+        const cr = active.getBoundingClientRect();
+        return cr.left >= sr.left - 1 && cr.right <= sr.right + 1;
+    }""")
+    assert is_visible, "selected chip not visible in strip after click"
+
+
 def test_apply_all_propagates_color_and_halign(page, live_server, tmp_path):
     """'All' button must copy font size, text_color, and text_halign to all text frames."""
     _create_series_with_instagram_post(page, live_server, tmp_path, img_count=2)
