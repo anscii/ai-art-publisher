@@ -160,6 +160,53 @@ def test_execute_post_telegram_duplicate_protection_via_status(client, db):
     assert "Already posted" in result.message
 
 
+@respx.mock
+def test_post_telegram_long_caption_uses_sendmessage(client):
+    """Caption > 1024 chars must be sent via sendMessage, not as album caption."""
+    _, pid = _setup(client, "telegram")
+    long_desc = "А" * 1025
+    client.patch(f"/api/posts/{pid}", json={"description": long_desc})
+    tg_base = "https://api.telegram.org/botTOKEN"
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        album_route = respx.post(f"{tg_base}/sendMediaGroup").mock(
+            return_value=httpx.Response(200, json={"ok": True, "result": [{"message_id": 42}]})
+        )
+        text_route = respx.post(f"{tg_base}/sendMessage").mock(
+            return_value=httpx.Response(200, json={"ok": True, "result": {"message_id": 43}})
+        )
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    # Album sent without inline caption
+    album_req = album_route.calls[0].request
+    album_body = json.loads(album_req.content)
+    first_item = album_body["media"][0]
+    assert "caption" not in first_item
+    # Full caption sent separately
+    assert text_route.called
+    text_body = json.loads(text_route.calls[0].request.content)
+    assert long_desc in text_body["text"]
+
+
+@respx.mock
+def test_post_telegram_short_caption_inline(client):
+    """Caption <= 1024 chars stays inline on the album — no sendMessage call."""
+    _, pid = _setup(client, "telegram")
+    tg_base = "https://api.telegram.org/botTOKEN"
+    with patch("app.routers.posts.get_or_create_settings", return_value=_mock_settings()):
+        album_route = respx.post(f"{tg_base}/sendMediaGroup").mock(
+            return_value=httpx.Response(200, json={"ok": True, "result": [{"message_id": 7}]})
+        )
+        text_route = respx.post(f"{tg_base}/sendMessage").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+        resp = client.post(f"/api/posts/{pid}/post")
+    assert resp.json()["success"] is True
+    album_req = album_route.calls[0].request
+    album_body = json.loads(album_req.content)
+    assert "caption" in album_body["media"][0]
+    assert not text_route.called
+
+
 # ── Instagram ─────────────────────────────────────────────────────────────────
 
 
