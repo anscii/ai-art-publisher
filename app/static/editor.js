@@ -2706,7 +2706,7 @@ function _renderStoryEditorV2(body) {
   );
 
   const phone = h('div', { cls: 'va__phone' });
-  _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+  _buildFramePreview(phone, frame, imgMap);
 
   const rail = _buildRail(body, frame, imgMap);
   phone.appendChild(rail);
@@ -2723,6 +2723,7 @@ function _renderStoryEditorV2(body) {
   phone.addEventListener('touchmove', () => { _swipeMoved = true; }, { passive: true });
   phone.addEventListener('touchend', e => {
     if (e.target.closest('.se-rail')) return;
+    if (e.target.closest('.se-link-sticker')) return;
     const dx = e.changedTouches[0].clientX - _swipeX;
     if (_swipeMoved && Math.abs(dx) >= 40) {
       // swipe
@@ -2733,6 +2734,7 @@ function _renderStoryEditorV2(body) {
 
   phone.addEventListener('click', e => {
     if (e.target.closest('.se-rail')) return;
+    if (e.target.closest('.se-link-sticker')) return;
     const rect = phone.getBoundingClientRect();
     const xRatio = (e.clientX - rect.left) / rect.width;
     if (xRatio < 0.3 && frameIdx > 0) {
@@ -2801,7 +2803,7 @@ function _renderStoryEditorV2(body) {
       frame.text = textarea.value;
       frame.rendered_url = null;
       _markFrameDirty(frame.id);
-      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+      _buildFramePreview(phone, frame, imgMap);
       updateToPrevState();
       updateToNextState();
     });
@@ -2827,7 +2829,7 @@ function _renderStoryEditorV2(body) {
       frame.title = titleInput.value || null;
       frame.rendered_url = null;
       _markFrameDirty(frame.id);
-      _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+      _buildFramePreview(phone, frame, imgMap);
     });
     controlEl = titleInput;
   }
@@ -2907,7 +2909,7 @@ function _renderStoryEditorV2(body) {
       frame.rendered_url = null;
       _markFrameDirty(frame.id);
       const phoneEl = body.querySelector('.va__phone');
-      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
     });
 
     const applyAllBtn = h('button', {
@@ -2926,7 +2928,7 @@ function _renderStoryEditorV2(body) {
         _markFrameDirty(f.id);
       });
       const phoneEl = body.querySelector('.va__phone');
-      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap, _isLastTextFrame(frame));
+      if (phoneEl) _buildFramePreview(phoneEl, frame, imgMap);
     });
 
     sizeSlider = h('div', { cls: 'd-flex align-items-center gap-2', style: 'padding:4px 0' },
@@ -2969,13 +2971,71 @@ function _renderStoryEditorV2(body) {
   body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id }, ...children));
 }
 
-function _isLastTextFrame(frame) {
+function _isLastEnabledFrame(frame) {
   if (!_storyCtx) return false;
-  const last = [..._storyCtx.story.frames].reverse().find(f => f.frame_type === 'text' && f.is_enabled);
+  const last = [..._storyCtx.story.frames].reverse().find(f => f.is_enabled);
   return !!last && last.id === frame.id;
 }
 
-function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
+let _stickerSaveTimer = null;
+
+function _buildLinkStickerEl(phone, frame) {
+  if (!_storyCtx) return null;
+  const { story, post } = _storyCtx;
+  if (post.platform !== 'telegram' || !_isLastEnabledFrame(frame)) return null;
+
+  const area = story.link_area || { x: 75, y: 82, w: 50, h: 10 };
+  const sticker = h('div', { cls: 'se-link-sticker' },
+    h('span', { cls: 'se-link-sticker__text' }, '↘ latest post'),
+  );
+  sticker.style.left = area.x + '%';
+  sticker.style.top  = area.y + '%';
+  sticker.style.maxWidth = area.w + '%';
+
+  sticker.addEventListener('pointerdown', e => {
+    if (e.target.closest('.se-rail')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    sticker.classList.add('se-link-sticker--dragging');
+    const startX = e.clientX, startY = e.clientY;
+    const startAx = area.x,   startAy = area.y;
+
+    function onMove(ev) {
+      if (!phone.contains(sticker)) { cleanup(); return; }
+      const rect = phone.getBoundingClientRect();
+      const dx = (ev.clientX - startX) / rect.width  * 100;
+      const dy = (ev.clientY - startY) / rect.height * 100;
+      area.x = Math.max(area.w / 2, Math.min(100 - area.w / 2, startAx + dx));
+      area.y = Math.max(area.h / 2, Math.min(100 - area.h / 2, startAy + dy));
+      sticker.style.left = area.x + '%';
+      sticker.style.top  = area.y + '%';
+    }
+
+    function onUp() {
+      cleanup();
+      if (!phone.contains(sticker)) return;
+      clearTimeout(_stickerSaveTimer);
+      _stickerSaveTimer = setTimeout(() => {
+        apiFetch('PATCH', '/api/stories/' + story.id, { link_area: { x: area.x, y: area.y, w: area.w, h: area.h } })
+          .then(updated => { if (_storyCtx && _storyCtx.story.id === updated.id) _storyCtx.story.link_area = updated.link_area; })
+          .catch(err => showToast(err.message, 'danger'));
+      }, 300);
+    }
+
+    function cleanup() {
+      sticker.classList.remove('se-link-sticker--dragging');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+
+  return sticker;
+}
+
+function _buildFramePreview(phone, frame, imgMap) {
   const savedRail = phone.querySelector('.se-rail');
   phone.replaceChildren();
   const bgUrl = (imgMap && frame.source_image_id) ? imgMap[frame.source_image_id] : '';
@@ -2985,10 +3045,7 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
     img.src = frame.rendered_url;
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
     phone.appendChild(img);
-    return;
-  }
-
-  if (frame.frame_type === 'image') {
+  } else if (frame.frame_type === 'image') {
     if (bgUrl) phone.appendChild(h('div', { cls: 'se-frame-bg', style: 'background-image:url(' + bgUrl + ')' }));
     else phone.appendChild(h('div', { style: 'position:absolute;inset:0;background:#1a1015' }));
     if (frame.title) {
@@ -3038,10 +3095,9 @@ function _buildFramePreview(phone, frame, imgMap, isLastTextFrame = false) {
       if (frame.text) textEl.appendChild(h('div', { cls: 'se-frame-text', style: 'color:' + color + ';font-size:' + Math.round(pSz * pRatio) + 'px;text-align:' + _ha }, frame.text));
       phone.appendChild(textEl);
     }
-    if (isLastTextFrame) {
-      phone.appendChild(h('div', { cls: 'se-frame-label-latest', style: 'color:' + (frame.text_color || '#ffffff') }, '↘ latest post'));
-    }
   }
+  const linkSticker = _buildLinkStickerEl(phone, frame);
+  if (linkSticker) phone.appendChild(linkSticker);
   if (savedRail) phone.appendChild(savedRail);
 }
 
@@ -3080,7 +3136,7 @@ function _buildRail(body, frame, imgMap) {
           frame.rendered_url = null;
           _markFrameDirty(frame.id);
           const phone = bgBtn.closest('.va__phone');
-          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+          if (phone) _buildFramePreview(phone, frame, imgMap);
           _setBgChipStyle(bgChip, frame.background_mode, imgMap && imgMap[frame.source_image_id]);
         });
         panel.appendChild(pick);
@@ -3114,7 +3170,7 @@ function _buildRail(body, frame, imgMap) {
           frame.rendered_url = null;
           _markFrameDirty(frame.id);
           const phone = alignBtn.closest('.va__phone');
-          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+          if (phone) _buildFramePreview(phone, frame, imgMap);
         });
         panel.appendChild(pick);
       });
@@ -3146,7 +3202,7 @@ function _buildRail(body, frame, imgMap) {
           frame.rendered_url = null;
           _markFrameDirty(frame.id);
           const phone = halignBtn.closest('.va__phone');
-          if (phone) _buildFramePreview(phone, frame, imgMap, _isLastTextFrame(frame));
+          if (phone) _buildFramePreview(phone, frame, imgMap);
         });
         panel.appendChild(pick);
       });
@@ -3187,7 +3243,7 @@ function _buildColorBar(body, frame) {
       _markFrameDirty(frame.id);
       body.querySelectorAll('.se-swatch').forEach(s => s.classList.toggle('is-on', s.dataset.colorHex === hex));
       const phone = body.querySelector('.va__phone');
-      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap, _isLastTextFrame(frame));
+      if (phone && _storyCtx) _buildFramePreview(phone, frame, _storyCtx.imgMap);
     });
     return swatch;
   });

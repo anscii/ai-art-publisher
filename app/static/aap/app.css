@@ -1127,12 +1127,24 @@ a:hover { color: var(--aap-accent); }
   line-height: 1.5; text-align: center;
   text-shadow: 0 2px 8px rgba(0,0,0,0.55);
   white-space: pre-line; }
-.se-frame-label-latest {
-  position: absolute; right: 10%; bottom: 3%;
-  font-family: "Inter", "Liberation Sans", Arial, sans-serif; font-weight: 600; font-size: 12px;
-  letter-spacing: .03em;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.65);
-  pointer-events: none; z-index: 3; }
+
+/* Link sticker overlay */
+.se-link-sticker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.92);
+  border-radius: 20px;
+  cursor: grab;
+  user-select: none; touch-action: none;
+  z-index: 15;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  font-family: "Inter", "Liberation Sans", Arial, sans-serif;
+  font-size: 11px; font-weight: 700;
+  white-space: nowrap;
+  color: #0088cc; }
+.se-link-sticker--dragging { cursor: grabbing; }
 
 /* Floating control rail */
 .se-rail {

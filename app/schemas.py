@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.enums import Platform
 
@@ -277,11 +277,28 @@ class StoryResponse(BaseModel):
     rendered_at: datetime | None
     posted_at: datetime | None
     error_message: str | None
+    link_area: dict | None
     frames: list[StoryFrameResponse]
 
 
 class StoryCreateRequest(BaseModel):
     image_ids: list[str]
+
+
+class StoryUpdate(BaseModel):
+    link_area: dict | None = None
+
+    @field_validator("link_area")
+    @classmethod
+    def validate_link_area(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return v
+        for key in ("x", "y", "w", "h"):
+            if key not in v:
+                raise ValueError(f"link_area missing required key: {key!r}")
+            if not isinstance(v[key], (int, float)):
+                raise ValueError(f"link_area.{key!r} must be a number")
+        return v
 
 
 class StoryFrameUpdate(BaseModel):
