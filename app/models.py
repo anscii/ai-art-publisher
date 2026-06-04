@@ -156,6 +156,9 @@ class Story(Base):
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     platform_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    link_area_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON {"x": float, "y": float, "w": float, "h": float} — Telegram MediaAreaUrl coords (%)
+    # null = use defaults {"x": 75, "y": 82, "w": 50, "h": 10}
 
     post: Mapped["Post"] = relationship("Post", back_populates="story")
     frames: Mapped[list["StoryFrame"]] = relationship(

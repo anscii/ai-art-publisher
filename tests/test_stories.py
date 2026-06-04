@@ -380,6 +380,118 @@ def test_render_story_produces_rendered_urls(client, monkeypatch):
             assert frame["rendered_url"] is not None
 
 
+def test_latest_post_label_renders_on_last_text_frame():
+    """Renderer draws "↘ latest post" label when is_last_text_frame=True."""
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "text"
+        title = None
+        text = "Closing thought."
+        background_mode = "solid_dark"
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        font_size = None
+
+    renderer = StoryRenderer()
+    without = renderer.render_frame(_Frame(), None, is_last_text_frame=False)
+    with_label = renderer.render_frame(_Frame(), None, is_last_text_frame=True)
+
+    crop = (780, 1780, 1080, 1880)
+    assert list(PILImage.open(io.BytesIO(without)).crop(crop).getdata()) != list(
+        PILImage.open(io.BytesIO(with_label)).crop(crop).getdata()
+    )
+
+
+def test_latest_post_label_not_drawn_on_image_frame():
+    """Image frames never get the label regardless of is_last_text_frame."""
+    from app.services.story_renderer import StoryRenderer
+
+    class _Frame:
+        frame_type = "image"
+        title = None
+        source_image_id = None
+        text_color = "#ffffff"
+        text_align = "middle"
+        title_position = "bottom"
+        font_size = None
+        background_mode = "solid_dark"
+
+    renderer = StoryRenderer()
+    assert renderer.render_frame(_Frame(), None, is_last_text_frame=False) == renderer.render_frame(
+        _Frame(), None, is_last_text_frame=True
+    )
+
+
+def test_render_instagram_story_passes_label_flag_for_last_text_frame(client, monkeypatch):
+    """render endpoint passes is_last_text_frame=True only for last text frame of Instagram story."""
+    from app.services.story_renderer import StoryRenderer
+
+    sid = _series(client)
+    img_id = _image(client, sid)
+    post = _instagram_post(client, sid, [img_id])
+    story_data = _story(client, post["id"], [img_id])
+
+    calls: list[dict] = []
+    real_render = StoryRenderer.render_frame
+
+    def spy_render(self, frame, image_bytes, *, is_last_text_frame=False):
+        calls.append({"frame_type": frame.frame_type, "is_last": is_last_text_frame})
+        return real_render(self, frame, image_bytes, is_last_text_frame=is_last_text_frame)
+
+    mock_storage = MagicMock()
+    mock_storage.download_bytes.return_value = _fake_jpeg()
+    mock_storage.upload_bytes.return_value = "stories/test/frame.jpg"
+    mock_storage.public_url.side_effect = lambda k: f"/uploads/{k}"
+
+    with (
+        patch("app.routers.stories.get_storage_from_settings", return_value=mock_storage),
+        patch.object(StoryRenderer, "render_frame", spy_render),
+    ):
+        resp = client.post(f"/api/stories/{story_data['id']}/render")
+
+    assert resp.status_code == 200
+    text_calls = [c for c in calls if c["frame_type"] == "text"]
+    assert text_calls, "expected at least one text frame"
+    # Exactly the last text frame should have is_last_text_frame=True
+    assert text_calls[-1]["is_last"] is True
+    assert all(not c["is_last"] for c in text_calls[:-1])
+
+
+def test_render_telegram_story_never_passes_label_flag(client, monkeypatch):
+    """render endpoint always passes is_last_text_frame=False for Telegram stories."""
+    from app.services.story_renderer import StoryRenderer
+
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story_data = _story(client, tg_post["id"], [img_id])
+
+    calls: list[dict] = []
+    real_render = StoryRenderer.render_frame
+
+    def spy_render(self, frame, image_bytes, *, is_last_text_frame=False):
+        calls.append({"frame_type": frame.frame_type, "is_last": is_last_text_frame})
+        return real_render(self, frame, image_bytes, is_last_text_frame=is_last_text_frame)
+
+    mock_storage = MagicMock()
+    mock_storage.download_bytes.return_value = _fake_jpeg()
+    mock_storage.upload_bytes.return_value = "stories/test/frame.jpg"
+    mock_storage.public_url.side_effect = lambda k: f"/uploads/{k}"
+
+    with (
+        patch("app.routers.stories.get_storage_from_settings", return_value=mock_storage),
+        patch.object(StoryRenderer, "render_frame", spy_render),
+    ):
+        resp = client.post(f"/api/stories/{story_data['id']}/render")
+
+    assert resp.status_code == 200
+    assert calls, "expected at least one frame rendered"
+    assert all(not c["is_last"] for c in calls), "Telegram frames must never get the label"
+
+
 def test_render_produces_1080x1920_jpeg(monkeypatch):
     """Unit test: renderer output is a valid 1080x1920 JPEG."""
     from app.services.story_renderer import StoryRenderer
@@ -745,70 +857,6 @@ def test_renderer_solid_accent_background():
     assert r_avg > 100  # orange-dominant (red channel high)
 
 
-def test_latest_post_label_changes_bottom_right():
-    from app.services.story_renderer import StoryRenderer
-
-    class _Frame:
-        frame_type = "text"
-        title = None
-        text = "Closing thought."
-        background_mode = "solid_dark"
-        source_image_id = None
-        text_color = "#ffffff"
-        text_align = "middle"
-        title_position = "bottom"
-        font_size = None
-
-    renderer = StoryRenderer()
-    without_label = renderer.render_frame(_Frame(), None, is_last_text_frame=False)
-    with_label = renderer.render_frame(_Frame(), None, is_last_text_frame=True)
-
-    img_no = PILImage.open(io.BytesIO(without_label))
-    img_yes = PILImage.open(io.BytesIO(with_label))
-
-    crop_box = (780, 1780, 1080, 1880)
-    assert list(img_no.crop(crop_box).getdata()) != list(img_yes.crop(crop_box).getdata())
-
-
-def test_latest_post_label_ignored_for_image_frame():
-    from app.services.story_renderer import StoryRenderer
-
-    class _Frame:
-        frame_type = "image"
-        title = None
-        source_image_id = None
-        text_color = "#ffffff"
-        text_align = "middle"
-        title_position = "bottom"
-        font_size = None
-        background_mode = "solid_dark"
-
-    renderer = StoryRenderer()
-    assert renderer.render_frame(_Frame(), None, is_last_text_frame=False) == renderer.render_frame(
-        _Frame(), None, is_last_text_frame=True
-    )
-
-
-def test_latest_post_label_default_is_false():
-    from app.services.story_renderer import StoryRenderer
-
-    class _Frame:
-        frame_type = "text"
-        title = None
-        text = "Default check."
-        background_mode = "solid_dark"
-        source_image_id = None
-        text_color = "#ffffff"
-        text_align = "middle"
-        title_position = "bottom"
-        font_size = None
-
-    renderer = StoryRenderer()
-    assert renderer.render_frame(_Frame(), None) == renderer.render_frame(
-        _Frame(), None, is_last_text_frame=False
-    )
-
-
 # ── Publish idempotent retry ──────────────────────────────────────────────────
 
 
@@ -952,5 +1000,184 @@ def test_telegram_stories_post_stories_calls_telethon():
         )
 
     assert result == mock_results
-    mock_fn.assert_called_once_with(12345, "abc", "session", "@mychannel", [b"fake1", b"fake2"])
+    mock_fn.assert_called_once_with(
+        12345, "abc", "session", "@mychannel", [b"fake1", b"fake2"], None, None
+    )
     mock_asyncio.run.assert_called_once_with(fake_coro)
+
+
+# ── story link area (PATCH /api/stories/{id}) ─────────────────────────────────
+
+
+def test_story_patch_link_area(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story = _story(client, tg_post["id"], [img_id])
+
+    area = {"x": 60.0, "y": 80.0, "w": 40.0, "h": 8.0}
+    resp = client.patch(f"/api/stories/{story['id']}", json={"link_area": area})
+    assert resp.status_code == 200
+    assert resp.json()["link_area"] == area
+
+
+def test_story_patch_link_area_clear(client):
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story = _story(client, tg_post["id"], [img_id])
+
+    # Set then clear
+    client.patch(
+        f"/api/stories/{story['id']}", json={"link_area": {"x": 50, "y": 50, "w": 40, "h": 8}}
+    )
+    resp = client.patch(f"/api/stories/{story['id']}", json={"link_area": None})
+    assert resp.status_code == 200
+    assert resp.json()["link_area"] is None
+
+
+def test_story_patch_link_area_404(client):
+    resp = client.patch(
+        "/api/stories/nonexistent", json={"link_area": {"x": 50, "y": 50, "w": 40, "h": 8}}
+    )
+    assert resp.status_code == 404
+
+
+def test_tg_story_publish_passes_link_to_last_frame(client, db, monkeypatch):
+    """publish calls post_stories with post_url on last frame, None on others."""
+    from app.config import AppConfig
+    from app.models import Story
+
+    monkeypatch.setattr(AppConfig, "fake_posting", False)
+    sid = _series(client)
+    img_id1 = _image(client, sid, key="images/a.jpg")
+    img_id2 = _image(client, sid, key="images/b.jpg")
+    tg_post = _telegram_post(client, sid, [img_id1, img_id2])
+
+    # Set post_url on the post so the link sticker is active
+    post_obj = db.get(Post, tg_post["id"])
+    post_obj.post_url = "https://t.me/murky_airt/42"
+    db.commit()
+
+    story_data = _story(client, tg_post["id"], [img_id1, img_id2])
+    story = db.get(Story, story_data["id"])
+    for frame in story.frames:
+        frame.rendered_url = f"https://r2.example.com/frame_{frame.id}.jpg"
+        frame.rendered_storage_key = f"stories/test/frame_{frame.id}.jpg"
+    story.status = "rendered"
+    db.commit()
+
+    mock_storage = MagicMock()
+    mock_storage.download_bytes.return_value = _fake_jpeg()
+
+    captured = {}
+
+    def fake_post_stories(**kwargs):
+        captured.update(kwargs)
+        return [{"ok": True, "story_id": i} for i in range(len(kwargs["images"]))]
+
+    with (
+        patch("app.routers.stories.get_storage_from_settings", return_value=mock_storage),
+        patch("app.routers.stories.tg_stories_svc") as mock_tg,
+    ):
+        mock_tg.post_stories.side_effect = fake_post_stories
+        monkeypatch.setattr(AppConfig, "fake_posting", False)
+
+        # Patch settings so we have api credentials
+        from app.routers.settings import get_or_create_settings
+
+        db.expire_all()
+        settings = get_or_create_settings(db)
+        settings.telegram_api_id = "12345"
+        settings.telegram_api_hash = "abc"
+        settings.telegram_session_string = "sess"
+        settings.telegram_channel_id = "@chan"
+        db.commit()
+
+        resp = client.post(f"/api/stories/{story_data['id']}/publish")
+
+    assert resp.status_code == 200
+    link_urls = captured.get("link_urls", [])
+    assert link_urls[-1] == "https://t.me/murky_airt/42"
+    assert all(u is None for u in link_urls[:-1])
+
+
+def test_tg_story_publish_no_link_when_no_post_url(client, db, monkeypatch):
+    """publish sends no link when post has no post_url."""
+    from app.config import AppConfig
+    from app.models import Story
+
+    monkeypatch.setattr(AppConfig, "fake_posting", True)
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story_data = _story(client, tg_post["id"], [img_id])
+
+    story = db.get(Story, story_data["id"])
+    for frame in story.frames:
+        frame.rendered_url = f"https://r2.example.com/frame_{frame.id}.jpg"
+        frame.rendered_storage_key = f"stories/test/frame_{frame.id}.jpg"
+    story.status = "rendered"
+    db.commit()
+
+    with patch("app.routers.stories.tg_stories_svc") as mock_tg:
+        resp = client.post(f"/api/stories/{story_data['id']}/publish")
+        mock_tg.post_stories.assert_not_called()  # fake_posting = True
+
+    assert resp.status_code == 200
+
+
+# ── link_area validation & resilience ────────────────────────────────────────
+
+
+def test_story_patch_link_area_rejects_partial_dict(client):
+    """PATCH with missing required keys returns 422."""
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story = _story(client, tg_post["id"], [img_id])
+
+    resp = client.patch(f"/api/stories/{story['id']}", json={"link_area": {"x": 50}})
+    assert resp.status_code == 422
+
+
+def test_story_patch_link_area_rejects_non_numeric(client):
+    """PATCH with non-numeric coordinate returns 422."""
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story = _story(client, tg_post["id"], [img_id])
+
+    resp = client.patch(
+        f"/api/stories/{story['id']}",
+        json={"link_area": {"x": "bad", "y": 80, "w": 50, "h": 10}},
+    )
+    assert resp.status_code == 422
+
+
+def test_story_get_survives_malformed_link_area_json(client, db):
+    """GET returns link_area=None (not 500) when stored JSON is corrupt."""
+    from app.models import Story
+
+    sid = _series(client)
+    img_id = _image(client, sid)
+    tg_post = _telegram_post(client, sid, [img_id])
+    story_data = _story(client, tg_post["id"], [img_id])
+
+    story = db.get(Story, story_data["id"])
+    story.link_area_json = "{bad json"
+    db.commit()
+
+    resp = client.get(f"/api/stories/{story_data['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["link_area"] is None
+
+
+def test_get_link_area_survives_malformed_json():
+    """get_link_area falls back to defaults on corrupt stored JSON."""
+    from app.routers.stories import _DEFAULT_LINK_AREA, get_link_area
+
+    class _Stub:
+        link_area_json = "{corrupt"
+
+    assert get_link_area(_Stub()) == _DEFAULT_LINK_AREA

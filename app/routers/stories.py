@@ -21,6 +21,7 @@ from app.schemas import (
     StoryFrameUpdate,
     StoryReorderRequest,
     StoryResponse,
+    StoryUpdate,
 )
 from app.services import telegram_stories as tg_stories_svc
 from app.services.instagram import InstagramService
@@ -29,6 +30,26 @@ from app.services.storage import get_storage_from_settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["stories"])
+
+_DEFAULT_LINK_AREA: dict = {"x": 75.0, "y": 82.0, "w": 50.0, "h": 10.0}
+
+
+def get_link_area(story: "Story") -> dict:
+    if story.link_area_json:
+        try:
+            return json.loads(story.link_area_json)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return _DEFAULT_LINK_AREA
+
+
+def _parse_link_area(json_str: str | None) -> dict | None:
+    if not json_str:
+        return None
+    try:
+        return json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
+        return None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -104,6 +125,7 @@ def _story_to_resp(story: Story) -> StoryResponse:
         rendered_at=story.rendered_at,
         posted_at=story.posted_at,
         error_message=story.error_message,
+        link_area=_parse_link_area(story.link_area_json),
         frames=[
             StoryFrameResponse(
                 id=f.id,
@@ -213,6 +235,17 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
 @router.get("/api/stories/{story_id}", response_model=StoryResponse)
 def get_story(story_id: str, db: Session = Depends(get_db)):
     return _story_to_resp(_get_story_or_404(story_id, db))
+
+
+@router.patch("/api/stories/{story_id}", response_model=StoryResponse)
+def patch_story(story_id: str, body: StoryUpdate, db: Session = Depends(get_db)):
+    story = _get_story_or_404(story_id, db)
+    if "link_area" in body.model_fields_set:
+        story.link_area_json = json.dumps(body.link_area) if body.link_area else None
+    story.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+    db.refresh(story)
+    return _story_to_resp(story)
 
 
 @router.patch("/api/story-frames/{frame_id}", response_model=StoryResponse)
@@ -327,11 +360,15 @@ def render_story(story_id: str, db: Session = Depends(get_db)):
     if not enabled_frames:
         raise HTTPException(status_code=400, detail="No enabled frames to render")
 
+    # Telegram uses a native MediaAreaUrl link sticker — no need to bake label into JPEG.
+    # Instagram has no native link sticker, so render the label for non-Telegram stories.
+    is_telegram = story.post.platform == Platform.telegram
     last_text_frame_id: str | None = None
-    for _f in reversed(enabled_frames):
-        if _f.frame_type == "text":
-            last_text_frame_id = _f.id
-            break
+    if not is_telegram:
+        for _f in reversed(enabled_frames):
+            if _f.frame_type == "text":
+                last_text_frame_id = _f.id
+                break
 
     renderer = StoryRenderer()
 
@@ -418,12 +455,19 @@ def _run_publish(story_id: str, db: Session) -> None:
         ]
         if tg_frames:
             images = [storage.download_bytes(f.rendered_storage_key or "") for f in tg_frames]
+            post_url = story.post.post_url
+            area = get_link_area(story)
+            last_idx = len(tg_frames) - 1
+            link_urls = [post_url if i == last_idx else None for i in range(len(tg_frames))]
+            link_areas = [area if i == last_idx else None for i in range(len(tg_frames))]
             batch = tg_stories_svc.post_stories(
                 api_id=int(settings.telegram_api_id),
                 api_hash=settings.telegram_api_hash,
                 session_string=settings.telegram_session_string,
                 channel_id=settings.telegram_channel_id,
                 images=images,
+                link_urls=link_urls,
+                link_areas=link_areas,
             )
             _tg_frame_results = dict(zip((f.id for f in tg_frames), batch))
 
