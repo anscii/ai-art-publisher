@@ -2969,6 +2969,10 @@ function _renderStoryEditorV2(body) {
   children.push(h('div', { cls: 'va__foot' }, renderBtn, publishBtn));
 
   body.replaceChildren(h('div', { cls: 'se-va', 'data-story-panel': post.id }, ...children));
+  requestAnimationFrame(() => {
+    const activeChip = strip.children[frameIdx];
+    if (activeChip) strip.scrollLeft = activeChip.offsetLeft - (strip.clientWidth / 2) + (activeChip.offsetWidth / 2);
+  });
 }
 
 function _isLastEnabledFrame(frame) {
