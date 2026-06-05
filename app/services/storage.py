@@ -16,23 +16,37 @@ class LocalStorageService:
         return f"{_LOCAL_URL_PREFIX}/{key}"
 
     def upload_bytes(self, data: bytes, key: str, content_type: str = "image/jpeg") -> str:
-        dest = self._dir / key
+        dest = self._safe_path(key)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         return key
 
     def upload_file(self, filepath: str, key: str) -> str:
-        dest = self._dir / key
+        dest = self._safe_path(key)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(filepath, dest)
         return key
 
     def download_bytes(self, key: str) -> bytes:
-        return (self._dir / key).read_bytes()
+        return self._safe_path(key).read_bytes()
+
+    def _safe_path(self, key: str) -> Path:
+        resolved = (self._dir / key).resolve()
+        if not resolved.is_relative_to(self._dir.resolve()):
+            raise ValueError(f"Key escapes storage root: {key!r}")
+        return resolved
+
+    def copy(self, src_key: str, dst_key: str) -> str:
+        src = self._safe_path(src_key)
+        dst = self._safe_path(dst_key)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        return dst_key
 
     def delete(self, key: str) -> None:
+        path = self._safe_path(key)
         try:
-            (self._dir / key).unlink()
+            path.unlink()
         except FileNotFoundError:
             pass
 
@@ -65,6 +79,14 @@ class R2StorageService:
     def download_bytes(self, key: str) -> bytes:
         resp = self._client.get_object(Bucket=self._bucket, Key=key)
         return resp["Body"].read()
+
+    def copy(self, src_key: str, dst_key: str) -> str:
+        self._client.copy_object(
+            Bucket=self._bucket,
+            CopySource={"Bucket": self._bucket, "Key": src_key},
+            Key=dst_key,
+        )
+        return dst_key
 
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=key)

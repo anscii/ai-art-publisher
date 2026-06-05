@@ -50,7 +50,7 @@ function _startGeneratingPoller(seriesId, { savedSelection = null, prevVariantCo
 // Polls loadSeriesDetail every 3 s while any post has status="sending".
 // Clears itself when all posts settle (posted/failed) or user navigates away.
 let _sendingPollerId = null;
-function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
+function _startSendingPoller(seriesId, { watchedPostIds = new Set(), watchedStoryPostIds = new Set() } = {}) {
   if (_sendingPollerId) clearInterval(_sendingPollerId);
   const notified = new Set();
   // Snapshot settled items so only new transitions toast.
@@ -58,7 +58,7 @@ function _startSendingPoller(seriesId, { watchedPostIds = new Set() } = {}) {
   // and must toast even if the background task completes before the first poll.
   (App.currentSeries?.posts || []).filter(p => !p.deleted_at).forEach(p => {
     if (p.status !== 'sending' && !watchedPostIds.has(p.id)) notified.add(p.id);
-    if (p.story_status && p.story_status !== 'publishing') notified.add('story:' + p.id);
+    if (p.story_status && p.story_status !== 'publishing' && !watchedStoryPostIds.has(p.id)) notified.add('story:' + p.id);
   });
   _sendingPollerId = setInterval(async () => {
     if (App.currentSeriesId !== seriesId) {
@@ -418,6 +418,13 @@ function buildThumb(img, seriesId, orderNum) {
   hdr2.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
   dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
+  const fixLi = document.createElement('li');
+  const fixA = h('a', { cls: 'dropdown-item small', href: '#' });
+  fixA.appendChild(icon('bi bi-magic me-1'));
+  fixA.appendChild(document.createTextNode('Fix with AI'));
+  fixA.addEventListener('click', e => { e.preventDefault(); openAiFixModal(img.id); });
+  fixLi.appendChild(fixA);
+  dropItems.appendChild(fixLi);
   const divLi = document.createElement('li');
   divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
   dropItems.appendChild(divLi);
@@ -830,6 +837,15 @@ function initLightbox() {
     const img = _lightboxImages[_lightboxIdx];
     if (img.status !== 'posted') _lightboxPatch('posted');
   });
+  document.getElementById('lightboxFixAiBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    const lb = bootstrap.Modal.getInstance(document.getElementById('lightboxModal'));
+    document.getElementById('lightboxModal').addEventListener('hidden.bs.modal', () => {
+      openAiFixModal(img.id);
+    }, { once: true });
+    lb?.hide();
+  });
+
   document.getElementById('lightboxDeleteBtn').addEventListener('click', async () => {
     const img = _lightboxImages[_lightboxIdx];
     try {
@@ -2880,9 +2896,10 @@ function _renderStoryEditorV2(body) {
     try {
       await apiFetch('POST', '/api/stories/' + story.id + '/publish');
       const seriesId = _storyCtx?.post?.series_id || App.currentSeriesId;
+      const postId = _storyCtx?.post?.id;
       bootstrap.Modal.getInstance(document.getElementById('storyEditorModal'))?.hide();
       if (seriesId) {
-        _startSendingPoller(seriesId);
+        _startSendingPoller(seriesId, postId ? { watchedStoryPostIds: new Set([postId]) } : {});
         await loadSeriesDetail(seriesId, { silent: true });
       }
     } catch (e) {
@@ -3291,3 +3308,91 @@ function _openStoryFullscreen(urls, startIdx) {
   render();
   document.body.appendChild(overlay);
 }
+
+// ── AI Fix Modal ───────────────────────────────────────────────────────────────
+
+let _aiFixImageId = null;
+let _aiFixTempKey = null;
+
+function openAiFixModal(imageId) {
+  _aiFixImageId = imageId;
+  _aiFixTempKey = null;
+  const hint = document.getElementById('aiFixHint');
+  if (hint) hint.value = '';
+  _aiFixSetState('form');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('aiFixModal')).show();
+}
+
+function _aiFixSetState(state) {
+  const form    = document.getElementById('aiFixForm');
+  const spinner = document.getElementById('aiFixSpinner');
+  const preview = document.getElementById('aiFixPreview');
+  const footer  = document.getElementById('aiFixFooter');
+  form.classList.toggle('d-none',    state !== 'form');
+  spinner.classList.toggle('d-none', state !== 'loading');
+  preview.classList.toggle('d-none', state !== 'preview');
+  if (footer) footer.classList.toggle('d-none', state !== 'form');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const submitBtn  = document.getElementById('aiFixSubmitBtn');
+  const keepBtn    = document.getElementById('aiFixKeepBtn');
+  const discardBtn = document.getElementById('aiFixDiscardBtn');
+  const modalEl    = document.getElementById('aiFixModal');
+
+  if (!submitBtn) return;
+
+  submitBtn.addEventListener('click', async () => {
+    const hint = document.getElementById('aiFixHint')?.value?.trim();
+    if (!hint) { showToast('Enter a hint before fixing.', 'warning'); return; }
+    _aiFixSetState('loading');
+    try {
+      const data = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix`, { hint });
+      _aiFixTempKey = data.temp_key;
+      document.getElementById('aiFixPreviewImg').src = data.preview_url;
+      _aiFixSetState('preview');
+    } catch (err) {
+      _aiFixSetState('form');
+      showToast('AI fix failed: ' + (err.message || err), 'danger');
+    }
+  });
+
+  keepBtn.addEventListener('click', async () => {
+    keepBtn.disabled = true;
+    discardBtn.disabled = true;
+    _aiFixSetState('loading');
+    try {
+      const series = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix/keep`, { temp_key: _aiFixTempKey });
+      _aiFixTempKey = null;
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      updateSeriesItem(series);
+      if (App.currentSeries?.id === series.id) {
+        App.currentSeries = series;
+        renderEditor(series);
+      }
+      showToast('Image saved.', 'success');
+    } catch (err) {
+      keepBtn.disabled = false;
+      discardBtn.disabled = false;
+      _aiFixSetState('preview');
+      showToast('Keep failed: ' + (err.message || err), 'danger');
+    }
+  });
+
+  discardBtn.addEventListener('click', async () => {
+    if (_aiFixTempKey) {
+      fetch(`/api/images/ai-fix/tmp?temp_key=${encodeURIComponent(_aiFixTempKey)}`, { method: 'DELETE' }).catch(() => {});
+      _aiFixTempKey = null;
+    }
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+  });
+
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    if (_aiFixTempKey) {
+      fetch(`/api/images/ai-fix/tmp?temp_key=${encodeURIComponent(_aiFixTempKey)}`, { method: 'DELETE' }).catch(() => {});
+      _aiFixTempKey = null;
+    }
+    keepBtn.disabled = false;
+    discardBtn.disabled = false;
+  });
+});

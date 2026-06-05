@@ -15,6 +15,7 @@ from app.routers import auth as auth_router
 from app.routers import backup as backup_router
 from app.routers import collections as collections_router
 from app.routers import generate as generate_router
+from app.routers import image_ai_fix as image_ai_fix_router
 from app.routers import images as images_router
 from app.routers import landing as landing_router
 from app.routers import posts as posts_router
@@ -159,6 +160,7 @@ app.include_router(settings_router.router)
 app.include_router(settings_router.stats_router)
 app.include_router(collections_router.router)
 app.include_router(series_router.router)
+app.include_router(image_ai_fix_router.router)
 app.include_router(images_router.router)
 app.include_router(generate_router.router)
 app.include_router(generate_router.variants_router)

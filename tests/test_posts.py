@@ -384,6 +384,51 @@ def test_build_caption_telegram_excludes_seo():
     assert "dream archaeology" not in caption
 
 
+def test_build_caption_telegram_html_formatting():
+    """Telegram caption wraps title in <b> and collection line in <i>."""
+    import json
+
+    from app.models import Post
+    from app.routers.posts import _build_caption
+
+    post = Post(
+        platform="telegram",
+        title="Forest Dawn",
+        title_ru="Лесной Рассвет",
+        collection_line="Series One",
+        collection_line_ru="Серия Один",
+        description="Описание",
+        tags=json.dumps(["#арт"]),
+    )
+    caption = _build_caption(post)
+    assert "<b>Лесной Рассвет</b>" in caption
+    assert "<i>Серия Один</i>" in caption
+    # plain fields unchanged
+    assert "Описание" in caption
+    assert "#арт" in caption
+
+
+def test_build_caption_telegram_html_formatting_no_collection():
+    """Telegram caption omits <i> tag when collection line is absent."""
+    import json
+
+    from app.models import Post
+    from app.routers.posts import _build_caption
+
+    post = Post(
+        platform="telegram",
+        title="Forest Dawn",
+        title_ru=None,
+        collection_line=None,
+        collection_line_ru=None,
+        description="Desc",
+        tags=json.dumps([]),
+    )
+    caption = _build_caption(post)
+    assert "<b>Forest Dawn</b>" in caption
+    assert "<i>" not in caption
+
+
 def test_create_posts_copies_seo_from_chosen_variant(client):
     """Instagram post gets seo from chosen variant; Telegram post does not."""
     from unittest.mock import MagicMock, patch
@@ -647,21 +692,21 @@ def test_build_caption_telegram_joins_parts():
         description="Body",
         tags=_json.dumps(["#tag"]),
     )
-    assert _build_caption(p) == "EN Title\n\nBody\n\n#tag"
+    assert _build_caption(p) == "<b>EN Title</b>\n\nBody\n\n#tag"
 
 
 def test_build_caption_telegram_prefers_ru_title():
     p = _make_post(
         platform="telegram", title="EN", title_ru="RU", description="Body", tags=_json.dumps([])
     )
-    assert _build_caption(p).startswith("RU")
+    assert _build_caption(p).startswith("<b>RU")
 
 
 def test_build_caption_telegram_falls_back_to_en_title_when_no_ru():
     p = _make_post(
         platform="telegram", title="EN", title_ru=None, description="Body", tags=_json.dumps([])
     )
-    assert _build_caption(p).startswith("EN")
+    assert _build_caption(p).startswith("<b>EN")
 
 
 def test_build_caption_telegram_prefers_ru_collection_line():
