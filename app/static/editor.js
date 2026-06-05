@@ -3366,7 +3366,10 @@ document.addEventListener('DOMContentLoaded', () => {
       _aiFixTempKey = null;
       bootstrap.Modal.getInstance(modalEl)?.hide();
       updateSeriesItem(series);
-      if (App.currentSeries?.id === series.id) renderEditor(series);
+      if (App.currentSeries?.id === series.id) {
+        App.currentSeries = series;
+        renderEditor(series);
+      }
       showToast('Image saved.', 'success');
     } catch (err) {
       keepBtn.disabled = false;
