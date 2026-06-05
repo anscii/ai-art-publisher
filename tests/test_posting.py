@@ -535,7 +535,7 @@ def test_telegram_post_stores_url_for_username_channel(client):
 
 
 @respx.mock
-def test_telegram_post_url_none_for_numeric_channel(client):
+def test_telegram_post_url_set_for_numeric_channel(client):
     _, pid = _setup(client, "telegram")
     with patch(
         "app.routers.posts.get_or_create_settings",
@@ -549,7 +549,7 @@ def test_telegram_post_url_none_for_numeric_channel(client):
         resp = client.post(f"/api/posts/{pid}/post")
     assert resp.json()["success"] is True
     post = client.get(f"/api/posts/{pid}").json()
-    assert post["post_url"] is None
+    assert post["post_url"] == "https://t.me/c/123456789/42"
 
 
 @respx.mock
