@@ -138,17 +138,23 @@ class TestAiFixKeep:
         assert resp.status_code == 400
 
     def test_404_for_missing_image(self, client):
-        resp = client.post("/api/images/nonexistent/ai-fix/keep", json={"temp_key": "tmp/x.png"})
+        resp = client.post(
+            "/api/images/nonexistent/ai-fix/keep",
+            json={"temp_key": _VALID_TEMP_KEY},
+        )
         assert resp.status_code == 404
+
+
+_VALID_TEMP_KEY = "tmp/12345678-1234-1234-1234-123456789abc.png"
 
 
 class TestAiFixDiscard:
     def test_deletes_temp_key(self, client):
         storage = _mock_storage()
         with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
-            resp = client.delete("/api/images/ai-fix/tmp?temp_key=tmp/abc.png")
+            resp = client.delete(f"/api/images/ai-fix/tmp?temp_key={_VALID_TEMP_KEY}")
         assert resp.status_code == 204
-        storage.delete.assert_called_once_with("tmp/abc.png")
+        storage.delete.assert_called_once_with(_VALID_TEMP_KEY)
 
     def test_rejects_non_tmp_key(self, client):
         storage = _mock_storage()
@@ -156,3 +162,20 @@ class TestAiFixDiscard:
             resp = client.delete("/api/images/ai-fix/tmp?temp_key=images/real.jpg")
         assert resp.status_code == 400
         storage.delete.assert_not_called()
+
+    def test_rejects_traversal_key(self, client):
+        storage = _mock_storage()
+        traversal = "tmp/../../etc/passwd"
+        with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
+            resp = client.delete(f"/api/images/ai-fix/tmp?temp_key={traversal}")
+        assert resp.status_code == 400
+        storage.delete.assert_not_called()
+
+    def test_rejects_keep_traversal(self, client):
+        sid = _make_series(client)
+        img_id = _register_image(client, sid)
+        resp = client.post(
+            f"/api/images/{img_id}/ai-fix/keep",
+            json={"temp_key": "tmp/../../images/real.jpg"},
+        )
+        assert resp.status_code == 400

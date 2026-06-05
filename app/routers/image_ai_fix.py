@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,7 +15,8 @@ from app.services.storage import get_storage_from_settings
 logger = logging.getLogger("app.image_ai_fix")
 router = APIRouter(tags=["image_ai_fix"])
 
-_TEMP_PREFIX = "tmp/"
+_TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
+_ALLOWED_EXTS = {"png", "jpg", "jpeg"}
 
 
 def _content_type_from_key(key: str) -> str:
@@ -27,7 +29,7 @@ def ai_fix_discard(
     temp_key: str,
     db: Session = Depends(get_db),
 ) -> None:
-    if not temp_key.startswith(_TEMP_PREFIX):
+    if not _TEMP_KEY_RE.match(temp_key):
         raise HTTPException(status_code=400, detail="Invalid temp_key")
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
@@ -51,7 +53,7 @@ def ai_fix_preview(
 
     if get_config().fake_ai:
         fake_bytes = storage.download_bytes(img.r2_key)
-        temp_key = f"{_TEMP_PREFIX}{uuid.uuid4()}.png"
+        temp_key = f"tmp/{uuid.uuid4()}.png"
         storage.upload_bytes(fake_bytes, temp_key, "image/png")
         return AIFixPreviewResponse(
             preview_url=storage.public_url(temp_key),
@@ -72,7 +74,7 @@ def ai_fix_preview(
         logger.exception("Image edit failed for image %s", image_id)
         raise HTTPException(status_code=502, detail=f"Image edit failed: {exc}") from exc
 
-    temp_key = f"{_TEMP_PREFIX}{uuid.uuid4()}.png"
+    temp_key = f"tmp/{uuid.uuid4()}.png"
     storage.upload_bytes(edited_bytes, temp_key, "image/png")
 
     return AIFixPreviewResponse(
@@ -87,7 +89,7 @@ def ai_fix_keep(
     body: AIFixKeepRequest,
     db: Session = Depends(get_db),
 ) -> SeriesDetail:
-    if not body.temp_key.startswith(_TEMP_PREFIX):
+    if not _TEMP_KEY_RE.match(body.temp_key):
         raise HTTPException(status_code=400, detail="Invalid temp_key")
 
     img = db.get(Image, image_id)
@@ -98,7 +100,8 @@ def ai_fix_keep(
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
 
-    ext = body.temp_key.rsplit(".", 1)[-1] if "." in body.temp_key else "png"
+    raw_ext = body.temp_key.rsplit(".", 1)[-1].lower() if "." in body.temp_key else "png"
+    ext = raw_ext if raw_ext in _ALLOWED_EXTS else "png"
     perm_key = f"images/{uuid.uuid4()}.{ext}"
 
     storage.copy(body.temp_key, perm_key)

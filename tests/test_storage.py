@@ -86,3 +86,25 @@ def test_local_delete_nonexistent(local_svc):
 def test_local_download_missing(local_svc):
     with pytest.raises(FileNotFoundError):
         local_svc.download_bytes("images/missing.jpg")
+
+
+def test_local_copy(local_svc):
+    local_svc.upload_bytes(b"original", "images/src.jpg", "image/jpeg")
+    local_svc.copy("images/src.jpg", "images/dst.jpg")
+    assert local_svc.download_bytes("images/dst.jpg") == b"original"
+
+
+def test_local_traversal_blocked(local_svc):
+    with pytest.raises(ValueError, match="escapes storage root"):
+        local_svc._safe_path("../../etc/passwd")
+
+
+def test_local_copy_traversal_blocked(local_svc):
+    local_svc.upload_bytes(b"data", "images/real.jpg", "image/jpeg")
+    with pytest.raises(ValueError, match="escapes storage root"):
+        local_svc.copy("images/real.jpg", "../../evil.jpg")
+
+
+def test_local_delete_traversal_blocked(local_svc):
+    with pytest.raises(ValueError, match="escapes storage root"):
+        local_svc.delete("../../etc/passwd")
