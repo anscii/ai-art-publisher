@@ -545,6 +545,39 @@
   </div>
 </div>
 
+<!-- AI Fix Modal -->
+<div class="modal fade" id="aiFixModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0">Fix with AI</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="aiFixBody">
+        <div id="aiFixForm">
+          <label class="form-label small" for="aiFixHint">What to fix or change</label>
+          <textarea id="aiFixHint" class="form-control form-control-sm" rows="3" placeholder="e.g. make the sky more dramatic"></textarea>
+        </div>
+        <div id="aiFixSpinner" class="text-center py-3 d-none">
+          <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+          <div class="small text-muted mt-2">Editing image...</div>
+        </div>
+        <div id="aiFixPreview" class="d-none">
+          <img id="aiFixPreviewImg" src="" class="img-fluid rounded mb-3" alt="AI-edited preview">
+          <div class="d-flex gap-2">
+            <button id="aiFixKeepBtn" class="btn btn-sm btn-primary flex-fill">Keep</button>
+            <button id="aiFixDiscardBtn" class="btn btn-sm btn-secondary flex-fill">Discard</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2" id="aiFixFooter">
+        <button id="aiFixSubmitBtn" class="btn btn-sm btn-primary">Fix</button>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <script src="/static/app.js"></script>

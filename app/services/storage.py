@@ -30,6 +30,12 @@ class LocalStorageService:
     def download_bytes(self, key: str) -> bytes:
         return (self._dir / key).read_bytes()
 
+    def copy(self, src_key: str, dst_key: str) -> str:
+        dst = self._dir / dst_key
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self._dir / src_key, dst)
+        return dst_key
+
     def delete(self, key: str) -> None:
         try:
             (self._dir / key).unlink()
@@ -65,6 +71,14 @@ class R2StorageService:
     def download_bytes(self, key: str) -> bytes:
         resp = self._client.get_object(Bucket=self._bucket, Key=key)
         return resp["Body"].read()
+
+    def copy(self, src_key: str, dst_key: str) -> str:
+        self._client.copy_object(
+            Bucket=self._bucket,
+            CopySource={"Bucket": self._bucket, "Key": src_key},
+            Key=dst_key,
+        )
+        return dst_key
 
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=key)

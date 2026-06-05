@@ -418,6 +418,13 @@ function buildThumb(img, seriesId, orderNum) {
   hdr2.appendChild(h('h6', { cls: 'dropdown-header', text: 'Move to' }));
   dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
+  const fixLi = document.createElement('li');
+  const fixA = h('a', { cls: 'dropdown-item small', href: '#' });
+  fixA.appendChild(icon('bi bi-magic me-1'));
+  fixA.appendChild(document.createTextNode('Fix with AI'));
+  fixA.addEventListener('click', e => { e.preventDefault(); openAiFixModal(img.id); });
+  fixLi.appendChild(fixA);
+  dropItems.appendChild(fixLi);
   const divLi = document.createElement('li');
   divLi.appendChild(h('hr', { cls: 'dropdown-divider' }));
   dropItems.appendChild(divLi);
@@ -3292,3 +3299,88 @@ function _openStoryFullscreen(urls, startIdx) {
   render();
   document.body.appendChild(overlay);
 }
+
+// ── AI Fix Modal ───────────────────────────────────────────────────────────────
+
+let _aiFixImageId = null;
+let _aiFixTempKey = null;
+
+function openAiFixModal(imageId) {
+  _aiFixImageId = imageId;
+  _aiFixTempKey = null;
+  const hint = document.getElementById('aiFixHint');
+  if (hint) hint.value = '';
+  _aiFixSetState('form');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('aiFixModal')).show();
+}
+
+function _aiFixSetState(state) {
+  const form    = document.getElementById('aiFixForm');
+  const spinner = document.getElementById('aiFixSpinner');
+  const preview = document.getElementById('aiFixPreview');
+  const footer  = document.getElementById('aiFixFooter');
+  form.classList.toggle('d-none',    state !== 'form');
+  spinner.classList.toggle('d-none', state !== 'loading');
+  preview.classList.toggle('d-none', state !== 'preview');
+  if (footer) footer.classList.toggle('d-none', state !== 'form');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const submitBtn  = document.getElementById('aiFixSubmitBtn');
+  const keepBtn    = document.getElementById('aiFixKeepBtn');
+  const discardBtn = document.getElementById('aiFixDiscardBtn');
+  const modalEl    = document.getElementById('aiFixModal');
+
+  if (!submitBtn) return;
+
+  submitBtn.addEventListener('click', async () => {
+    const hint = document.getElementById('aiFixHint')?.value?.trim();
+    if (!hint) { showToast('Enter a hint before fixing.', 'warning'); return; }
+    _aiFixSetState('loading');
+    try {
+      const data = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix`, { hint });
+      _aiFixTempKey = data.temp_key;
+      document.getElementById('aiFixPreviewImg').src = data.preview_url;
+      _aiFixSetState('preview');
+    } catch (err) {
+      _aiFixSetState('form');
+      showToast('AI fix failed: ' + (err.message || err), 'danger');
+    }
+  });
+
+  keepBtn.addEventListener('click', async () => {
+    keepBtn.disabled = true;
+    discardBtn.disabled = true;
+    _aiFixSetState('loading');
+    try {
+      const series = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix/keep`, { temp_key: _aiFixTempKey });
+      _aiFixTempKey = null;
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      updateSeriesItem(series);
+      if (App.currentSeries?.id === series.id) renderEditor(series);
+      showToast('Image saved.', 'success');
+    } catch (err) {
+      keepBtn.disabled = false;
+      discardBtn.disabled = false;
+      _aiFixSetState('preview');
+      showToast('Keep failed: ' + (err.message || err), 'danger');
+    }
+  });
+
+  discardBtn.addEventListener('click', async () => {
+    if (_aiFixTempKey) {
+      fetch(`/api/images/ai-fix/tmp?temp_key=${encodeURIComponent(_aiFixTempKey)}`, { method: 'DELETE' }).catch(() => {});
+      _aiFixTempKey = null;
+    }
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+  });
+
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    if (_aiFixTempKey) {
+      fetch(`/api/images/ai-fix/tmp?temp_key=${encodeURIComponent(_aiFixTempKey)}`, { method: 'DELETE' }).catch(() => {});
+      _aiFixTempKey = null;
+    }
+    keepBtn.disabled = false;
+    discardBtn.disabled = false;
+  });
+});
