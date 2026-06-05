@@ -66,7 +66,12 @@ def _build_caption(post: Post) -> str:
     if post.platform == Platform.telegram:
         title = post.title_ru or post.title
         coll_line = post.collection_line_ru or post.collection_line
-        parts = [title, coll_line, post.description, tags]
+        parts = [
+            f"<b>{title}</b>" if title else None,
+            f"<i>{coll_line}</i>" if coll_line else None,
+            post.description,
+            tags,
+        ]
     else:
         title = post.title
         coll_line = post.collection_line
