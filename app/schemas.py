@@ -419,6 +419,22 @@ class GenerateFullRequest(BaseModel):
     model: str | None = None
 
 
+# ── Image AI fix ──────────────────────────────────────────────────────────────
+
+
+class AIFixRequest(BaseModel):
+    hint: str
+
+
+class AIFixPreviewResponse(BaseModel):
+    preview_url: str
+    temp_key: str
+
+
+class AIFixKeepRequest(BaseModel):
+    temp_key: str
+
+
 # ── Scheduling (legacy queue view) ────────────────────────────────────────────
 
 
