@@ -189,6 +189,69 @@ def test_delete_posted_post_returns_400(client):
     assert resp.status_code == 400
 
 
+# ── Telegram post_url / external_post_id ─────────────────────────────────────
+
+
+def test_telegram_execute_sets_post_url_for_at_handle(client, db):
+    """@handle channel → post_url is https://t.me/handle/message_id."""
+    from unittest.mock import MagicMock, patch
+
+    import httpx
+    import respx
+
+    from app.models import Post
+
+    sid, img_id = _series_with_image(client)
+    pid = _make_posts(client, sid, img_id, ["telegram"])[0]["id"]
+
+    settings = MagicMock()
+    settings.telegram_bot_token = "T"
+    settings.telegram_channel_id = "@mychan"
+    settings.r2_public_base_url = "https://pub.r2.dev"
+    settings.facebook_page_id = None
+
+    with respx.mock:
+        respx.post("https://api.telegram.org/botT/sendMediaGroup").mock(
+            return_value=httpx.Response(200, json={"ok": True, "result": [{"message_id": 99}]})
+        )
+        with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+            client.post(f"/api/posts/{pid}/post")
+
+    post = db.get(Post, pid)
+    assert post.post_url == "https://t.me/mychan/99"
+    assert post.external_post_id == "99"
+
+
+def test_telegram_execute_sets_post_url_for_numeric_channel(client, db):
+    """Numeric channel -100xxx → post_url is https://t.me/c/xxx/message_id."""
+    from unittest.mock import MagicMock, patch
+
+    import httpx
+    import respx
+
+    from app.models import Post
+
+    sid, img_id = _series_with_image(client)
+    pid = _make_posts(client, sid, img_id, ["telegram"])[0]["id"]
+
+    settings = MagicMock()
+    settings.telegram_bot_token = "T"
+    settings.telegram_channel_id = "-1001234567890"
+    settings.r2_public_base_url = "https://pub.r2.dev"
+    settings.facebook_page_id = None
+
+    with respx.mock:
+        respx.post("https://api.telegram.org/botT/sendMediaGroup").mock(
+            return_value=httpx.Response(200, json={"ok": True, "result": [{"message_id": 42}]})
+        )
+        with patch("app.routers.posts.get_or_create_settings", return_value=settings):
+            client.post(f"/api/posts/{pid}/post")
+
+    post = db.get(Post, pid)
+    assert post.post_url == "https://t.me/c/1234567890/42"
+    assert post.external_post_id == "42"
+
+
 # ── collection_line ───────────────────────────────────────────────────────────
 
 

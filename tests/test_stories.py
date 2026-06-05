@@ -1102,6 +1102,63 @@ def test_tg_story_publish_passes_link_to_last_frame(client, db, monkeypatch):
     assert all(u is None for u in link_urls[:-1])
 
 
+def test_tg_story_publish_link_on_retry_last_frame_only_unposted(client, db, monkeypatch):
+    """Retry publish: first frame already posted, sole remaining frame still gets link_url."""
+    monkeypatch.setattr(AppConfig, "fake_posting", False)
+    sid = _series(client)
+    img_id1 = _image(client, sid, key="images/a.jpg")
+    img_id2 = _image(client, sid, key="images/b.jpg")
+    tg_post = _telegram_post(client, sid, [img_id1, img_id2])
+
+    post_obj = db.get(Post, tg_post["id"])
+    post_obj.post_url = "https://t.me/murky_airt/55"
+    db.commit()
+
+    story_data = _story(client, tg_post["id"], [img_id1, img_id2])
+    story = db.get(Story, story_data["id"])
+
+    # Simulate all but last frame already posted (partial post from yesterday)
+    for frame in story.frames[:-1]:
+        frame.platform_frame_id = "prev-posted-id"
+    for frame in story.frames:
+        frame.rendered_url = f"https://r2.example.com/frame_{frame.id}.jpg"
+        frame.rendered_storage_key = f"stories/test/frame_{frame.id}.jpg"
+    story.status = "rendered"
+    db.commit()
+
+    mock_storage = MagicMock()
+    mock_storage.download_bytes.return_value = _fake_jpeg()
+
+    captured = {}
+
+    def fake_post_stories(**kwargs):
+        captured.update(kwargs)
+        return [{"ok": True, "story_id": i} for i in range(len(kwargs["images"]))]
+
+    with (
+        patch("app.routers.stories.get_storage_from_settings", return_value=mock_storage),
+        patch("app.routers.stories.tg_stories_svc") as mock_tg,
+    ):
+        mock_tg.post_stories.side_effect = fake_post_stories
+        from app.routers.settings import get_or_create_settings
+
+        db.expire_all()
+        settings = get_or_create_settings(db)
+        settings.telegram_api_id = "12345"
+        settings.telegram_api_hash = "abc"
+        settings.telegram_session_string = "sess"
+        settings.telegram_channel_id = "@chan"
+        db.commit()
+
+        resp = client.post(f"/api/stories/{story_data['id']}/publish")
+
+    assert resp.status_code == 200
+    # Only the unposted second frame should have been submitted
+    assert len(captured.get("images", [])) == 1
+    link_urls = captured.get("link_urls", [])
+    assert link_urls == ["https://t.me/murky_airt/55"]
+
+
 def test_tg_story_publish_no_link_when_no_post_url(client, db, monkeypatch):
     """publish sends no link when post has no post_url."""
     from app.config import AppConfig
