@@ -837,6 +837,15 @@ function initLightbox() {
     const img = _lightboxImages[_lightboxIdx];
     if (img.status !== 'posted') _lightboxPatch('posted');
   });
+  document.getElementById('lightboxFixAiBtn').addEventListener('click', () => {
+    const img = _lightboxImages[_lightboxIdx];
+    const lb = bootstrap.Modal.getInstance(document.getElementById('lightboxModal'));
+    document.getElementById('lightboxModal').addEventListener('hidden.bs.modal', () => {
+      openAiFixModal(img.id);
+    }, { once: true });
+    lb?.hide();
+  });
+
   document.getElementById('lightboxDeleteBtn').addEventListener('click', async () => {
     const img = _lightboxImages[_lightboxIdx];
     try {
