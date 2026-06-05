@@ -84,7 +84,6 @@ class TestAiFixKeep:
         sid = _make_series(client)
         img_id = _register_image(client, sid)
         storage = _mock_storage()
-        storage.upload_bytes.return_value = "tmp/preview.png"
 
         with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
             preview = client.post(
@@ -100,6 +99,37 @@ class TestAiFixKeep:
         assert len(images) == 2
         storage.copy.assert_called_once()
         storage.delete.assert_called()
+
+    def test_kept_image_filename_prefixed(self, client, db):
+        from app.models import Image
+
+        sid = _make_series(client)
+        img_id = _register_image(client, sid, key="images/original.jpg")
+
+        storage = _mock_storage()
+        with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
+            preview = client.post(f"/api/images/{img_id}/ai-fix", json={"hint": "fix"}).json()
+            client.post(f"/api/images/{img_id}/ai-fix/keep", json={"temp_key": preview["temp_key"]})
+
+        db.expire_all()
+        new_img = (
+            db.query(Image).filter_by(series_id=sid).order_by(Image.order_index.desc()).first()
+        )
+        assert new_img.original_filename.startswith("ai-fix-")
+
+    def test_storage_error_on_keep_returns_502(self, client):
+        sid = _make_series(client)
+        img_id = _register_image(client, sid)
+        storage = _mock_storage()
+        storage.copy.side_effect = Exception("R2 network error")
+
+        with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
+            preview = client.post(f"/api/images/{img_id}/ai-fix", json={"hint": "fix"}).json()
+            resp = client.post(
+                f"/api/images/{img_id}/ai-fix/keep", json={"temp_key": preview["temp_key"]}
+            )
+        assert resp.status_code == 502
+        assert "Try again" in resp.json()["detail"]
 
     def test_new_image_inserted_after_source(self, client, db):
         from app.models import Image

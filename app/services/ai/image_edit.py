@@ -2,7 +2,11 @@ import base64
 import logging
 from io import BytesIO
 
+from app.routers.generate import _call_with_timeout
+
 logger = logging.getLogger(__name__)
+
+_IMAGE_EDIT_TIMEOUT = 120
 
 
 def edit_image(api_key: str, image_bytes: bytes, content_type: str, hint: str) -> bytes:
@@ -11,15 +15,19 @@ def edit_image(api_key: str, image_bytes: bytes, content_type: str, hint: str) -
 
     client = openai.OpenAI(api_key=api_key)
     ext = "png" if "png" in content_type else "jpg"
-    resp = client.images.edit(
-        model="gpt-image-1",
-        image=(f"image.{ext}", BytesIO(image_bytes), content_type),
-        prompt=hint,
-        n=1,
-    )
-    if not resp.data:
-        raise ValueError("OpenAI returned no image data")
-    b64 = resp.data[0].b64_json
-    if not b64:
-        raise ValueError("OpenAI returned no base64 image data")
-    return base64.b64decode(b64)
+
+    def _call() -> bytes:
+        resp = client.images.edit(
+            model="gpt-image-1",
+            image=(f"image.{ext}", BytesIO(image_bytes), content_type),
+            prompt=hint,
+            n=1,
+        )
+        if not resp.data:
+            raise ValueError("OpenAI returned no image data")
+        b64 = resp.data[0].b64_json
+        if not b64:
+            raise ValueError("OpenAI returned no base64 image data")
+        return base64.b64decode(b64)
+
+    return _call_with_timeout(_call, timeout=_IMAGE_EDIT_TIMEOUT)

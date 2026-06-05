@@ -70,9 +70,9 @@ def ai_fix_preview(
 
     try:
         edited_bytes = edit_image(settings.openai_api_key, image_bytes, content_type, body.hint)
-    except Exception as exc:
+    except Exception:
         logger.exception("Image edit failed for image %s", image_id)
-        raise HTTPException(status_code=502, detail=f"Image edit failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="Image editing failed. Try again.")
 
     temp_key = f"tmp/{uuid.uuid4()}.png"
     storage.upload_bytes(edited_bytes, temp_key, "image/png")
@@ -104,8 +104,12 @@ def ai_fix_keep(
     ext = raw_ext if raw_ext in _ALLOWED_EXTS else "png"
     perm_key = f"images/{uuid.uuid4()}.{ext}"
 
-    storage.copy(body.temp_key, perm_key)
-    storage.delete(body.temp_key)
+    try:
+        storage.copy(body.temp_key, perm_key)
+        storage.delete(body.temp_key)
+    except Exception:
+        logger.exception("Storage promotion failed for temp_key %s", body.temp_key)
+        raise HTTPException(status_code=502, detail="Failed to save image. Try again.")
 
     source_idx = img.order_index
     for other in series.images:
@@ -115,7 +119,7 @@ def ai_fix_keep(
     new_img = Image(
         series_id=series.id,
         r2_key=perm_key,
-        original_filename=perm_key.split("/")[-1],
+        original_filename=f"ai-fix-{img.original_filename}",
         order_index=source_idx + 1,
     )
     db.add(new_img)
