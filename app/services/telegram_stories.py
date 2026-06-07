@@ -60,6 +60,7 @@ async def _post_stories_async(
     results: list[dict] = []
     _link_urls = link_urls or [None] * len(images)
     _link_areas = link_areas or [None] * len(images)
+    logger.info(f"tg stories debug: {_link_urls=} {_link_areas=}")
     try:
         await client.connect()
         channel = await client.get_entity(channel_id)
