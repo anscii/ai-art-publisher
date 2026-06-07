@@ -36,11 +36,21 @@ async def _post_one_frame(
         kwargs["media_areas"] = [MediaAreaUrl(coordinates=coords, url=link_url)]
     result = await client(SendStoryRequest(**kwargs))
     story_id: int | None = None
+    returned_areas = None
     for update in getattr(result, "updates", []):
         story = getattr(update, "story", None)
         if story is not None:
             story_id = getattr(story, "id", None)
+            returned_areas_list = getattr(story, "media_areas", None)
+            if returned_areas_list:
+                returned_areas = [a.to_dict() for a in returned_areas_list]
             break
+    logger.info(
+        "tg story frame posted: story_id=%s link_url=%r returned_media_areas=%r",
+        story_id,
+        link_url,
+        returned_areas,
+    )
     return {"ok": True, "story_id": story_id}
 
 
