@@ -1159,6 +1159,57 @@ def test_tg_story_publish_link_on_retry_last_frame_only_unposted(client, db, mon
     assert link_urls == ["https://t.me/murky_airt/55"]
 
 
+def test_tg_story_publish_link_reconstructed_from_external_post_id(client, db, monkeypatch):
+    """publish reconstructs post_url from external_post_id when post_url is null."""
+    monkeypatch.setattr(AppConfig, "fake_posting", False)
+    sid = _series(client)
+    img_id = _image(client, sid, key="images/a.jpg")
+    tg_post = _telegram_post(client, sid, [img_id])
+
+    post_obj = db.get(Post, tg_post["id"])
+    post_obj.post_url = None
+    post_obj.external_post_id = "77"
+    db.commit()
+
+    story_data = _story(client, tg_post["id"], [img_id])
+    story = db.get(Story, story_data["id"])
+    for frame in story.frames:
+        frame.rendered_url = f"https://r2.example.com/frame_{frame.id}.jpg"
+        frame.rendered_storage_key = f"stories/test/frame_{frame.id}.jpg"
+    story.status = "rendered"
+    db.commit()
+
+    mock_storage = MagicMock()
+    mock_storage.download_bytes.return_value = _fake_jpeg()
+
+    captured = {}
+
+    def fake_post_stories(**kwargs):
+        captured.update(kwargs)
+        return [{"ok": True, "story_id": i} for i in range(len(kwargs["images"]))]
+
+    with (
+        patch("app.routers.stories.get_storage_from_settings", return_value=mock_storage),
+        patch("app.routers.stories.tg_stories_svc") as mock_tg,
+    ):
+        mock_tg.post_stories.side_effect = fake_post_stories
+        from app.routers.settings import get_or_create_settings
+
+        db.expire_all()
+        settings = get_or_create_settings(db)
+        settings.telegram_api_id = "12345"
+        settings.telegram_api_hash = "abc"
+        settings.telegram_session_string = "sess"
+        settings.telegram_channel_id = "-1001234567890"
+        db.commit()
+
+        resp = client.post(f"/api/stories/{story_data['id']}/publish")
+
+    assert resp.status_code == 200
+    link_urls = captured.get("link_urls", [])
+    assert link_urls[-1] == "https://t.me/c/1234567890/77"
+
+
 def test_tg_story_publish_no_link_when_no_post_url(client, db, monkeypatch):
     """publish sends no link when post has no post_url."""
     from app.config import AppConfig

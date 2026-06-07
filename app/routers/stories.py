@@ -456,6 +456,21 @@ def _run_publish(story_id: str, db: Session) -> None:
         if tg_frames:
             images = [storage.download_bytes(f.rendered_storage_key or "") for f in tg_frames]
             post_url = story.post.post_url
+            # Fallback: reconstruct URL from external_post_id + channel settings if post_url missing
+            if not post_url and story.post.external_post_id:
+                _ch = (settings.telegram_channel_id or "").strip()
+                _mid = story.post.external_post_id
+                if _ch.startswith("@"):
+                    post_url = f"https://t.me/{_ch.lstrip('@')}/{_mid}"
+                elif _ch.startswith("-100"):
+                    post_url = f"https://t.me/c/{_ch[4:]}/{_mid}"
+            logger.info(
+                "TG story publish story=%s post=%s post_url=%r frames=%d",
+                story.id,
+                story.post_id,
+                post_url,
+                len(tg_frames),
+            )
             area = get_link_area(story)
             last_idx = len(tg_frames) - 1
             link_urls = [post_url if i == last_idx else None for i in range(len(tg_frames))]
