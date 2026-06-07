@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models import AIVariant
 from app.services.ai.base import (
     AIVariantData,
     _ensure_newlines,
@@ -381,6 +382,32 @@ def test_used_in_posts_flag_on_variant_response(client):
     used_map = {v["id"]: v["used_in_posts"] for v in detail["ai_variants"]}
     assert used_map[vid] is True
     assert all(not flag for v_id, flag in used_map.items() if v_id != vid)
+
+
+def test_delete_variant_preserves_db_row(client, db):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 200
+    row = db.get(AIVariant, vid)
+    assert row is not None
+    assert row.deleted_at is not None
+
+
+def test_delete_already_deleted_variant_returns_404(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.delete(f"/api/ai_variants/{vid}")
+    resp = client.delete(f"/api/ai_variants/{vid}")
+    assert resp.status_code == 404
+
+
+def test_deleted_variant_absent_from_series_detail(client):
+    sid, variants = _make_series_with_variants(client)
+    vid = variants[0]["id"]
+    client.delete(f"/api/ai_variants/{vid}")
+    detail = client.get(f"/api/series/{sid}").json()
+    assert all(v["id"] != vid for v in detail["ai_variants"])
 
 
 def _register_images(client, sid, keys):
