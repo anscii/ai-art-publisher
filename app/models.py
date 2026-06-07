@@ -245,6 +245,7 @@ class AIVariant(Base):
     archive_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="ai_variants")
 

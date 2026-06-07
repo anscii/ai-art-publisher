@@ -2,6 +2,7 @@ import base64
 import concurrent.futures
 import json
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -385,7 +386,7 @@ def delete_variant(
     from app.models import Post
 
     v = db.get(AIVariant, variant_id)
-    if not v:
+    if not v or v.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Variant not found")
 
     used = (
@@ -405,7 +406,12 @@ def delete_variant(
             detail="Cannot delete a variant that has been used in posts",
         )
 
-    dependents = db.scalars(_select(AIVariant).where(AIVariant.draft_id == variant_id)).all()
+    dependents = db.scalars(
+        _select(AIVariant).where(
+            AIVariant.draft_id == variant_id,
+            AIVariant.deleted_at.is_(None),
+        )
+    ).all()
 
     if dependents and not cascade:
         raise HTTPException(
@@ -436,12 +442,12 @@ def delete_variant(
                 detail="Cannot delete: a dependent full variant is used in posts",
             )
         for dep in dependents:
-            db.delete(dep)
+            dep.deleted_at = datetime.now(UTC)
 
     series = v.series
     if series.chosen_variant_id == variant_id:
         series.chosen_variant_id = None
-    db.delete(v)
+    v.deleted_at = datetime.now(UTC)
     db.commit()
     return series_to_detail(series, db)
 
