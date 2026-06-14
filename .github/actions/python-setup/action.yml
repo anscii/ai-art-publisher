@@ -1,5 +1,5 @@
 name: Python setup
-description: Setup Python, uv, venv, and dependencies
+description: Setup Python, uv, and dependencies
 
 runs:
   using: composite
@@ -12,11 +12,7 @@ runs:
       with:
         enable-cache: true
         cache-dependency-glob: |
-          requirements*.txt
-
-    - name: Create venv
-      shell: bash
-      run: make venv
+          uv.lock
 
     - name: Install dependencies
       shell: bash

@@ -267,7 +267,7 @@ The frontend is ~1700 lines of vanilla JS across four files with no build step a
 ### Prerequisites
 
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- [uv](https://docs.astral.sh/uv/)
 - Cloudflare R2 bucket (public) — for image storage
 - At least one AI provider API key
 
@@ -278,12 +278,11 @@ The frontend is ~1700 lines of vanilla JS across four files with no build step a
 git clone https://github.com/anscii/ai-art-publisher.git
 cd ai-art-publisher
 
-# Create venv and install dependencies
-uv venv .venv --python=python3.12
-uv pip install -r requirements.txt -r requirements-dev.txt
+# Create venv and install dependencies (incl. dev tools)
+uv sync
 
 # Install Playwright browser (needed for E2E tests only)
-.venv/bin/playwright install chromium
+uv run playwright install chromium
 
 # Install pre-commit hooks
 make hooks

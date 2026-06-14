@@ -1,10 +1,9 @@
 SHELL := $(shell which bash)
 UV    := uv
-PY    := .venv/bin/python
 
 # ── Dev server ────────────────────────────────────────────────────────────────
 run:
-	$(PY) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload \
+	$(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload \
     --reload-dir app \
     --reload-include "*.js" \
     --reload-include "*.html" \
@@ -13,61 +12,61 @@ run:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 test:
-	$(PY) -m pytest -v -s --cov=app --cov-report=term --cov-report=xml:coverage.xml --junitxml=report.xml .
+	$(UV) run pytest -v -s --cov=app --cov-report=term --cov-report=xml:coverage.xml --junitxml=report.xml .
 
 test-fast:
-	$(PY) -m pytest -v .
+	$(UV) run pytest -v .
 
 test-front:
-	$(PY) -m pytest -m e2e -v
+	$(UV) run pytest -m e2e -v
 
 test-back:
-	$(PY) -m pytest -m "not e2e" -v --cov=app --cov-report=term --cov-report=xml:coverage.xml --junitxml=report.xml
+	$(UV) run pytest -m "not e2e" -v --cov=app --cov-report=term --cov-report=xml:coverage.xml --junitxml=report.xml
 
 playwright-install:
-	$(PY) -m playwright install chromium
+	$(UV) run playwright install chromium
 
 # ── Lint & format ─────────────────────────────────────────────────────────────
 format:
-	$(PY) -m ruff format app
+	$(UV) run ruff format app
 
 lint:
-	$(PY) -m ruff check app
-	$(PY) -m ruff format --diff app
+	$(UV) run ruff check app
+	$(UV) run ruff format --diff app
 
 lint-fix:
-	$(PY) -m ruff format app
-	$(PY) -m ruff check app --fix
+	$(UV) run ruff format app
+	$(UV) run ruff check app --fix
 
 # ── Type check ────────────────────────────────────────────────────────────────
 types:
-	$(PY) -m mypy app
+	$(UV) run mypy app
 
 # ── Run everything ────────────────────────────────────────────────────────────
 check: lint-fix lint types test
 
 # ── Database migrations ───────────────────────────────────────────────────────
 test-prompt:
-	$(PY) scripts/test_generation.py --hint "$(hint)" $(if $(provider),--provider $(provider),) $(if $(model),--model $(model),) $(if $(variants),--variants $(variants),)
+	$(UV) run python scripts/test_generation.py --hint "$(hint)" $(if $(provider),--provider $(provider),) $(if $(model),--model $(model),) $(if $(variants),--variants $(variants),)
 
 migrate:
-	$(PY) scripts/migrate.py
+	$(UV) run python scripts/migrate.py
 
 migrate-new:
-	$(PY) -m alembic revision --autogenerate -m "$(msg)"
+	$(UV) run alembic revision --autogenerate -m "$(msg)"
 
 # ── Environment ───────────────────────────────────────────────────────────────
-venv:
-	uv venv .venv --python=python3.12
-
 install:
-	$(UV) pip install -r requirements.txt
+	$(UV) sync --no-dev
 
 install-dev:
-	$(UV) pip install -r requirements.txt -r requirements-dev.txt
+	$(UV) sync
+
+lock:
+	$(UV) lock
 
 hooks:
-	$(PY) -m pre_commit install
+	$(UV) run pre-commit install
 
 # ── Database snapshots ───────────────────────────────────────────────────────
 pull-prod-db:
@@ -83,4 +82,4 @@ clean:
 	find . -name .mypy_cache  -exec rm -rf {} +
 	find . -name .ruff_cache  -exec rm -rf {} +
 
-.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check test-prompt migrate migrate-new venv install install-dev hooks clean pull-prod-db
+.PHONY: run test test-fast test-front test-back playwright-install format lint lint-fix types check test-prompt migrate migrate-new install install-dev lock hooks clean pull-prod-db
