@@ -1,3 +1,45 @@
+[project]
+name = "ai-art-publisher"
+version = "0.1.0"
+description = "AI Art Publisher"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.5",
+  "uvicorn[standard]==0.32.1",
+  "sqlalchemy==2.0.36",
+  "pydantic==2.10.3",
+  "pydantic-settings==2.7.0",
+  "boto3==1.35.86",
+  "httpx==0.28.1",
+  "apscheduler==3.10.4",
+  "anthropic==0.40.0",
+  "openai==1.57.3",
+  "google-generativeai==0.8.3",
+  "Pillow==11.0.0",
+  "python-multipart==0.0.20",
+  "jinja2==3.1.4",
+  "python-dotenv==1.0.1",
+  "tqdm==4.67.1",
+  "alembic==1.14.1",
+  "telethon>=1.36",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==8.3.4",
+  "pytest-playwright",
+  "playwright",
+  "pytest-asyncio==0.24.0",
+  "pytest-cov==6.0.0",
+  "respx==0.22.0",
+  "ruff==0.8.6",
+  "mypy==1.13.0",
+  "pre-commit==4.0.1",
+]
+
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

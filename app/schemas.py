@@ -477,6 +477,18 @@ class TrashImage(BaseModel):
     deleted_at: datetime
 
 
+class TrashVariant(BaseModel):
+    id: str
+    series_id: str
+    series_title: str
+    provider: str
+    model: str
+    title: str
+    draft_id: str | None
+    deleted_at: datetime
+
+
 class TrashResponse(BaseModel):
     series: list[TrashSeries]
     images: list[TrashImage]
+    variants: list[TrashVariant]

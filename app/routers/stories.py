@@ -26,6 +26,7 @@ from app.schemas import (
 from app.services import telegram_stories as tg_stories_svc
 from app.services.instagram import InstagramService
 from app.services.storage import get_storage_from_settings
+from app.services.story_renderer import draw_link_button
 
 logger = logging.getLogger(__name__)
 
@@ -475,6 +476,8 @@ def _run_publish(story_id: str, db: Session) -> None:
             last_idx = len(tg_frames) - 1
             link_urls = [post_url if i == last_idx else None for i in range(len(tg_frames))]
             link_areas = [area if i == last_idx else None for i in range(len(tg_frames))]
+            if post_url:
+                images[last_idx] = draw_link_button(images[last_idx], area)
             batch = tg_stories_svc.post_stories(
                 api_id=int(settings.telegram_api_id),
                 api_hash=settings.telegram_api_hash,

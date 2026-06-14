@@ -209,7 +209,7 @@ def get_ai_stats(
     if range == "week":
         since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
 
-    base_q = db.query(AIVariant)
+    base_q = db.query(AIVariant).filter(AIVariant.deleted_at.is_(None))
     if since is not None:
         base_q = base_q.filter(AIVariant.generated_at >= since)
 
@@ -224,8 +224,10 @@ def get_ai_stats(
         .order_by(func.count().desc())
         .all()
     )
-    chosen_q = db.query(AIVariant.provider, AIVariant.model, func.count().label("count")).join(
-        Series, Series.chosen_variant_id == AIVariant.id
+    chosen_q = (
+        db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
+        .filter(AIVariant.deleted_at.is_(None))
+        .join(Series, Series.chosen_variant_id == AIVariant.id)
     )
     if since is not None:
         chosen_q = chosen_q.filter(AIVariant.generated_at >= since)

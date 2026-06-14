@@ -1289,3 +1289,38 @@ def test_get_link_area_survives_malformed_json():
         link_area_json = "{corrupt"
 
     assert get_link_area(_Stub()) == _DEFAULT_LINK_AREA
+
+
+def test_draw_link_button_returns_valid_jpeg():
+    """draw_link_button composites a pill onto the image and returns a valid JPEG."""
+    from app.services.story_renderer import draw_link_button
+
+    # Create a minimal 1080×1920 white JPEG
+    buf = io.BytesIO()
+    PILImage.new("RGB", (1080, 1920), (200, 200, 200)).save(buf, "JPEG")
+    original_bytes = buf.getvalue()
+
+    area = {"x": 75.0, "y": 82.0, "w": 50.0, "h": 10.0}
+    result = draw_link_button(original_bytes, area)
+
+    # Must be valid JPEG of same dimensions
+    assert isinstance(result, bytes)
+    out = PILImage.open(io.BytesIO(result))
+    assert out.format == "JPEG"
+    assert out.size == (1080, 1920)
+    # Must differ from original (pill was composited)
+    assert result != original_bytes
+
+
+def test_draw_link_button_custom_label():
+    """draw_link_button accepts a custom label without error."""
+    from app.services.story_renderer import draw_link_button
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (540, 960), (100, 100, 100)).save(buf, "JPEG")
+
+    result = draw_link_button(
+        buf.getvalue(), {"x": 50.0, "y": 50.0, "w": 40.0, "h": 8.0}, label="↗ view post"
+    )
+    out = PILImage.open(io.BytesIO(result))
+    assert out.size == (540, 960)

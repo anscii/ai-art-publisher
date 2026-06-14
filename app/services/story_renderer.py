@@ -299,6 +299,40 @@ class StoryRenderer:
         return _to_jpeg(canvas.convert("RGB"))
 
 
+def draw_link_button(image_bytes: bytes, area: dict, label: str = _LABEL_TEXT) -> bytes:
+    """Composite a visible pill button onto image bytes for the Telegram link sticker.
+
+    Coordinates in `area` are center-based percentages (0-100), matching Telegram's
+    MediaAreaCoordinates convention: x/y = center, w/h = dimensions.
+    Applied at publish time only — does not modify the R2-stored render.
+    """
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    W, H = img.size
+
+    cx = int(W * area.get("x", 75.0) / 100)
+    cy = int(H * area.get("y", 82.0) / 100)
+    bw = int(W * area.get("w", 50.0) / 100)
+    bh = int(H * area.get("h", 10.0) / 100)
+
+    x0, y0, x1, y1 = cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2
+
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=bh // 2, fill=(255, 255, 255, 210))
+
+    font = _load_font(_FONT_BODY, bh // 2)
+    bbox = font.getbbox(label)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = cx - tw // 2
+    ty = cy - th // 2 - bbox[1]
+    draw.text(
+        (tx + _SHADOW_OFFSET[0], ty + _SHADOW_OFFSET[1]), label, font=font, fill=(0, 0, 0, 60)
+    )
+    draw.text((tx, ty), label, font=font, fill=(30, 30, 30, 255))
+
+    return _to_jpeg(Image.alpha_composite(img, overlay))
+
+
 def _to_jpeg(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     if img.mode != "RGB":

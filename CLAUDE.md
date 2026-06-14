@@ -26,7 +26,7 @@ E2E tests spin up a real `uvicorn` subprocess on port 18765 with `FAKE_POSTING=t
 ## Running the dev server
 
 ```bash
-.venv/bin/uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 ## Project layout

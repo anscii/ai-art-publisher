@@ -69,7 +69,11 @@ def series_to_detail(s: Series, db: Session) -> SeriesDetail:
     settings = get_or_create_settings(db)
     base_url = get_public_base_url(settings)
     images = sorted([i for i in s.images if i.deleted_at is None], key=lambda i: i.order_index)
-    variants = sorted(s.ai_variants, key=lambda v: v.generated_at, reverse=True)
+    variants = sorted(
+        [v for v in s.ai_variants if v.deleted_at is None],
+        key=lambda v: v.generated_at,
+        reverse=True,
+    )
     active_posts = db.scalars(
         select(Post)
         .options(

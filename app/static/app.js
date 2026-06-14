@@ -790,7 +790,7 @@ async function refreshTrash() {
   content.replaceChildren(h('div', { cls: 'text-muted text-center py-4', text: 'Loading…' }));
   try {
     const data = await apiFetch('GET', '/api/trash');
-    const isEmpty = !data.series.length && !data.images.length;
+    const isEmpty = !data.series.length && !data.images.length && !data.variants.length;
     emptyBtn.classList.toggle('d-none', isEmpty);
     emptyBtn.onclick = () => showConfirm('Permanently delete everything in Trash?', async () => {
       const progressContainer = document.getElementById('trashProgressContainer');
@@ -800,6 +800,7 @@ async function refreshTrash() {
       const items = [
         ...data.series.map(s => ({ type: 'series', id: s.id, label: s.title || s.original_folder_name || s.id.slice(0, 8) })),
         ...data.images.map(i => ({ type: 'images', id: i.id, label: i.original_filename })),
+        ...data.variants.map(v => ({ type: 'variants', id: v.id, label: v.title || v.provider + '/' + v.model })),
       ];
       const total = items.length;
       _disableWithSpinner(emptyBtn);
@@ -827,6 +828,7 @@ async function refreshTrash() {
       const parts = [];
       if (data.images.length) parts.push(data.images.length + ' image' + (data.images.length !== 1 ? 's' : ''));
       if (data.series.length) parts.push(data.series.length + ' series');
+      if (data.variants.length) parts.push(data.variants.length + ' variant' + (data.variants.length !== 1 ? 's' : ''));
       parts.push('auto-purged after 30 days');
       kicker.textContent = parts.join(' · ');
     }
@@ -842,6 +844,16 @@ async function refreshTrash() {
     if (data.series.length) {
       nodes.push(h('h2', { cls: 'aap-section-label' + (data.images.length ? ' mt-4' : ''), text: 'Deleted series · ' + data.series.length }));
       data.series.forEach(s => nodes.push(_buildTrashSeriesItem(s)));
+    }
+    if (data.variants.length) {
+      const hasPrev = data.images.length || data.series.length;
+      nodes.push(h('h2', { cls: 'aap-section-label' + (hasPrev ? ' mt-4' : ''), text: 'Deleted variants · ' + data.variants.length }));
+      const bySeriesMap = new Map();
+      data.variants.forEach(v => {
+        if (!bySeriesMap.has(v.series_id)) bySeriesMap.set(v.series_id, { title: v.series_title, variants: [] });
+        bySeriesMap.get(v.series_id).variants.push(v);
+      });
+      bySeriesMap.forEach(({ title, variants }) => nodes.push(_buildTrashVariantGroup(title, variants)));
     }
     content.replaceChildren(...nodes);
   } catch (e) {
@@ -929,6 +941,48 @@ function _buildTrashImageItem(i) {
         document.createTextNode(' · deleted ' + _timeAgo(i.deleted_at)))),
     h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn));
 }
+
+function _buildTrashVariantGroup(seriesTitle, variants) {
+  const wrapper = h('div', { cls: 'mb-2' });
+  wrapper.appendChild(h('div', { cls: 'aap-trash-row__meta px-2 py-1', text: seriesTitle }));
+  variants.forEach(v => {
+    const restoreBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-success' });
+    restoreBtn.appendChild(icon('bi bi-arrow-counterclockwise'));
+    restoreBtn.appendChild(document.createTextNode(' Restore'));
+    restoreBtn.addEventListener('click', async () => {
+      _disableWithSpinner(restoreBtn);
+      try {
+        await apiFetch('POST', '/api/trash/variants/' + v.id + '/restore');
+        showToast('Variant restored', 'success');
+        if (App.currentSeriesId === v.series_id) loadSeriesDetail(v.series_id);
+      } catch (e) { showToast(e.message, 'danger'); }
+      refreshTrash();
+    });
+    const delBtn = h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger' });
+    delBtn.appendChild(icon('bi bi-trash'));
+    delBtn.appendChild(document.createTextNode(' Delete'));
+    delBtn.addEventListener('click', () => showConfirm('Permanently delete this variant?', async () => {
+      _disableWithSpinner(delBtn);
+      try {
+        await apiFetch('DELETE', '/api/trash/variants/' + v.id);
+        showToast('Permanently deleted', 'success');
+      } catch (e) { showToast(e.message, 'danger'); }
+      refreshTrash();
+    }));
+    const label = v.title || (v.provider + '/' + v.model);
+    const meta = v.provider + ' · ' + v.model + ' · deleted ' + _timeAgo(v.deleted_at);
+    wrapper.appendChild(
+      h('article', { cls: 'aap-trash-row' },
+        h('span', { cls: 'aap-mini-thumb' }),
+        h('div', { cls: 'min-w-0' },
+          h('div', { cls: 'aap-trash-row__title', text: label }),
+          h('div', { cls: 'aap-trash-row__meta', text: meta })),
+        h('div', { cls: 'aap-trash-row__actions' }, restoreBtn, delBtn))
+    );
+  });
+  return wrapper;
+}
+
 function _timeAgo(iso) {
   const secs = Math.floor((Date.now() - new Date(iso + 'Z')) / 1000);
   if (secs < 60) return 'just now';
