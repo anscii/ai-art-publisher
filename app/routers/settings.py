@@ -183,10 +183,10 @@ def _test_google(key: str) -> dict:
     if not key:
         return {"ok": False, "message": "API key not configured"}
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=key)
-        list(genai.list_models())
+        client = genai.Client(api_key=key)
+        list(client.models.list())
         return {"ok": True, "message": "Connected"}
     except Exception as e:
         return {"ok": False, "message": str(e)}

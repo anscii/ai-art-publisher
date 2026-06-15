@@ -7,8 +7,7 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev \
-    && find .venv/lib/python3.12/site-packages/googleapiclient/discovery_cache/documents -type f -delete
+RUN uv sync --frozen --no-dev
 
 
 FROM python:3.12-slim
