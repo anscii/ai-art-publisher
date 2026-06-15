@@ -3,7 +3,8 @@ import io
 import logging
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.services.ai.base import (
     MAX_OUTPUT_TOKENS,
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class GoogleProvider(AIProvider):
     def __init__(self, api_key: str):
-        genai.configure(api_key=api_key)
+        self._client = genai.Client(api_key=api_key)
 
     def generate_variants(
         self,
@@ -42,32 +43,32 @@ class GoogleProvider(AIProvider):
             parts.append(img)
         parts.append(build_user_text(images_b64, hint))
 
-        m = genai.GenerativeModel(
-            model, system_instruction=build_step1_system_prompt(num_variants, language)
-        )
         logger.debug(
             "google request | model=%s | parts(count)=%d | text=%s",
             model,
             len(parts),
             parts[-1] if parts else "",
         )
-        resp = m.generate_content(
-            parts,
-            generation_config={
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "max_output_tokens": MAX_OUTPUT_TOKENS,
-            },
+        resp = self._client.models.generate_content(
+            model=model,
+            contents=parts,
+            config=types.GenerateContentConfig(
+                system_instruction=build_step1_system_prompt(num_variants, language),
+                temperature=1.0,
+                top_p=0.95,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            ),
         )
         logger.debug("google response | model=%s | text=%s", model, resp.text)
+        assert resp.text is not None
         raw = parse_ai_response(resp.text, "google", model)
         variants = [AIVariantData.from_llm_dict(v) for v in raw]
         u = resp.usage_metadata
+        assert u is not None
+        input_tokens = u.prompt_token_count or 0
+        output_tokens = u.candidates_token_count or 0
         attach_usage(
-            variants,
-            u.prompt_token_count,
-            u.candidates_token_count,
-            calc_cost(model, u.prompt_token_count, u.candidates_token_count),
+            variants, input_tokens, output_tokens, calc_cost(model, input_tokens, output_tokens)
         )
         return variants
 
@@ -78,20 +79,22 @@ class GoogleProvider(AIProvider):
         model: str,
         hint: str | None = None,
     ) -> AIVariantData:
-        m = genai.GenerativeModel(model, system_instruction=build_step2_system_prompt(language))
         user_text = build_step2_user_text(description, language, hint)
         logger.debug(
             "google expand request | model=%s | language=%s | text=%s", model, language, user_text
         )
-        resp = m.generate_content(
-            [user_text],
-            generation_config={
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "max_output_tokens": MAX_OUTPUT_TOKENS,
-            },
+        resp = self._client.models.generate_content(
+            model=model,
+            contents=user_text,
+            config=types.GenerateContentConfig(
+                system_instruction=build_step2_system_prompt(language),
+                temperature=1.0,
+                top_p=0.95,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            ),
         )
         logger.debug("google expand response | model=%s | text=%s", model, resp.text)
+        assert resp.text is not None
         raw = parse_ai_object(resp.text, "google", model)
         data = AIVariantData.from_llm_dict(raw)
         if language == "en":
@@ -99,10 +102,10 @@ class GoogleProvider(AIProvider):
         else:
             data.description_ru = description
         u = resp.usage_metadata
+        assert u is not None
+        input_tokens = u.prompt_token_count or 0
+        output_tokens = u.candidates_token_count or 0
         attach_usage(
-            [data],
-            u.prompt_token_count,
-            u.candidates_token_count,
-            calc_cost(model, u.prompt_token_count, u.candidates_token_count),
+            [data], input_tokens, output_tokens, calc_cost(model, input_tokens, output_tokens)
         )
         return data
