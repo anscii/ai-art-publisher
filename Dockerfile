@@ -1,17 +1,25 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y fonts-liberation fonts-inter && rm -rf /var/lib/apt/lists/*
-
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-ENV PATH="/app/.venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev \
+    && find .venv/lib/python3.12/site-packages/googleapiclient/discovery_cache/documents -type f -delete
 
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-liberation fonts-inter && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+COPY --from=builder /app/.venv /app/.venv
 COPY . .
 
 RUN mkdir -p data
