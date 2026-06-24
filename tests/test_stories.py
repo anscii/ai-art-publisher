@@ -4,6 +4,7 @@ import io
 from unittest.mock import MagicMock, patch
 
 from PIL import Image as PILImage
+from PIL import ImageChops
 
 from app.config import AppConfig
 from app.models import Post, Story
@@ -1324,3 +1325,26 @@ def test_draw_link_button_custom_label():
     )
     out = PILImage.open(io.BytesIO(result))
     assert out.size == (540, 960)
+
+
+def test_draw_link_button_chip_auto_sizes_to_label():
+    """Chip width grows with label length instead of clipping inside a fixed box."""
+    from app.services.story_renderer import draw_link_button
+
+    bg = (200, 200, 200)
+    area = {"x": 50.0, "y": 50.0, "w": 50.0, "h": 10.0}
+
+    def chip_width(label: str) -> int:
+        buf = io.BytesIO()
+        PILImage.new("RGB", (1080, 1920), bg).save(buf, "JPEG")
+        result = draw_link_button(buf.getvalue(), area, label=label)
+        out = PILImage.open(io.BytesIO(result)).convert("RGB")
+        bbox = ImageChops.difference(out, PILImage.new("RGB", out.size, bg)).getbbox()
+        assert bbox is not None, "chip should be visible against flat background"
+        return bbox[2] - bbox[0]
+
+    short_w = chip_width("↘ latest post")
+    long_w = chip_width("↘ latest post about something much longer than before")
+
+    assert long_w > short_w
+    assert long_w <= 1080  # must stay within canvas, never clip
