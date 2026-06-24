@@ -186,9 +186,33 @@ function _updateSaveDescBtn() {
 }
 
 
+// ── Selection autosave ────────────────────────────────────────────────────────
+// Debounced PUT /queue after the user toggles selection. _selectionDirty blocks
+// renderEditor's reinit-from-server while a save is pending/unconfirmed, so the
+// generation/sending pollers (silent reload every 3s) can't revert an in-flight toggle.
+let _selectionDirty = false;
+let _selectionSaveTimer = null;
+
+function _scheduleSaveSelection(seriesId) {
+  _selectionDirty = true;
+  clearTimeout(_selectionSaveTimer);
+  _selectionSaveTimer = setTimeout(() => _flushSelection(seriesId), 600);
+}
+
+async function _flushSelection(seriesId) {
+  try {
+    await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
+    _selectionDirty = false;
+  } catch (e) {
+    showToast('Selection save failed: ' + e.message, 'danger');
+  }
+}
+
 // ── Editor entry point ────────────────────────────────────────────────────────
 function renderEditor(series) {
-  _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
+  if (!_selectionDirty) {
+    _selectedImages = new Set(series.images.filter(i => i.status === 'queued').map(i => i.id));
+  }
   App.activeVariantId = series.chosen_variant_id || null;
 
   const slug = series.original_folder_name || String(series.id).slice(0, 12);
@@ -472,6 +496,7 @@ function _toggleSelection(imgId, imgStatus, seriesId) {
   _refreshImagesHeader(total);
   _refreshActionBar(seriesId);
   _lightboxSyncSelectBtn(imgId);
+  _scheduleSaveSelection(seriesId);
 }
 
 function _resortStrip() {
@@ -523,6 +548,7 @@ function _syncSelectionUI(seriesId) {
   _resortStrip();
   _refreshImagesHeader((App.currentSeries?.images ?? []).length);
   _refreshActionBar(seriesId);
+  _scheduleSaveSelection(seriesId);
 }
 
 function _selectAll(seriesId) {
@@ -724,17 +750,6 @@ function buildActionBar(seriesId) {
   });
   bar.appendChild(delBtn);
   bar.appendChild(h('div', { style: 'flex:1' }));
-
-  const saveBtn = h('button', { cls: 'btn aap-btn aap-btn-primary', text: '\u21b3 Save' });
-  saveBtn.addEventListener('click', async () => {
-    try {
-      const updated = await apiFetch('PUT', '/api/series/' + seriesId + '/queue', { image_ids: [..._selectedImages] });
-      App.currentSeries = updated;
-      updateSeriesItem(updated);
-      showToast('Queue saved', 'success');
-    } catch (e) { showToast(e.message, 'danger'); }
-  });
-  bar.appendChild(saveBtn);
   return bar;
 }
 
