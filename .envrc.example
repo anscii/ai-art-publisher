@@ -1,0 +1,44 @@
+# Copy to .envrc, fill secrets, then run: direnv allow
+
+export DATABASE_URL=sqlite:///./data/db.sqlite
+export DATA_DIR=./data
+export DEBUG=false
+export LOG_LEVEL=INFO
+export FAKE_POSTING=
+export FAKE_AI=
+export LOCAL_STORAGE=1
+
+# HTTP Basic Auth — leave empty to disable (safe for local dev)
+export AUTH_USERNAME=
+export AUTH_PASSWORD=
+
+# Session / scheduler secrets
+export SESSION_SECRET=
+export SCHEDULER_SECRET=
+export BACKUP_TOKEN=
+
+# AI provider keys (bootstrap into DB on first boot; can set via UI instead)
+export ANTHROPIC_API_KEY=
+export OPENAI_API_KEY=
+export GOOGLE_API_KEY=
+export DEEPSEEK_API_KEY=
+export OPENROUTER_API_KEY=
+export DEFAULT_PROVIDER=anthropic
+export DEFAULT_MODEL=claude-haiku-4-5
+
+# Telegram
+export TELEGRAM_BOT_TOKEN=
+export TELEGRAM_CHANNEL_ID=
+
+# Instagram / Facebook
+export INSTAGRAM_ACCESS_TOKEN=
+export INSTAGRAM_USER_ID=
+export FACEBOOK_PAGE_ID=
+export FACEBOOK_PAGE_ACCESS_TOKEN=
+
+# R2 storage (leave unset to use LOCAL_STORAGE=1)
+# export R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+# export R2_ACCESS_KEY=
+# export R2_SECRET_KEY=
+# export R2_BUCKET=ai-gallery
+# export R2_PUBLIC_BASE_URL=https://pub-xxx.r2.dev

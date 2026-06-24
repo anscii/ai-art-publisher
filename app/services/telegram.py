@@ -1,3 +1,5 @@
+from itertools import batched
+
 import httpx
 
 # Telegram sendMediaGroup caption limit; sendMessage allows up to 4096 chars.
@@ -15,7 +17,7 @@ class TelegramService:
         # Captions > 1024 chars are rejected by sendMediaGroup; send separately.
         inline_caption = caption if len(caption) <= _TG_CAPTION_LIMIT else ""
         with httpx.Client(timeout=30) as client:
-            for chunk in _chunks(image_urls, 10):
+            for chunk in batched(image_urls, 10):
                 media = []
                 for i, url in enumerate(chunk):
                     item = {"type": "photo", "media": url}
@@ -48,8 +50,3 @@ class TelegramService:
                 if not data.get("ok"):
                     return {"ok": False, "description": data.get("description", "Unknown error")}
         return {"ok": True, "message_id": last_message_id}
-
-
-def _chunks(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i : i + n]

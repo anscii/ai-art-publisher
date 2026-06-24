@@ -25,6 +25,14 @@ _BLUR_RADIUS = 20
 _LABEL_SIZE = 36
 _LABEL_TEXT = "↘ latest post"
 
+# Matches the editor's `.se-link-sticker` preview chip (app/static/aap/app.css),
+# scaled from its 412px preview container up to the 1080px render canvas (~0.3815x).
+_LINK_CHIP_BG = (255, 255, 255, 235)
+_LINK_CHIP_TEXT = (0, 136, 204, 255)  # #0088cc
+_LINK_CHIP_FONT_SIZE = 29
+_LINK_CHIP_PAD_V = 13
+_LINK_CHIP_PAD_H = 31
+
 _SOLID_OVERLAY: dict[str, tuple[int, int, int, int]] = {
     "solid_dark": (0, 0, 0, 217),
     "solid_light": (245, 240, 230, 235),
@@ -300,10 +308,13 @@ class StoryRenderer:
 
 
 def draw_link_button(image_bytes: bytes, area: dict, label: str = _LABEL_TEXT) -> bytes:
-    """Composite a visible pill button onto image bytes for the Telegram link sticker.
+    """Composite a visible pill chip onto image bytes for the Telegram link sticker.
 
-    Coordinates in `area` are center-based percentages (0-100), matching Telegram's
-    MediaAreaCoordinates convention: x/y = center, w/h = dimensions.
+    `area.x`/`area.y` are center-based percentages (0-100), matching the editor's
+    preview chip and Telegram's MediaAreaCoordinates convention. The chip itself
+    auto-sizes to the label text (like the editor's `.se-link-sticker` CSS chip) —
+    `area.w`/`area.h` are not used here; they only size Telegram's own interactive
+    tap target via MediaAreaCoordinates, a separate concern from this pixel art.
     Applied at publish time only — does not modify the R2-stored render.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
@@ -311,24 +322,33 @@ def draw_link_button(image_bytes: bytes, area: dict, label: str = _LABEL_TEXT) -
 
     cx = int(W * area.get("x", 75.0) / 100)
     cy = int(H * area.get("y", 82.0) / 100)
-    bw = int(W * area.get("w", 50.0) / 100)
-    bh = int(H * area.get("h", 10.0) / 100)
 
+    font = _load_font(_FONT_BODY, _LINK_CHIP_FONT_SIZE)
+    bbox = font.getbbox(label)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+    bw = tw + 2 * _LINK_CHIP_PAD_H
+    bh = th + 2 * _LINK_CHIP_PAD_V
+    radius = bh // 2
     x0, y0, x1, y1 = cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2
 
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    draw.rounded_rectangle([x0, y0, x1, y1], radius=bh // 2, fill=(255, 255, 255, 210))
-
-    font = _load_font(_FONT_BODY, bh // 2)
-    bbox = font.getbbox(label)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = cx - tw // 2
-    ty = cy - th // 2 - bbox[1]
-    draw.text(
-        (tx + _SHADOW_OFFSET[0], ty + _SHADOW_OFFSET[1]), label, font=font, fill=(0, 0, 0, 60)
+    draw.rounded_rectangle(
+        [
+            x0 + _SHADOW_OFFSET[0],
+            y0 + _SHADOW_OFFSET[1],
+            x1 + _SHADOW_OFFSET[0],
+            y1 + _SHADOW_OFFSET[1],
+        ],
+        radius=radius,
+        fill=(0, 0, 0, _SHADOW_OPACITY // 2),
     )
-    draw.text((tx, ty), label, font=font, fill=(30, 30, 30, 255))
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=_LINK_CHIP_BG)
+
+    tx = cx - tw // 2 - bbox[0]
+    ty = cy - th // 2 - bbox[1]
+    draw.text((tx, ty), label, font=font, fill=_LINK_CHIP_TEXT)
 
     return _to_jpeg(Image.alpha_composite(img, overlay))
 

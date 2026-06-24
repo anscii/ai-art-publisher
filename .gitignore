@@ -1,5 +1,6 @@
 .env
 .env.import
+.envrc
 scripts/results_*.html
 .venv/
 data/
