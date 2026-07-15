@@ -149,6 +149,25 @@ def test_get_current_user_no_auth_configured_returns_default_user(db):
     assert get_current_user(request, db).id == user.id
 
 
+def test_get_current_user_no_auth_fallback_banned_rejected(db):
+    """reset_config blanks auth_username and google_client_id — dev/E2E mode.
+
+    A banned local@localhost row must still 401, not be handed back.
+    """
+    from datetime import datetime
+
+    u = User(email="local@localhost", is_admin=True, banned_at=datetime.utcnow())
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    request = MagicMock()
+    request.cookies = {}
+    request.headers = {}
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(request, db)
+    assert exc_info.value.status_code == 401
+
+
 def test_get_current_user_legacy_basic_auth_resolves_owner(db, auth_config, monkeypatch):
     from app.config import AppConfig
 
