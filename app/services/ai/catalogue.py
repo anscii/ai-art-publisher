@@ -1,7 +1,7 @@
 PROVIDER_MODEL_PRICING: dict[str, tuple[float, float]] = {
     # (input $/MTok, output $/MTok)
-    "claude-opus-4-7": (5.00, 25.00),
-    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-8": (5.00, 25.00),
+    "claude-sonnet-5": (3.00, 15.00),
     "claude-haiku-4-5": (1.00, 5.00),
     "deepseek-v4-flash": (0.14, 0.28),
     "gpt-5.5": (5.00, 30.00),
@@ -12,11 +12,10 @@ PROVIDER_MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gemini-3.1-flash-lite": (0.25, 1.50),
     # OpenRouter free tier — no cost
     "openrouter/free": (0.0, 0.0),
-    "openrouter/owl-alpha": (0.0, 0.0),
-    "nvidia/nemotron-3-super-120b-a12b-20230311:free": (0.0, 0.0),
+    "tencent/hy3:free": (0.0, 0.0),
+    "nvidia/nemotron-3-ultra-550b-a55b:free": (0.0, 0.0),
+    "nvidia/nemotron-3-super-120b-a12b:free": (0.0, 0.0),
     "google/gemma-4-31b-it:free": (0.0, 0.0),
-    "openai/gpt-oss-120b:free": (0.0, 0.0),
-    "deepseek/deepseek-v4-flash:free": (0.0, 0.0),
 }
 
 
@@ -29,8 +28,8 @@ def calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
     "anthropic": [
-        {"id": "claude-opus-4-7", "label": "Opus 4.7 — most capable"},
-        {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6 — balanced"},
+        {"id": "claude-opus-4-8", "label": "Opus 4.8 — most capable"},
+        {"id": "claude-sonnet-5", "label": "Sonnet 5 — balanced"},
         {"id": "claude-haiku-4-5", "label": "Haiku 4.5 — fast"},
     ],
     "deepseek": [
@@ -48,14 +47,16 @@ PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
     ],
     "openrouter": [
         {"id": "openrouter/free", "label": "Auto-select free model"},
-        {"id": "openrouter/owl-alpha", "label": "Owl Alpha"},
+        {"id": "tencent/hy3:free", "label": "Tencent: Hy3 (free)"},
         {
-            "id": "nvidia/nemotron-3-super-120b-a12b-20230311:free",
+            "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "label": "Nvidia Nemotron 3 Ultra 550b (free)",
+        },
+        {
+            "id": "nvidia/nemotron-3-super-120b-a12b:free",
             "label": "Nvidia Nemotron 3 Super 120b (free)",
         },
         {"id": "google/gemma-4-31b-it:free", "label": "Gemma 4 31B (free)"},
-        {"id": "openai/gpt-oss-120b:free", "label": "GPT OSS 120B (free)"},
-        {"id": "deepseek/deepseek-v4-flash:free", "label": "DeepSeek V4 Flash (free)"},
     ],
 }
 
