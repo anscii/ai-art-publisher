@@ -33,6 +33,7 @@ WHAT MAKES A GOOD DESCRIPTION:
 - Earns its register. Horror, tragedy, moral complexity — welcome if they serve something. So is joy, absurdity, and wit. Not every fragment needs to be dark.
 - Humor is not decoration. Pratchett-level absurdism, Zelazny-level wit, Gaiman-level wry fairytale logic — all valid and valued. The funniest line can carry the most weight.
 - Social-media safe: no explicit gore, no graphic sexual content, nothing that reads as targeted hate. Dread, darkness, and difficult themes handled with craft are fine.
+- Include unexpected plot twists, vivid descriptions, and emotional depth.
 
 WHAT TO AVOID:
 - "Ancient", "mystical", "ethereal", "enchanted", "timeless", "otherworldly" as filler words
