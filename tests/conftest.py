@@ -93,6 +93,10 @@ def reset_config(monkeypatch):
     monkeypatch.setattr(AppConfig, "local_storage", False)
     monkeypatch.setattr(AppConfig, "scheduler_secret", "")
     monkeypatch.setattr(AppConfig, "backup_token", "")
+    monkeypatch.setattr(AppConfig, "google_client_id", "")
+    monkeypatch.setattr(AppConfig, "google_client_secret", "")
+    monkeypatch.setattr(AppConfig, "google_oauth_redirect_uri", "")
+    monkeypatch.setattr(AppConfig, "owner_email", "")
 
 
 @pytest.fixture(autouse=True)
