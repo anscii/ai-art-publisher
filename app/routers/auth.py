@@ -6,10 +6,13 @@ import logging
 import secrets
 import time
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 
 from app.config import get_config
+from app.database import get_db
+from app.models import User
 
 logger = logging.getLogger("app.auth")
 
@@ -60,6 +63,42 @@ def get_session_user_id(request: Request, secret: str) -> str | None:
         return data.get("uid")
     except (ValueError, KeyError):
         return None
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    cfg = get_config()
+    user_id = get_session_user_id(request, cfg.session_secret)
+    if user_id:
+        user = db.get(User, user_id)
+        if user and not user.banned_at:
+            return user
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    auth = request.headers.get("Authorization", "")
+    if cfg.auth_username and auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode("utf-8")
+            username, _, password = decoded.partition(":")
+        except (ValueError, UnicodeDecodeError):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        if _verify_credentials(username, password, cfg):
+            owner = db.query(User).filter(User.email == cfg.owner_email.strip().lower()).first()
+            if owner and not owner.banned_at:
+                return owner
+
+    if not cfg.auth_username and not cfg.google_client_id:
+        # No auth configured at all (local dev / E2E) — same "auth disabled when
+        # env unset" semantics the middleware already has. Resolve or create a
+        # default local user so the app stays usable without OAuth setup.
+        user = db.query(User).filter(User.email == "local@localhost").first()
+        if not user:
+            user = User(email="local@localhost", is_admin=True)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def _verify_credentials(username: str, password: str, cfg) -> bool:
