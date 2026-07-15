@@ -43,6 +43,7 @@ def _bootstrap_settings(db):
         s = AppSettings(id=1)
         db.add(s)
     env_map = {
+        "invite_code": "INVITE_CODE",
         "anthropic_api_key": "ANTHROPIC_API_KEY",
         "openai_api_key": "OPENAI_API_KEY",
         "google_api_key": "GOOGLE_API_KEY",
