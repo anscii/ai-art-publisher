@@ -1,9 +1,16 @@
 import base64
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.config import AppConfig
-from app.routers.auth import COOKIE_NAME, create_session_token, verify_session_token
+from app.routers.auth import (
+    COOKIE_NAME,
+    create_session_token,
+    create_user_session_token,
+    get_session_user_id,
+    verify_session_token,
+)
 
 _SECRET = "test-secret-key"
 _USER = "admin"
@@ -42,6 +49,44 @@ def test_verify_expired_token(monkeypatch):
     monkeypatch.setattr(auth_mod, "_MAX_AGE", -1)
     token = create_session_token(_SECRET, _USER)
     assert not verify_session_token(token, _SECRET)
+
+
+def test_create_and_read_user_session_token():
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) == "user-abc-123"
+
+
+def test_get_session_user_id_no_cookie():
+    request = MagicMock()
+    request.cookies = {}
+    assert get_session_user_id(request, _SECRET) is None
+
+
+def test_get_session_user_id_wrong_secret():
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, "wrong-secret") is None
+
+
+def test_get_session_user_id_expired(monkeypatch):
+    from app.routers import auth as auth_mod
+
+    monkeypatch.setattr(auth_mod, "_MAX_AGE", -1)
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) is None
+
+
+def test_get_session_user_id_ignores_legacy_username_token():
+    """A legacy username-based token (payload key 'u') must not be misread as a user id."""
+    token = create_session_token(_SECRET, "admin")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) is None
 
 
 # ── GET / routing ──────────────────────────────────────────────────────────────
