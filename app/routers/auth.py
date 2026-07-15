@@ -40,6 +40,28 @@ def verify_session_token(token: str, secret: str) -> bool:
         return False
 
 
+def create_user_session_token(secret: str, user_id: str) -> str:
+    exp = int(time.time()) + _MAX_AGE
+    payload = base64.urlsafe_b64encode(json.dumps({"uid": user_id, "exp": exp}).encode()).decode()
+    return f"{payload}.{_sign(payload, secret)}"
+
+
+def get_session_user_id(request: Request, secret: str) -> str | None:
+    token = request.cookies.get(COOKIE_NAME, "")
+    if not token:
+        return None
+    try:
+        payload, sig = token.rsplit(".", 1)
+        if not hmac.compare_digest(_sign(payload, secret), sig):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        if int(time.time()) > data["exp"]:
+            return None
+        return data.get("uid")
+    except (ValueError, KeyError):
+        return None
+
+
 def _verify_credentials(username: str, password: str, cfg) -> bool:
     return secrets.compare_digest(username, cfg.auth_username) and secrets.compare_digest(
         password, cfg.auth_password
