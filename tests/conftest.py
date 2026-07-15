@@ -141,3 +141,9 @@ def mock_storage():
     storage.upload_bytes.return_value = "images/test.jpg"
     storage.download_bytes.return_value = b"fake-image-data"
     return storage
+
+
+@pytest.fixture()
+def auth_config(monkeypatch):
+    monkeypatch.setattr(AppConfig, "auth_username", "admin")
+    monkeypatch.setattr(AppConfig, "auth_password", "hunter2")
