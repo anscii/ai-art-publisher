@@ -1,8 +1,11 @@
-from app.models import AIVariant, Series
+from app.models import AIVariant, Series, User
 
 
 def _make_series(db, name="s1"):
-    s = Series(name=name)
+    owner = User(email="fixture-owner@example.com", google_sub="g-fixture")
+    db.add(owner)
+    db.commit()
+    s = Series(name=name, user_id=owner.id)
     db.add(s)
     db.commit()
     db.refresh(s)
