@@ -20,12 +20,6 @@ _USER = "admin"
 _PASS = "hunter2"
 
 
-@pytest.fixture()
-def auth_config(monkeypatch):
-    monkeypatch.setattr(AppConfig, "auth_username", _USER)
-    monkeypatch.setattr(AppConfig, "auth_password", _PASS)
-
-
 # ── session token helpers ──────────────────────────────────────────────────────
 
 
@@ -125,8 +119,6 @@ def test_get_current_user_banned_rejected(db):
 
 
 def test_get_current_user_no_session_rejected(db, monkeypatch):
-    from app.config import AppConfig
-
     # Auth must be configured for the 401 path — otherwise the no-auth
     # fallback (below) kicks in.
     monkeypatch.setattr(AppConfig, "google_client_id", "client-id")
@@ -169,8 +161,6 @@ def test_get_current_user_no_auth_fallback_banned_rejected(db):
 
 
 def test_get_current_user_legacy_basic_auth_resolves_owner(db, auth_config, monkeypatch):
-    from app.config import AppConfig
-
     monkeypatch.setattr(AppConfig, "owner_email", "owner@example.com")
     owner = User(email="owner@example.com", google_sub=None, is_admin=True)
     db.add(owner)
