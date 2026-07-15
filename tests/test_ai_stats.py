@@ -1,8 +1,20 @@
-from app.models import AIVariant, Series
+from app.models import AIVariant, Series, User
+
+
+def _owner(db) -> User:
+    # Matches the no-auth dev fallback's default user (see get_current_user) so
+    # that series created here are visible to the unauthenticated `client` used
+    # by these tests when they PUT through /api/series/{id}.
+    owner = db.query(User).filter(User.email == "local@localhost").first()
+    if not owner:
+        owner = User(email="local@localhost", is_admin=True)
+        db.add(owner)
+        db.flush()
+    return owner
 
 
 def _series(db, name="s"):
-    s = Series(name=name, title=name)
+    s = Series(name=name, title=name, user_id=_owner(db).id)
     db.add(s)
     db.flush()
     return s

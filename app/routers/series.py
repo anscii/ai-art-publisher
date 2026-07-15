@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import AIVariant, Image, Post, PostImage, Series, Story
+from app.models import AIVariant, Image, Post, PostImage, Series, Story, User
+from app.routers.auth import get_current_user
 from app.routers.posts import post_to_resp
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -144,6 +145,17 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
     )
 
 
+def get_owned_series(series_id: str, user: User, db: Session) -> Series:
+    series = (
+        db.query(Series)
+        .filter(Series.id == series_id, Series.user_id == user.id, Series.deleted_at.is_(None))
+        .first()
+    )
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    return series
+
+
 def _assign_collection_index(s: Series, new_cid: str | None, db: Session) -> None:
     old_cid = s.collection_id
     if new_cid == old_cid:
@@ -167,8 +179,13 @@ def _assign_collection_index(s: Series, new_cid: str | None, db: Session) -> Non
 
 
 @router.post("", status_code=201)
-def create_series(body: SeriesCreate, db: Session = Depends(get_db)) -> SeriesDetail:
+def create_series(
+    body: SeriesCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SeriesDetail:
     s = Series(
+        user_id=user.id,
         name=body.name or body.title,
         title=body.title,
         status=body.status,
@@ -189,8 +206,9 @@ def list_series(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesListResponse:
-    q = select(Series).where(Series.deleted_at.is_(None))
+    q = select(Series).where(Series.deleted_at.is_(None), Series.user_id == user.id)
     if status:
         statuses = [s.strip() for s in status.split(",")]
         q = q.where(Series.status.in_(statuses))
@@ -220,12 +238,18 @@ def list_series(
 
 
 @router.get("/unsorted")
-def get_or_create_unsorted(db: Session = Depends(get_db)) -> SeriesDetail:
+def get_or_create_unsorted(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> SeriesDetail:
     s = db.scalars(
-        select(Series).where(Series.title == "Unsorted", Series.deleted_at.is_(None))
+        select(Series).where(
+            Series.title == "Unsorted",
+            Series.deleted_at.is_(None),
+            Series.user_id == user.id,
+        )
     ).first()
     if not s:
-        s = Series(name="Unsorted", title="Unsorted", status="new")
+        s = Series(name="Unsorted", title="Unsorted", status="new", user_id=user.id)
         db.add(s)
         db.commit()
         db.refresh(s)
@@ -233,10 +257,13 @@ def get_or_create_unsorted(db: Session = Depends(get_db)) -> SeriesDetail:
 
 
 @router.put("/{series_id}/queue")
-def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db)) -> SeriesDetail:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+def save_queue(
+    series_id: str,
+    body: SaveQueueBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SeriesDetail:
+    s = get_owned_series(series_id, user, db)
     selected = set(body.image_ids)
     for img in s.images:
         if img.deleted_at or img.status in ("posted", "skip"):
@@ -248,31 +275,35 @@ def save_queue(series_id: str, body: SaveQueueBody, db: Session = Depends(get_db
 
 @router.get("/{series_id}/generation-status")
 def get_generation_status(
-    series_id: str, response: Response, db: Session = Depends(get_db)
+    series_id: str,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    s = db.get(Series, series_id)
-    if not s or s.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned_series(series_id, user, db)
     if s.generation_status in ("generating_draft", "generating_full"):
         response.status_code = 202
     return {"generation_status": s.generation_status, "generation_error": s.generation_error}
 
 
 @router.get("/{series_id}")
-def get_series(series_id: str, db: Session = Depends(get_db)) -> SeriesDetail:
-    s = db.get(Series, series_id)
-    if not s or s.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Series not found")
+def get_series(
+    series_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SeriesDetail:
+    s = get_owned_series(series_id, user, db)
     return series_to_detail(s, db)
 
 
 @router.put("/{series_id}")
 def update_series(
-    series_id: str, body: SeriesUpdate, db: Session = Depends(get_db)
+    series_id: str,
+    body: SeriesUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned_series(series_id, user, db)
     updates = body.model_dump(exclude_unset=True)
     if "collection_id" in updates:
         _assign_collection_index(s, updates["collection_id"], db)
@@ -286,10 +317,12 @@ def update_series(
 
 
 @router.delete("/{series_id}")
-def delete_series(series_id: str, db: Session = Depends(get_db)) -> dict:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+def delete_series(
+    series_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    s = get_owned_series(series_id, user, db)
     s.deleted_at = datetime.now(UTC)
     db.commit()
     return {"deleted": series_id}
