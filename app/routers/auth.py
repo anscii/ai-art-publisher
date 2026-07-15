@@ -96,6 +96,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             db.add(user)
             db.commit()
             db.refresh(user)
+        if user.banned_at:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         return user
 
     raise HTTPException(status_code=401, detail="Unauthorized")
