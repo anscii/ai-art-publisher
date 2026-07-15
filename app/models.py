@@ -266,6 +266,7 @@ class AppSettings(Base):
     __tablename__ = "app_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    invite_code: Mapped[str] = mapped_column(String, default="")
     anthropic_api_key: Mapped[str] = mapped_column(String, default="")
     openai_api_key: Mapped[str] = mapped_column(String, default="")
     google_api_key: Mapped[str] = mapped_column(String, default="")
