@@ -198,3 +198,16 @@ def test_middleware_enforces_when_only_google_configured(client, monkeypatch):
 
     resp = client.get("/api/settings")
     assert resp.status_code == 401
+
+
+def test_signup_page_has_invite_form_and_google_link(client):
+    resp = client.get("/auth/signup")
+    assert resp.status_code == 200
+    assert "<form" in resp.text
+    assert 'name="invite_code"' in resp.text
+    assert "/auth/login/google" in resp.text
+
+
+def test_landing_page_links_to_signup(client, auth_config):
+    resp = client.get("/")
+    assert "/auth/signup" in resp.text

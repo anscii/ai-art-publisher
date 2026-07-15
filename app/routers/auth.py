@@ -8,7 +8,7 @@ import time
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_config
@@ -222,6 +222,25 @@ def _redirect_to_google(cfg, invite_ok: bool) -> RedirectResponse:
 def login_google():
     cfg = get_config()
     return _redirect_to_google(cfg, invite_ok=False)
+
+
+_SIGNUP_HTML = """<!doctype html>
+<html><head><title>Sign up — AI Art Publisher</title></head>
+<body>
+<h1>Sign up</h1>
+{error}
+<form method="post" action="/auth/signup">
+  <label>Invite code <input type="text" name="invite_code" required></label>
+  <button type="submit">Continue</button>
+</form>
+<p><a href="/auth/login/google">Already have an account? Sign in with Google</a></p>
+</body></html>"""
+
+
+@router.get("/auth/signup", include_in_schema=False)
+async def signup_page(invite_error: str = ""):
+    error = "<p>Invalid invite code.</p>" if invite_error else ""
+    return HTMLResponse(_SIGNUP_HTML.format(error=error))
 
 
 @router.post("/auth/signup", include_in_schema=False)
