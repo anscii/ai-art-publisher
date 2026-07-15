@@ -11,6 +11,18 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    google_sub: Mapped[str | None] = mapped_column(String, unique=True, nullable=True, index=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ban_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Collection(Base):
     __tablename__ = "collections"
 
