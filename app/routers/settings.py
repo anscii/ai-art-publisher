@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AIVariant, AppSettings, Series
 from app.schemas import AIProviderModelStat, AIStatsResponse, SettingsUpdate
-from app.services.ai.catalogue import PROVIDER_MODELS
+from app.services.ai.catalogue import IMAGE_EDIT_MODELS, PROVIDER_MODELS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -52,7 +52,7 @@ def _to_dict(s: AppSettings) -> dict:
 
 @router.get("/providers")
 def get_providers() -> dict:
-    return PROVIDER_MODELS
+    return {**PROVIDER_MODELS, "image_edit": IMAGE_EDIT_MODELS}
 
 
 @router.get("")

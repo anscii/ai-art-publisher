@@ -10,6 +10,7 @@ from app.models import Image
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import AIFixKeepRequest, AIFixPreviewResponse, AIFixRequest, SeriesDetail
+from app.services.ai.catalogue import DEFAULT_IMAGE_EDIT_MODEL, image_edit_provider
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.image_ai_fix")
@@ -17,6 +18,7 @@ router = APIRouter(tags=["image_ai_fix"])
 
 _TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
 _ALLOWED_EXTS = {"png", "jpg", "jpeg"}
+_PROVIDER_LABEL = {"openai": "OpenAI", "google": "Google"}
 
 
 def _content_type_from_key(key: str) -> str:
@@ -60,8 +62,16 @@ def ai_fix_preview(
             temp_key=temp_key,
         )
 
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=400, detail="OpenAI API key not configured")
+    model = body.model or settings.image_edit_model or DEFAULT_IMAGE_EDIT_MODEL
+    try:
+        provider = image_edit_provider(model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    api_key = settings.openai_api_key if provider == "openai" else settings.google_api_key
+    if not api_key:
+        raise HTTPException(
+            status_code=400, detail=f"{_PROVIDER_LABEL[provider]} API key not configured"
+        )
 
     image_bytes = storage.download_bytes(img.r2_key)
     content_type = _content_type_from_key(img.r2_key)
@@ -69,7 +79,9 @@ def ai_fix_preview(
     from app.services.ai.image_edit import edit_image
 
     try:
-        edited_bytes = edit_image(settings.openai_api_key, image_bytes, content_type, body.hint)
+        edited_bytes, cost = edit_image(
+            provider, api_key, model, image_bytes, content_type, body.hint
+        )
     except Exception:
         logger.exception("Image edit failed for image %s", image_id)
         raise HTTPException(status_code=502, detail="Image editing failed. Try again.")
@@ -80,6 +92,8 @@ def ai_fix_preview(
     return AIFixPreviewResponse(
         preview_url=storage.public_url(temp_key),
         temp_key=temp_key,
+        model=model,
+        cost_usd=cost,
     )
 
 
