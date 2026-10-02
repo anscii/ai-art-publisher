@@ -3365,6 +3365,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix`, { hint });
       _aiFixTempKey = data.temp_key;
       document.getElementById('aiFixPreviewImg').src = data.preview_url;
+      const costEl = document.getElementById('aiFixCost');
+      if (costEl) costEl.textContent = (data.model || '') + (data.cost_usd > 0 ? ' · $' + data.cost_usd.toFixed(4) : '');
       _aiFixSetState('preview');
     } catch (err) {
       _aiFixSetState('form');

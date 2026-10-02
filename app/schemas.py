@@ -21,6 +21,7 @@ class SettingsResponse(BaseModel):
     google_default_model: str
     deepseek_default_model: str
     openrouter_default_model: str
+    image_edit_model: str
     telegram_bot_token: str
     telegram_channel_id: str
     telegram_api_id: str
@@ -49,6 +50,7 @@ class SettingsUpdate(BaseModel):
     google_default_model: str | None = None
     deepseek_default_model: str | None = None
     openrouter_default_model: str | None = None
+    image_edit_model: str | None = None
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
     telegram_api_id: str | None = None
@@ -429,6 +431,8 @@ class AIFixRequest(BaseModel):
 class AIFixPreviewResponse(BaseModel):
     preview_url: str
     temp_key: str
+    model: str = ""
+    cost_usd: float = 0.0
 
 
 class AIFixKeepRequest(BaseModel):
