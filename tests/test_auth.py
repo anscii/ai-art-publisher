@@ -1,19 +1,23 @@
 import base64
+from unittest.mock import MagicMock
 
 import pytest
+from fastapi import HTTPException
 
 from app.config import AppConfig
-from app.routers.auth import COOKIE_NAME, create_session_token, verify_session_token
+from app.models import User
+from app.routers.auth import (
+    COOKIE_NAME,
+    create_session_token,
+    create_user_session_token,
+    get_current_user,
+    get_session_user_id,
+    verify_session_token,
+)
 
 _SECRET = "test-secret-key"
 _USER = "admin"
 _PASS = "hunter2"
-
-
-@pytest.fixture()
-def auth_config(monkeypatch):
-    monkeypatch.setattr(AppConfig, "auth_username", _USER)
-    monkeypatch.setattr(AppConfig, "auth_password", _PASS)
 
 
 # ── session token helpers ──────────────────────────────────────────────────────
@@ -42,6 +46,132 @@ def test_verify_expired_token(monkeypatch):
     monkeypatch.setattr(auth_mod, "_MAX_AGE", -1)
     token = create_session_token(_SECRET, _USER)
     assert not verify_session_token(token, _SECRET)
+
+
+def test_create_and_read_user_session_token():
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) == "user-abc-123"
+
+
+def test_get_session_user_id_no_cookie():
+    request = MagicMock()
+    request.cookies = {}
+    assert get_session_user_id(request, _SECRET) is None
+
+
+def test_get_session_user_id_wrong_secret():
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, "wrong-secret") is None
+
+
+def test_get_session_user_id_expired(monkeypatch):
+    from app.routers import auth as auth_mod
+
+    monkeypatch.setattr(auth_mod, "_MAX_AGE", -1)
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) is None
+
+
+def test_get_session_user_id_ignores_legacy_username_token():
+    """A legacy username-based token (payload key 'u') must not be misread as a user id."""
+    token = create_session_token(_SECRET, "admin")
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    assert get_session_user_id(request, _SECRET) is None
+
+
+# ── get_current_user ──────────────────────────────────────────────────────────
+
+
+def test_get_current_user_via_session_cookie(db):
+    u = User(email="friend@example.com", google_sub="g-1")
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    token = create_user_session_token(_SECRET, u.id)
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    request.headers = {}
+    result = get_current_user(request, db)
+    assert result.id == u.id
+
+
+def test_get_current_user_banned_rejected(db):
+    from datetime import datetime
+
+    u = User(email="banned@example.com", google_sub="g-2", banned_at=datetime.utcnow())
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    token = create_user_session_token(_SECRET, u.id)
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: token}
+    request.headers = {}
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(request, db)
+    assert exc_info.value.status_code == 401
+
+
+def test_get_current_user_no_session_rejected(db, monkeypatch):
+    # Auth must be configured for the 401 path — otherwise the no-auth
+    # fallback (below) kicks in.
+    monkeypatch.setattr(AppConfig, "google_client_id", "client-id")
+    request = MagicMock()
+    request.cookies = {}
+    request.headers = {}
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(request, db)
+    assert exc_info.value.status_code == 401
+
+
+def test_get_current_user_no_auth_configured_returns_default_user(db):
+    """reset_config blanks auth_username and google_client_id — dev/E2E mode."""
+    request = MagicMock()
+    request.cookies = {}
+    request.headers = {}
+    user = get_current_user(request, db)
+    assert user.email == "local@localhost"
+    # Second call resolves the same row, doesn't create a duplicate.
+    assert get_current_user(request, db).id == user.id
+
+
+def test_get_current_user_no_auth_fallback_banned_rejected(db):
+    """reset_config blanks auth_username and google_client_id — dev/E2E mode.
+
+    A banned local@localhost row must still 401, not be handed back.
+    """
+    from datetime import datetime
+
+    u = User(email="local@localhost", is_admin=True, banned_at=datetime.utcnow())
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    request = MagicMock()
+    request.cookies = {}
+    request.headers = {}
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(request, db)
+    assert exc_info.value.status_code == 401
+
+
+def test_get_current_user_legacy_basic_auth_resolves_owner(db, auth_config, monkeypatch):
+    monkeypatch.setattr(AppConfig, "owner_email", "owner@example.com")
+    owner = User(email="owner@example.com", google_sub=None, is_admin=True)
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+    creds = base64.b64encode(f"{_USER}:{_PASS}".encode()).decode()
+    request = MagicMock()
+    request.cookies = {}
+    request.headers = {"Authorization": f"Basic {creds}"}
+    result = get_current_user(request, db)
+    assert result.id == owner.id
 
 
 # ── GET / routing ──────────────────────────────────────────────────────────────

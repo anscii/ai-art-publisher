@@ -5,11 +5,20 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from app.config import AppConfig
-from app.models import Image, Post, PostImage, Series
+from app.models import Image, Post, PostImage, Series, User
+
+
+def _owner(db) -> User:
+    owner = db.query(User).filter(User.email == "fixture-owner@example.com").first()
+    if not owner:
+        owner = User(email="fixture-owner@example.com", google_sub="g-fixture")
+        db.add(owner)
+        db.flush()
+    return owner
 
 
 def _series(db, title="Test Series") -> Series:
-    s = Series(id=str(uuid.uuid4()), title=title)
+    s = Series(id=str(uuid.uuid4()), title=title, user_id=_owner(db).id)
     db.add(s)
     db.flush()
     return s

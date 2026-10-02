@@ -11,6 +11,20 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    google_sub: Mapped[str | None] = mapped_column(String, unique=True, nullable=True, index=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ban_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    series: Mapped[list["Series"]] = relationship("Series", back_populates="user")
+
+
 class Collection(Base):
     __tablename__ = "collections"
 
@@ -27,6 +41,9 @@ class Series(Base):
     __tablename__ = "series"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     original_folder_name: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, default="")
     title: Mapped[str] = mapped_column(String, default="")
@@ -48,6 +65,7 @@ class Series(Base):
     generation_error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     collection: Mapped["Collection | None"] = relationship("Collection", back_populates="series")
+    user: Mapped["User"] = relationship("User", back_populates="series")
     images: Mapped[list["Image"]] = relationship(
         "Image",
         back_populates="series",
@@ -254,6 +272,7 @@ class AppSettings(Base):
     __tablename__ = "app_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    invite_code: Mapped[str] = mapped_column(String, default="")
     anthropic_api_key: Mapped[str] = mapped_column(String, default="")
     openai_api_key: Mapped[str] = mapped_column(String, default="")
     google_api_key: Mapped[str] = mapped_column(String, default="")

@@ -101,6 +101,9 @@ _PUBLIC_PATHS = frozenset(
         "/internal/backup-db",
         "/auth/login",
         "/auth/logout",
+        "/auth/login/google",
+        "/auth/signup",
+        "/auth/google/callback",
         "/landing",
         "/api/landing/recent",
     }
@@ -110,7 +113,7 @@ _PUBLIC_PATHS = frozenset(
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     cfg = get_config()
-    if not cfg.auth_username or not cfg.auth_password:
+    if (not cfg.auth_username or not cfg.auth_password) and not cfg.google_client_id:
         return await call_next(request)
 
     if request.url.path in _PUBLIC_PATHS:

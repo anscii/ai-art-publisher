@@ -2,9 +2,16 @@ from app import models
 from tests.conftest import _TestingSessionLocal
 
 
+def _owner_id(db):
+    owner = models.User(email="fixture-owner@example.com", google_sub="g-fixture")
+    db.add(owner)
+    db.commit()
+    return owner.id
+
+
 def test_series_defaults():
     db = _TestingSessionLocal()
-    s = models.Series(title="Test")
+    s = models.Series(title="Test", user_id=_owner_id(db))
     db.add(s)
     db.commit()
     db.refresh(s)
@@ -31,7 +38,7 @@ def test_collection_model():
 
 def test_post_model():
     db = _TestingSessionLocal()
-    s = models.Series(title="S")
+    s = models.Series(title="S", user_id=_owner_id(db))
     db.add(s)
     db.commit()
     img = models.Image(series_id=s.id, r2_key="images/x.jpg", original_filename="x.jpg")
@@ -51,7 +58,7 @@ def test_post_model():
 
 def test_image_belongs_to_series():
     db = _TestingSessionLocal()
-    s = models.Series(title="S")
+    s = models.Series(title="S", user_id=_owner_id(db))
     db.add(s)
     db.commit()
     img = models.Image(
@@ -69,7 +76,7 @@ def test_image_belongs_to_series():
 
 def test_cascade_delete_images():
     db = _TestingSessionLocal()
-    s = models.Series(title="S")
+    s = models.Series(title="S", user_id=_owner_id(db))
     db.add(s)
     db.commit()
     img = models.Image(series_id=s.id, r2_key="images/x.jpg", original_filename="x.jpg")

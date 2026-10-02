@@ -83,3 +83,9 @@ def test_partial_update_preserves_other_fields(client):
     data = client.get("/api/settings").json()
     assert data["telegram_channel_id"] == "@mychannel"
     assert data["default_provider"] == "google"
+
+
+def test_invite_code_readable_plaintext(client):
+    client.put("/api/settings", json={"invite_code": "friends-2026"})
+    resp = client.get("/api/settings")
+    assert resp.json()["invite_code"] == "friends-2026"  # not masked like *_api_key fields
