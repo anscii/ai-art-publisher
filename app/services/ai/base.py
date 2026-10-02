@@ -209,9 +209,13 @@ def extract_json(text: str) -> str:
     return text
 
 
-def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
+class AIResponseError(RuntimeError):
+    """Model answered, but the answer is unusable. Message is safe to show in the UI."""
+
+
+def _parse_json(text: str, provider: str, model: str) -> Any:
     try:
-        return json.loads(extract_json(text))  # type: ignore[no-any-return]
+        return json.loads(extract_json(text))
     except Exception as exc:
         _logger.warning(
             "json parse failed | provider=%s | model=%s | error=%s | text=%s",
@@ -220,24 +224,20 @@ def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
             exc,
             text,
         )
-        raise
+        raise AIResponseError(
+            f"{provider} {model} returned a response that is not valid JSON: {exc}"
+        ) from exc
+
+
+def parse_ai_response(text: str, provider: str, model: str) -> list[Any]:
+    return _parse_json(text, provider, model)  # type: ignore[no-any-return]
 
 
 def parse_ai_object(text: str, provider: str, model: str) -> dict[str, Any]:
-    try:
-        result = json.loads(extract_json(text))
-        if isinstance(result, list) and len(result) == 1:
-            return result[0]  # type: ignore[no-any-return]
-        return result  # type: ignore[return-value]
-    except Exception as exc:
-        _logger.warning(
-            "json parse failed | provider=%s | model=%s | error=%s | text=%s",
-            provider,
-            model,
-            exc,
-            text,
-        )
-        raise
+    result = _parse_json(text, provider, model)
+    if isinstance(result, list) and len(result) == 1:
+        return result[0]  # type: ignore[no-any-return]
+    return result  # type: ignore[no-any-return]
 
 
 @dataclass
