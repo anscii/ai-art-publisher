@@ -42,6 +42,7 @@ def _do_ai_fix_keep(page):
     page.locator("#aiFixModal").wait_for(state="visible", timeout=5000)
 
     page.locator("#aiFixHint").fill("make it darker")
+    page.locator("#aiFixModel").select_option("gemini-3.1-flash-image")
     page.locator("#aiFixSubmitBtn").click()
 
     # Wait for the preview to appear (FAKE_AI mode is synchronous)

@@ -147,6 +147,28 @@ class TestRouterModelSelection:
         assert resp.json()["model"] == DEFAULT_IMAGE_EDIT_MODEL
         assert ed.call_args.args[0] == "openai"
 
+    def test_request_model_overrides_setting(self, client):
+        client.put(
+            "/api/settings",
+            json={
+                "openai_api_key": "ok",
+                "google_api_key": "gk",
+                "image_edit_model": "gpt-image-2",
+            },
+        )
+        img_id, storage = _setup(client)
+        with (
+            patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage),
+            patch("app.services.ai.image_edit.edit_image", return_value=(b"out", 0.03)) as ed,
+        ):
+            resp = client.post(
+                f"/api/images/{img_id}/ai-fix",
+                json={"hint": "h", "model": "gemini-3.1-flash-lite-image"},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["model"] == "gemini-3.1-flash-lite-image"
+        assert ed.call_args.args[:3] == ("google", "gk", "gemini-3.1-flash-lite-image")
+
     def test_google_model_requires_google_key(self, client):
         client.put(
             "/api/settings",

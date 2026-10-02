@@ -62,7 +62,7 @@ def ai_fix_preview(
             temp_key=temp_key,
         )
 
-    model = settings.image_edit_model or DEFAULT_IMAGE_EDIT_MODEL
+    model = body.model or settings.image_edit_model or DEFAULT_IMAGE_EDIT_MODEL
     try:
         provider = image_edit_provider(model)
     except ValueError as e:

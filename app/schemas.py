@@ -426,6 +426,7 @@ class GenerateFullRequest(BaseModel):
 
 class AIFixRequest(BaseModel):
     hint: str
+    model: str | None = None
 
 
 class AIFixPreviewResponse(BaseModel):
