@@ -80,3 +80,53 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "deepseek": "deepseek-flash",
     "openrouter": "openrouter/free",
 }
+
+
+# ── Image editing (image + prompt → image) ───────────────────────────────────
+# (text-in $/MTok, image-in $/MTok, image-out $/MTok) — standard tier, verified 2026-10-02
+IMAGE_EDIT_PRICING: dict[str, tuple[float, float, float]] = {
+    "gpt-image-2.5-flare": (5.00, 8.00, 30.00),
+    "gpt-image-2.5-sunburst": (5.00, 8.00, 30.00),
+    "gpt-image-2": (5.00, 8.00, 30.00),
+    # Google: same input price for text and image tokens
+    "gemini-3.1-flash-lite-image": (0.25, 0.25, 30.00),
+    "gemini-3.1-flash-image": (0.50, 0.50, 60.00),
+    "gemini-3-pro-image": (2.00, 2.00, 120.00),
+}
+
+IMAGE_EDIT_MODELS: list[dict[str, str]] = [
+    {"id": "gpt-image-2.5-flare", "provider": "openai", "label": "GPT Image 2.5 Flare — fast"},
+    {
+        "id": "gpt-image-2.5-sunburst",
+        "provider": "openai",
+        "label": "GPT Image 2.5 Sunburst — precise edits",
+    },
+    {"id": "gpt-image-2", "provider": "openai", "label": "GPT Image 2"},
+    {
+        "id": "gemini-3.1-flash-lite-image",
+        "provider": "google",
+        "label": "Nano Banana 2 Lite — cheapest (~$0.03)",
+    },
+    {
+        "id": "gemini-3.1-flash-image",
+        "provider": "google",
+        "label": "Nano Banana 2 — balanced (~$0.07)",
+    },
+    {"id": "gemini-3-pro-image", "provider": "google", "label": "Nano Banana Pro — best (~$0.13)"},
+]
+
+DEFAULT_IMAGE_EDIT_MODEL = "gpt-image-2.5-flare"
+
+
+def image_edit_provider(model: str) -> str:
+    for m in IMAGE_EDIT_MODELS:
+        if m["id"] == model:
+            return m["provider"]
+    raise ValueError(f"Unknown image edit model: {model}")
+
+
+def calc_image_edit_cost(model: str, text_in: int, image_in: int, image_out: int) -> float:
+    p = IMAGE_EDIT_PRICING.get(model)
+    if not p:
+        return 0.0
+    return (text_in * p[0] + image_in * p[1] + image_out * p[2]) / 1_000_000

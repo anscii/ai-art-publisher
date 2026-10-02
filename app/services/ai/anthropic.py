@@ -6,6 +6,7 @@ import anthropic as _anthropic
 from app.services.ai.base import (
     MAX_OUTPUT_TOKENS,
     AIProvider,
+    AIResponseError,
     AIVariantData,
     attach_usage,
     build_step1_system_prompt,
@@ -18,6 +19,21 @@ from app.services.ai.base import (
 from app.services.ai.catalogue import calc_cost
 
 logger = logging.getLogger(__name__)
+
+
+def _response_text(resp: Any, model: str) -> str:
+    """First text block of a Messages response.
+
+    Thinking-enabled models (Sonnet 5.5, Opus 5.5, ...) put a ``thinking`` block
+    before the text, so ``content[0]`` is not always text.
+    """
+    for block in resp.content:
+        if getattr(block, "type", None) == "text" and block.text:
+            return block.text  # type: ignore[no-any-return]
+    detail = resp.stop_reason or "unknown"
+    if resp.stop_reason == "refusal" and getattr(resp, "stop_details", None):
+        detail = f"refusal: {resp.stop_details.explanation or resp.stop_details.category}"
+    raise AIResponseError(f"Anthropic {model} returned no text (stop_reason={detail})")
 
 
 class AnthropicProvider(AIProvider):
@@ -57,10 +73,9 @@ class AnthropicProvider(AIProvider):
             system=build_step1_system_prompt(num_variants, language),
             messages=messages,
         )
-        block = resp.content[0]
-        assert isinstance(block, _anthropic.types.TextBlock)
-        logger.debug("anthropic response | model=%s | text=%s", model, block.text)
-        raw = parse_ai_response(block.text, "anthropic", model)
+        text = _response_text(resp, model)
+        logger.debug("anthropic response | model=%s | text=%s", model, text)
+        raw = parse_ai_response(text, "anthropic", model)
         variants = [AIVariantData.from_llm_dict(v) for v in raw]
         attach_usage(
             variants,
@@ -96,10 +111,9 @@ class AnthropicProvider(AIProvider):
             system=build_step2_system_prompt(language),
             messages=messages,
         )
-        block = resp.content[0]
-        assert isinstance(block, _anthropic.types.TextBlock)
-        logger.debug("anthropic expand response | model=%s | text=%s", model, block.text)
-        raw = parse_ai_object(block.text, "anthropic", model)
+        text = _response_text(resp, model)
+        logger.debug("anthropic expand response | model=%s | text=%s", model, text)
+        raw = parse_ai_object(text, "anthropic", model)
         data = AIVariantData.from_llm_dict(raw)
         if language == "en":
             data.description_en = description

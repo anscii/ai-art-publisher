@@ -3334,6 +3334,9 @@ function openAiFixModal(imageId) {
   _aiFixTempKey = null;
   const hint = document.getElementById('aiFixHint');
   if (hint) hint.value = '';
+  const modelEl = document.getElementById('aiFixModel');
+  // Keep the last picked model across opens so different models can be tried back to back.
+  if (modelEl) buildProviderModelSelect(modelEl, 'image_edit', { withDefault: true, selectedValue: modelEl.value || '' });
   _aiFixSetState('form');
   bootstrap.Modal.getOrCreateInstance(document.getElementById('aiFixModal')).show();
 }
@@ -3362,9 +3365,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!hint) { showToast('Enter a hint before fixing.', 'warning'); return; }
     _aiFixSetState('loading');
     try {
-      const data = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix`, { hint });
+      const model = document.getElementById('aiFixModel')?.value || null;
+      const data = await apiFetch('POST', `/api/images/${_aiFixImageId}/ai-fix`, { hint, model });
       _aiFixTempKey = data.temp_key;
       document.getElementById('aiFixPreviewImg').src = data.preview_url;
+      const costEl = document.getElementById('aiFixCost');
+      if (costEl) costEl.textContent = (data.model || '') + (data.cost_usd > 0 ? ' · $' + data.cost_usd.toFixed(4) : '');
       _aiFixSetState('preview');
     } catch (err) {
       _aiFixSetState('form');

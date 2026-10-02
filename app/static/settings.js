@@ -54,6 +54,8 @@ async function loadSettings() {
       const el = document.getElementById('s_' + p + '_default_model');
       if (el) buildProviderModelSelect(el, p, { selectedValue: s[p + '_default_model'] || '' });
     });
+    const imgEditEl = document.getElementById('s_image_edit_model');
+    if (imgEditEl) buildProviderModelSelect(imgEditEl, 'image_edit', { selectedValue: s.image_edit_model || '' });
     // Initialise Test button states: green if value is '****' (key saved), red if empty.
     _SECRET_FIELD_IDS.forEach(id => {
       const input = document.getElementById(id);
@@ -66,6 +68,7 @@ async function saveSettings() {
   const fields = [
     'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key', 'default_provider',
     'anthropic_default_model', 'openai_default_model', 'google_default_model', 'deepseek_default_model', 'openrouter_default_model',
+    'image_edit_model',
     'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
     'telegram_api_hash', 'telegram_session_string',
     'instagram_access_token', 'instagram_user_id',

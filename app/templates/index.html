@@ -360,6 +360,12 @@
                 <select class="form-select aap-input" id="s_openrouter_default_model"></select>
               </div>
             </div>
+            <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr 1fr;">
+              <div class="aap-field-block">
+                <span class="aap-field-block__label">Image edit model (Fix with AI)</span>
+                <select class="form-select aap-input" id="s_image_edit_model"></select>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -558,13 +564,16 @@
         <div id="aiFixForm">
           <label class="form-label small" for="aiFixHint">What to fix or change</label>
           <textarea id="aiFixHint" class="form-control form-control-sm" rows="3" placeholder="e.g. make the sky more dramatic"></textarea>
+          <label class="form-label small mt-2 mb-1" for="aiFixModel">Model</label>
+          <select id="aiFixModel" class="form-select form-select-sm"></select>
         </div>
         <div id="aiFixSpinner" class="text-center py-3 d-none">
           <div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Editing image...</span></div>
           <div class="small text-muted mt-2">Editing image...</div>
         </div>
         <div id="aiFixPreview" class="d-none">
-          <img id="aiFixPreviewImg" src="" class="img-fluid rounded mb-3" alt="AI-edited preview">
+          <img id="aiFixPreviewImg" src="" class="img-fluid rounded mb-2" alt="AI-edited preview">
+          <div id="aiFixCost" class="small text-muted mb-2"></div>
           <div class="d-flex gap-2">
             <button id="aiFixKeepBtn" class="btn btn-sm btn-primary flex-fill">Keep</button>
             <button id="aiFixDiscardBtn" class="btn btn-sm btn-secondary flex-fill">Discard</button>
