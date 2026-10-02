@@ -55,7 +55,7 @@ def test_generate_variants_calls_generate_content_with_images_and_config():
     provider._client.models.generate_content.return_value = _usage_resp(json.dumps(raw))
 
     variants = provider.generate_variants(
-        [_b64_png()], "gemini-2.5-flash", hint="hint text", num_variants=2, language="en"
+        [_b64_png()], "gemini-3.8-flash", hint="hint text", num_variants=2, language="en"
     )
 
     assert len(variants) == 2
@@ -63,7 +63,7 @@ def test_generate_variants_calls_generate_content_with_images_and_config():
     assert variants[1].description_en == "Desc two.\n\nTwo."
 
     _, kwargs = provider._client.models.generate_content.call_args
-    assert kwargs["model"] == "gemini-2.5-flash"
+    assert kwargs["model"] == "gemini-3.8-flash"
 
     contents = kwargs["contents"]
     assert len(contents) == 2
@@ -86,7 +86,7 @@ def test_generate_variants_attaches_usage_and_cost():
         json.dumps(raw), prompt_tokens=123, output_tokens=45
     )
 
-    variants = provider.generate_variants([_b64_png()], "gemini-2.5-flash")
+    variants = provider.generate_variants([_b64_png()], "gemini-3.8-flash")
 
     assert len(variants) == 1
     assert variants[0].input_tokens == 123
@@ -104,7 +104,7 @@ def test_expand_variant_calls_generate_content_with_text_contents():
         json.dumps(raw), prompt_tokens=10, output_tokens=20
     )
 
-    data = provider.expand_variant("My desc.\n\nTwo.", "en", "gemini-2.5-flash", hint="ctx")
+    data = provider.expand_variant("My desc.\n\nTwo.", "en", "gemini-3.8-flash", hint="ctx")
 
     assert data.description_en == "My desc.\n\nTwo."
     assert data.description_ru == "Расш.\n\nДва."
@@ -112,7 +112,7 @@ def test_expand_variant_calls_generate_content_with_text_contents():
     assert data.output_tokens == 20
 
     _, kwargs = provider._client.models.generate_content.call_args
-    assert kwargs["model"] == "gemini-2.5-flash"
+    assert kwargs["model"] == "gemini-3.8-flash"
     assert kwargs["contents"] == build_step2_user_text("My desc.\n\nTwo.", "en", "ctx")
 
     config = kwargs["config"]
@@ -128,7 +128,7 @@ def test_expand_variant_russian_keeps_primary_in_description_ru():
     raw = {"title": "T", "title_ru": "Т", "description_en": "Expanded.\n\nTwo."}
     provider._client.models.generate_content.return_value = _usage_resp(json.dumps(raw))
 
-    data = provider.expand_variant("Исходное.\n\nДва.", "ru", "gemini-2.5-flash")
+    data = provider.expand_variant("Исходное.\n\nДва.", "ru", "gemini-3.8-flash")
 
     assert data.description_ru == "Исходное.\n\nДва."
     assert data.description_en == "Expanded.\n\nTwo."
