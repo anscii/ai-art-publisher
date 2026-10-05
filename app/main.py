@@ -24,7 +24,7 @@ from app.routers import series as series_router
 from app.routers import settings as settings_router
 from app.routers import stories as stories_router
 from app.routers import trash as trash_router
-from app.routers.auth import is_authenticated
+from app.routers.auth import auth_enabled, is_authenticated
 
 
 def _configure_app_logging() -> None:
@@ -113,7 +113,7 @@ _PUBLIC_PATHS = frozenset(
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     cfg = get_config()
-    if (not cfg.auth_username or not cfg.auth_password) and not cfg.google_client_id:
+    if not auth_enabled(cfg):
         return await call_next(request)
 
     if request.url.path in _PUBLIC_PATHS:

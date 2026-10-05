@@ -5,16 +5,17 @@ import json
 import logging
 import secrets
 import time
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_config
 from app.database import get_db
-from app.models import User
-from app.routers.settings import get_or_create_settings
+from app.models import AppSettings, User
 
 logger = logging.getLogger("app.auth")
 
@@ -35,21 +36,34 @@ def _sign(payload: str, secret: str) -> str:
     return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def create_session_token(secret: str, username: str) -> str:
-    exp = int(time.time()) + _MAX_AGE
-    payload = base64.urlsafe_b64encode(json.dumps({"u": username, "exp": exp}).encode()).decode()
-    return f"{payload}.{_sign(payload, secret)}"
+def auth_enabled(cfg) -> bool:
+    """Single source of truth for 'is any auth configured' — middleware and
+    get_current_user must agree, or a half-set AUTH_USERNAME lets the
+    middleware through while every /api call 401s."""
+    return bool(cfg.auth_username and cfg.auth_password) or bool(cfg.google_client_id)
 
 
-def verify_session_token(token: str, secret: str) -> bool:
+def _resolve_owner(db: Session, cfg) -> User | None:
+    email = cfg.owner_email.strip().lower()
+    if not email:
+        return None
+    return db.query(User).filter(User.email == email).first()
+
+
+def _get_or_create_local_user(db: Session) -> User:
+    user = db.query(User).filter(User.email == "local@localhost").first()
+    if user:
+        return user
     try:
-        payload, sig = token.rsplit(".", 1)
-        if not hmac.compare_digest(_sign(payload, secret), sig):
-            return False
-        data = json.loads(base64.urlsafe_b64decode(payload))
-        return int(time.time()) <= data["exp"]
-    except (ValueError, KeyError):
-        return False
+        user = User(email="local@localhost", is_admin=True)
+        db.add(user)
+        db.commit()
+    except IntegrityError:
+        # Two first requests raced on the unique email index — the other one won.
+        db.rollback()
+        user = db.query(User).filter(User.email == "local@localhost").one()
+    db.refresh(user)
+    return user
 
 
 def create_user_session_token(secret: str, user_id: str) -> str:
@@ -91,25 +105,25 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         except (ValueError, UnicodeDecodeError):
             raise HTTPException(status_code=401, detail="Unauthorized")
         if _verify_credentials(username, password, cfg):
-            owner = db.query(User).filter(User.email == cfg.owner_email.strip().lower()).first()
+            owner = _resolve_owner(db, cfg)
             if owner and not owner.banned_at:
                 return owner
 
-    if not cfg.auth_username and not cfg.google_client_id:
-        # No auth configured at all (local dev / E2E) — same "auth disabled when
-        # env unset" semantics the middleware already has. Resolve or create a
-        # default local user so the app stays usable without OAuth setup.
-        user = db.query(User).filter(User.email == "local@localhost").first()
-        if not user:
-            user = User(email="local@localhost", is_admin=True)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+    if not auth_enabled(cfg):
+        # No auth configured (local dev / E2E) — resolve or create a default
+        # local user so the app stays usable without OAuth setup.
+        user = _get_or_create_local_user(db)
         if user.banned_at:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return user
 
     raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
 
 
 def _verify_credentials(username: str, password: str, cfg) -> bool:
@@ -119,8 +133,7 @@ def _verify_credentials(username: str, password: str, cfg) -> bool:
 
 
 def is_authenticated(request: Request, cfg) -> bool:
-    token = request.cookies.get(COOKIE_NAME, "")
-    if token and verify_session_token(token, cfg.session_secret):
+    if get_session_user_id(request, cfg.session_secret):
         return True
     if not cfg.auth_username or not cfg.auth_password:
         return False
@@ -140,6 +153,7 @@ async def login(
     request: Request,
     username: str = Form(),
     password: str = Form(),
+    db: Session = Depends(get_db),
 ):
     cfg = get_config()
     ok = bool(cfg.auth_username) and _verify_credentials(username, password, cfg)
@@ -151,7 +165,16 @@ async def login(
         )
         return RedirectResponse("/?login_error=1", status_code=303)
 
-    token = create_session_token(cfg.session_secret, username)
+    # Password login is the owner's break-glass path: it must land on the same
+    # uid-carrying token Google login issues, or get_current_user 401s every API call.
+    owner = _resolve_owner(db, cfg)
+    if not owner:
+        logger.warning("Password login succeeded but OWNER_EMAIL has no matching user row")
+        return RedirectResponse("/?login_error=no_owner", status_code=303)
+    if owner.banned_at:
+        return RedirectResponse("/?login_error=banned", status_code=303)
+
+    token = create_user_session_token(cfg.session_secret, owner.id)
     is_https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
     resp = RedirectResponse("/", status_code=303)
     resp.set_cookie(
@@ -197,6 +220,8 @@ def _read_oauth_state_cookie(request: Request, secret: str) -> dict | None:
 
 
 def _redirect_to_google(cfg, invite_ok: bool) -> RedirectResponse:
+    if not cfg.google_client_id:
+        return RedirectResponse("/?login_error=google_off", status_code=303)
     nonce = secrets.token_urlsafe(24)
     params = {
         "client_id": cfg.google_client_id,
@@ -206,8 +231,7 @@ def _redirect_to_google(cfg, invite_ok: bool) -> RedirectResponse:
         "state": nonce,
         "prompt": "select_account",
     }
-    query = "&".join(f"{k}={httpx.QueryParams({k: v})[k]}" for k, v in params.items())
-    resp = RedirectResponse(f"{GOOGLE_AUTHORIZE_URL}?{query}", status_code=303)
+    resp = RedirectResponse(f"{GOOGLE_AUTHORIZE_URL}?{urlencode(params)}", status_code=303)
     resp.set_cookie(
         OAUTH_STATE_COOKIE,
         _create_oauth_state_cookie_value(cfg.session_secret, nonce, invite_ok),
@@ -250,10 +274,9 @@ def signup(request: Request, invite_code: str = Form()):
 
     db = SessionLocal()
     try:
-        settings = get_or_create_settings(db)
-        valid = bool(settings.invite_code) and secrets.compare_digest(
-            invite_code, settings.invite_code
-        )
+        settings = db.get(AppSettings, 1)
+        expected = settings.invite_code if settings else ""
+        valid = bool(expected) and secrets.compare_digest(invite_code, expected)
     finally:
         db.close()
     if not valid:
@@ -310,7 +333,14 @@ def google_callback(request: Request, code: str = "", state: str = ""):
         user = db.query(User).filter(User.google_sub == google_sub).first()
         if not user:
             user = db.query(User).filter(User.email == email).first()
-            if user and not user.google_sub:
+            if user and user.google_sub:
+                # Same email, different Google account (sub lookup above missed):
+                # a recycled address must not log into the old owner's account.
+                resp = RedirectResponse("/?login_error=no_account", status_code=303)
+                resp.delete_cookie(OAUTH_STATE_COOKIE)
+                return resp
+            if user:
+                # Owner row from migration 034 has google_sub=NULL — link on first login.
                 user.google_sub = google_sub
                 db.commit()
                 db.refresh(user)

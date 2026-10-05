@@ -8,11 +8,10 @@ from app.config import AppConfig
 from app.models import User
 from app.routers.auth import (
     COOKIE_NAME,
-    create_session_token,
+    auth_enabled,
     create_user_session_token,
     get_current_user,
     get_session_user_id,
-    verify_session_token,
 )
 
 _SECRET = "test-secret-key"
@@ -23,29 +22,13 @@ _PASS = "hunter2"
 # ── session token helpers ──────────────────────────────────────────────────────
 
 
-def test_verify_valid_token():
-    token = create_session_token(_SECRET, _USER)
-    assert verify_session_token(token, _SECRET)
-
-
-def test_verify_wrong_secret():
-    token = create_session_token(_SECRET, _USER)
-    assert not verify_session_token(token, "wrong-secret")
-
-
-def test_verify_tampered_payload():
-    token = create_session_token(_SECRET, _USER)
-    payload, sig = token.rsplit(".", 1)
-    tampered = base64.urlsafe_b64encode(b'{"u":"hacker","exp":9999999999}').decode()
-    assert not verify_session_token(f"{tampered}.{sig}", _SECRET)
-
-
-def test_verify_expired_token(monkeypatch):
-    from app.routers import auth as auth_mod
-
-    monkeypatch.setattr(auth_mod, "_MAX_AGE", -1)
-    token = create_session_token(_SECRET, _USER)
-    assert not verify_session_token(token, _SECRET)
+def test_tampered_payload_rejected():
+    token = create_user_session_token(_SECRET, "user-abc-123")
+    _, sig = token.rsplit(".", 1)
+    tampered = base64.urlsafe_b64encode(b'{"uid":"hacker","exp":9999999999}').decode()
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: f"{tampered}.{sig}"}
+    assert get_session_user_id(request, _SECRET) is None
 
 
 def test_create_and_read_user_session_token():
@@ -79,11 +62,46 @@ def test_get_session_user_id_expired(monkeypatch):
 
 
 def test_get_session_user_id_ignores_legacy_username_token():
-    """A legacy username-based token (payload key 'u') must not be misread as a user id."""
-    token = create_session_token(_SECRET, "admin")
+    """A pre-multi-user cookie (payload key 'u') must not be misread as a user id."""
+    import json
+    import time
+
+    from app.routers.auth import _sign
+
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"u": "admin", "exp": int(time.time()) + 60}).encode()
+    ).decode()
     request = MagicMock()
-    request.cookies = {COOKIE_NAME: token}
+    request.cookies = {COOKIE_NAME: f"{payload}.{_sign(payload, _SECRET)}"}
     assert get_session_user_id(request, _SECRET) is None
+
+
+# ── auth_enabled ──────────────────────────────────────────────────────────────
+
+
+def test_auth_enabled_requires_both_username_and_password(monkeypatch):
+    from app.config import get_config
+
+    assert not auth_enabled(get_config())
+    monkeypatch.setattr(AppConfig, "auth_username", "admin")
+    assert not auth_enabled(get_config()), "username without password must not enable auth"
+    monkeypatch.setattr(AppConfig, "auth_password", "pw")
+    assert auth_enabled(get_config())
+
+
+def test_auth_enabled_by_google_alone(monkeypatch):
+    from app.config import get_config
+
+    monkeypatch.setattr(AppConfig, "google_client_id", "client-id")
+    assert auth_enabled(get_config())
+
+
+def test_half_configured_basic_auth_is_disabled_end_to_end(client, monkeypatch):
+    """Middleware and get_current_user must agree: AUTH_USERNAME without a
+    password means auth is off everywhere, not 'middleware open, API 401'."""
+    monkeypatch.setattr(AppConfig, "auth_username", "admin")
+    assert client.get("/").status_code == 200
+    assert client.get("/api/series").status_code == 200
 
 
 # ── get_current_user ──────────────────────────────────────────────────────────
@@ -191,8 +209,17 @@ def test_root_unauthenticated_returns_landing(client, auth_config):
     assert "aap-signin-card" in resp.text
 
 
-def test_root_with_session_cookie_returns_app(client, auth_config):
-    token = create_session_token(_SECRET, _USER)
+def _owner(db, monkeypatch, email="owner@example.com"):
+    monkeypatch.setattr(AppConfig, "owner_email", email)
+    owner = User(email=email, google_sub=None, is_admin=True)
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+    return owner
+
+
+def test_root_with_session_cookie_returns_app(client, auth_config, db, monkeypatch):
+    token = create_user_session_token(_SECRET, _owner(db, monkeypatch).id)
     client.cookies.set(COOKIE_NAME, token)
     resp = client.get("/")
     client.cookies.clear()
@@ -210,7 +237,8 @@ def test_root_with_basic_auth_header_returns_app(client, auth_config):
 # ── POST /auth/login ───────────────────────────────────────────────────────────
 
 
-def test_login_correct_creds_sets_cookie(client, auth_config):
+def test_login_correct_creds_sets_owner_uid_cookie(client, auth_config, db, monkeypatch):
+    owner = _owner(db, monkeypatch)
     resp = client.post(
         "/auth/login",
         data={"username": _USER, "password": _PASS},
@@ -218,8 +246,46 @@ def test_login_correct_creds_sets_cookie(client, auth_config):
     )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/"
-    assert COOKIE_NAME in resp.cookies
-    assert verify_session_token(resp.cookies[COOKIE_NAME], _SECRET)
+    request = MagicMock()
+    request.cookies = {COOKIE_NAME: resp.cookies[COOKIE_NAME]}
+    assert get_session_user_id(request, _SECRET) == owner.id
+
+
+def test_login_cookie_works_for_api_calls(client, auth_config, db, monkeypatch):
+    """Regression: password login used to mint a username token that
+    get_current_user ignored, so every /api call 401'd right after login."""
+    _owner(db, monkeypatch)
+    client.post("/auth/login", data={"username": _USER, "password": _PASS}, follow_redirects=False)
+    resp = client.get("/api/series")
+    client.cookies.clear()
+    assert resp.status_code == 200
+
+
+def test_login_without_owner_row_redirects_error(client, auth_config, monkeypatch):
+    monkeypatch.setattr(AppConfig, "owner_email", "owner@example.com")
+    resp = client.post(
+        "/auth/login",
+        data={"username": _USER, "password": _PASS},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "login_error=no_owner" in resp.headers["location"]
+    assert COOKIE_NAME not in resp.cookies
+
+
+def test_login_banned_owner_rejected(client, auth_config, db, monkeypatch):
+    from datetime import datetime
+
+    owner = _owner(db, monkeypatch)
+    owner.banned_at = datetime.utcnow()
+    db.commit()
+    resp = client.post(
+        "/auth/login",
+        data={"username": _USER, "password": _PASS},
+        follow_redirects=False,
+    )
+    assert "login_error=banned" in resp.headers["location"]
+    assert COOKIE_NAME not in resp.cookies
 
 
 def test_login_wrong_password_redirects_with_error(client, auth_config):
@@ -249,8 +315,8 @@ def test_login_logs_failed_attempt(client, auth_config, caplog):
 # ── GET /auth/logout ───────────────────────────────────────────────────────────
 
 
-def test_logout_clears_cookie(client, auth_config):
-    token = create_session_token(_SECRET, _USER)
+def test_logout_clears_cookie(client, auth_config, db, monkeypatch):
+    token = create_user_session_token(_SECRET, _owner(db, monkeypatch).id)
     client.cookies.set(COOKIE_NAME, token)
     resp = client.get("/auth/logout", follow_redirects=False)
     client.cookies.clear()

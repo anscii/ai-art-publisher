@@ -89,3 +89,34 @@ def test_invite_code_readable_plaintext(client):
     client.put("/api/settings", json={"invite_code": "friends-2026"})
     resp = client.get("/api/settings")
     assert resp.json()["invite_code"] == "friends-2026"  # not masked like *_api_key fields
+
+
+def _login_as(client, db, monkeypatch, *, is_admin):
+    from app.config import AppConfig, get_config
+    from app.models import User
+    from app.routers.auth import COOKIE_NAME, create_user_session_token
+
+    # Enable auth so the no-auth local@localhost admin fallback stays out of the way.
+    monkeypatch.setattr(AppConfig, "google_client_id", "client-id")
+    u = User(
+        email=f"{'admin' if is_admin else 'friend'}@example.com", google_sub="g", is_admin=is_admin
+    )
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    client.cookies.set(COOKIE_NAME, create_user_session_token(get_config().session_secret, u.id))
+
+
+def test_settings_forbidden_for_non_admin(client, db, monkeypatch):
+    _login_as(client, db, monkeypatch, is_admin=False)
+    assert client.get("/api/settings").status_code == 403
+    assert client.put("/api/settings", json={"invite_code": "mine"}).status_code == 403
+    assert client.get("/api/settings/providers").status_code == 403
+    assert client.get("/api/stats/ai").status_code == 403
+    client.cookies.clear()
+
+
+def test_settings_allowed_for_admin(client, db, monkeypatch):
+    _login_as(client, db, monkeypatch, is_admin=True)
+    assert client.get("/api/settings").status_code == 200
+    client.cookies.clear()

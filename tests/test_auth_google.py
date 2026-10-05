@@ -211,3 +211,90 @@ def test_signup_page_has_invite_form_and_google_link(client):
 def test_landing_page_links_to_signup(client, auth_config):
     resp = client.get("/")
     assert "/auth/signup" in resp.text
+
+
+@respx.mock
+def test_callback_email_match_with_different_google_sub_rejected(client, monkeypatch, db):
+    """Account takeover guard: user A registered with sub X; the same email later
+    shows up under a different Google account (sub Y). Must NOT log in as A."""
+    from app.models import User
+
+    _oauth_config(monkeypatch)
+    db.add(User(email="recycled@example.com", google_sub="g-original"))
+    db.commit()
+
+    resp = client.get("/auth/login/google", follow_redirects=False)
+    state_cookie = resp.cookies[OAUTH_STATE_COOKIE]
+    state_param = resp.headers["location"].split("state=")[1].split("&")[0]
+
+    respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=httpx.Response(200, json={"access_token": "fake-access-token"})
+    )
+    respx.get(GOOGLE_USERINFO_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"sub": "g-newcomer", "email": "recycled@example.com", "email_verified": True},
+        )
+    )
+
+    client.cookies.set(OAUTH_STATE_COOKIE, state_cookie)
+    callback_resp = client.get(
+        f"/auth/google/callback?code=fake-code&state={state_param}", follow_redirects=False
+    )
+    client.cookies.clear()
+    assert callback_resp.status_code == 303
+    assert "login_error=no_account" in callback_resp.headers["location"]
+    assert COOKIE_NAME not in callback_resp.cookies
+    assert db.query(User).filter(User.email == "recycled@example.com").one().google_sub == (
+        "g-original"
+    )
+
+
+@respx.mock
+def test_callback_links_owner_row_with_null_sub(client, monkeypatch, db):
+    """Migration 034 creates the owner with google_sub=NULL; first Google login links it."""
+    from app.models import User
+
+    _oauth_config(monkeypatch)
+    db.add(User(email="owner@example.com", google_sub=None, is_admin=True))
+    db.commit()
+
+    resp = client.get("/auth/login/google", follow_redirects=False)
+    state_cookie = resp.cookies[OAUTH_STATE_COOKIE]
+    state_param = resp.headers["location"].split("state=")[1].split("&")[0]
+    respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=httpx.Response(200, json={"access_token": "fake-access-token"})
+    )
+    respx.get(GOOGLE_USERINFO_URL).mock(
+        return_value=httpx.Response(
+            200, json={"sub": "g-owner", "email": "owner@example.com", "email_verified": True}
+        )
+    )
+    client.cookies.set(OAUTH_STATE_COOKIE, state_cookie)
+    callback_resp = client.get(
+        f"/auth/google/callback?code=fake-code&state={state_param}", follow_redirects=False
+    )
+    client.cookies.clear()
+    assert callback_resp.headers["location"] == "/"
+    assert COOKIE_NAME in callback_resp.cookies
+    assert db.query(User).filter(User.email == "owner@example.com").one().google_sub == "g-owner"
+
+
+def test_google_redirect_url_is_percent_encoded(client, monkeypatch):
+    _oauth_config(monkeypatch)
+    resp = client.get("/auth/login/google", follow_redirects=False)
+    location = resp.headers["location"]
+    assert "redirect_uri=https%3A%2F%2Fapp.test%2Fauth%2Fgoogle%2Fcallback" in location
+    assert "scope=openid+email" in location
+
+
+def test_login_google_without_config_redirects_error(client):
+    """reset_config blanks google_client_id — the link must not bounce to Google with an empty client_id."""
+    resp = client.get("/auth/login/google", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "login_error=google_off" in resp.headers["location"]
+
+
+def test_landing_page_has_google_sign_in(client, auth_config):
+    resp = client.get("/", follow_redirects=False)
+    assert 'href="/auth/login/google"' in resp.text

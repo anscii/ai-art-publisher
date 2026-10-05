@@ -73,15 +73,20 @@
       <div class="aap-signin-card__head">SIGN IN</div>
 
       <!-- Error message (shown when ?login_error is present) -->
-      <div id="loginError" class="aap-signin-card__error" style="display:none">
-        Invalid username or password.
-      </div>
+      <div id="loginError" class="aap-signin-card__error" style="display:none"></div>
+
+      <a class="btn aap-btn aap-btn-primary aap-signin-card__submit" href="/auth/login/google">
+        Sign in with Google &#x2192;
+      </a>
+      <p><a href="/auth/signup">New here? Sign up with an invite code</a></p>
+
+      <div class="aap-signin-card__label" style="margin-top: 12px;"><span>or owner password</span></div>
 
       <!-- Username -->
       <div>
         <div class="aap-signin-card__label"><span>username</span></div>
         <input class="form-control aap-input" type="text" name="username"
-               placeholder="username" required autofocus autocomplete="username">
+               placeholder="username" required autocomplete="username">
       </div>
 
       <!-- Password -->
@@ -94,14 +99,12 @@
                required autocomplete="current-password">
       </div>
 
-      <button class="btn aap-btn aap-btn-primary aap-signin-card__submit" type="submit">
+      <button class="btn aap-btn aap-signin-card__submit" type="submit">
         Sign in &#x2192;
       </button>
 
-      <p><a href="/auth/signup">New here? Sign up with an invite code</a></p>
-
       <div class="aap-signin-card__foot">
-        single-user &middot; invite-only
+        invite-only
       </div>
     </form>
   </section>
@@ -153,8 +156,17 @@
 
   // Show error if login failed
   (function () {
-    if (new URLSearchParams(location.search).get('login_error')) {
-      document.getElementById('loginError').style.display = '';
+    var code = new URLSearchParams(location.search).get('login_error');
+    if (code) {
+      var MSG = {
+        no_account: 'No account for that Google email. Sign up with an invite code first.',
+        banned: 'This account has been suspended.',
+        no_owner: 'Owner account is not configured (OWNER_EMAIL).',
+        google_off: 'Google sign-in is not configured on this server.'
+      };
+      var el = document.getElementById('loginError');
+      el.textContent = MSG[code] || 'Sign-in failed. Check your credentials and try again.';
+      el.style.display = '';
     }
   })();
 
