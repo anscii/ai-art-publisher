@@ -14,10 +14,10 @@ def _cfg_for(db_url: str) -> Config:
     return cfg
 
 
-def _create_pre_034_schema(db_url: str) -> None:
-    """Build the schema exactly as migration 034 finds it: full head schema
+def _create_pre_035_schema(db_url: str) -> None:
+    """Build the schema exactly as migration 035 finds it: full head schema
     minus `series.user_id` (and its index/FK). The ORM's Series model now has
-    `user_id` (added alongside migration 034 in Task 8), so plain
+    `user_id` (added alongside migration 035 in Task 8), so plain
     `Base.metadata.create_all` would already include the column this
     migration is meant to add — strip it back off via a batch op (SQLite
     can't just DROP COLUMN a column that's part of a FK constraint).
@@ -44,8 +44,8 @@ def test_backfill_assigns_existing_series_to_owner(tmp_path, monkeypatch):
     # Patch AppConfig so alembic's env.py uses the test DB.
     monkeypatch.setattr(AppConfig, "database_url", db_url)
 
-    _create_pre_034_schema(db_url)
-    alembic_command.stamp(cfg, "033")
+    _create_pre_035_schema(db_url)
+    alembic_command.stamp(cfg, "034")
 
     engine = create_engine(db_url)
     with engine.begin() as conn:
@@ -61,7 +61,7 @@ def test_backfill_assigns_existing_series_to_owner(tmp_path, monkeypatch):
     engine.dispose()
 
     monkeypatch.setenv("OWNER_EMAIL", "owner@example.com")
-    alembic_command.upgrade(cfg, "034")
+    alembic_command.upgrade(cfg, "035")
 
     engine = create_engine(db_url)
     with engine.begin() as conn:
@@ -91,9 +91,9 @@ def test_backfill_requires_owner_email(tmp_path, monkeypatch):
     # Patch AppConfig so alembic's env.py uses the test DB.
     monkeypatch.setattr(AppConfig, "database_url", db_url)
 
-    _create_pre_034_schema(db_url)
-    alembic_command.stamp(cfg, "033")
+    _create_pre_035_schema(db_url)
+    alembic_command.stamp(cfg, "034")
 
     monkeypatch.delenv("OWNER_EMAIL", raising=False)
     with pytest.raises(RuntimeError, match="OWNER_EMAIL"):
-        alembic_command.upgrade(cfg, "034")
+        alembic_command.upgrade(cfg, "035")

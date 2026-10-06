@@ -148,7 +148,7 @@ def test_callback_state_mismatch_rejected(client, monkeypatch):
 def test_callback_unverified_email_rejected(client, monkeypatch):
     """Security: an unverified Google email must never create or link an account.
 
-    The owner row from migration 034 has google_sub=NULL and gets linked by
+    The owner row from migration 035 has google_sub=NULL and gets linked by
     email match on first login — without this check, a Google account carrying
     OWNER_EMAIL as an unverified external email could claim it (admin takeover).
     """

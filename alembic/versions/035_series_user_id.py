@@ -1,7 +1,7 @@
 """series: add user_id, backfill onto OWNER_EMAIL account
 
-Revision ID: 034
-Revises: 033
+Revision ID: 035
+Revises: 034
 Create Date: 2026-07-03
 """
 
@@ -14,8 +14,8 @@ from sqlalchemy import text
 
 from alembic import op
 
-revision = "034"
-down_revision = "033"
+revision = "035"
+down_revision = "034"
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """add users table
 
-Revision ID: 032
-Revises: 031
+Revision ID: 033
+Revises: 032
 Create Date: 2026-07-03
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "032"
-down_revision = "031"
+revision = "033"
+down_revision = "032"
 branch_labels = None
 depends_on = None
 

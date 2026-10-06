@@ -321,7 +321,7 @@ def google_callback(request: Request, code: str = "", state: str = ""):
     # Lowercase: Google emails are case-insensitive; email-match linking and the
     # OWNER_EMAIL backfill match must not silently miss on case.
     email = (userinfo.get("email") or "").strip().lower()
-    # email_verified check is security-critical: the owner row (migration 034)
+    # email_verified check is security-critical: the owner row (migration 035)
     # has google_sub=NULL and is linked by email match on first login. Without
     # this, a Google account carrying an unverified copy of OWNER_EMAIL could
     # claim the admin account.
@@ -340,7 +340,7 @@ def google_callback(request: Request, code: str = "", state: str = ""):
                 resp.delete_cookie(OAUTH_STATE_COOKIE)
                 return resp
             if user:
-                # Owner row from migration 034 has google_sub=NULL — link on first login.
+                # Owner row from migration 035 has google_sub=NULL — link on first login.
                 user.google_sub = google_sub
                 db.commit()
                 db.refresh(user)
