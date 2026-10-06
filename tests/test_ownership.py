@@ -67,7 +67,7 @@ def graph(client, db):
         "trashed_variant_id": tvar.id,
     }
     client.cookies.clear()
-    login_as(client, db, "b@example.com", "g-b")
+    login_as(client, db, "b@example.com", "g-b", is_admin=True)  # gates answer 403 to non-admins
     return ids
 
 

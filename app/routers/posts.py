@@ -12,7 +12,7 @@ from app.database import get_db
 from app.enums import Platform
 from app.models import AIVariant, Post, PostImage, Series, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
 from app.services.facebook import FacebookService
@@ -330,6 +330,9 @@ def create_posts(
     user: User = Depends(get_current_user),
 ) -> list[PostResponse]:
     s = get_owned(Series, series_id, user, db)
+    # stopgap-1b: lift in #5 (a scheduled Post is sent with the Owner's credentials)
+    if body.scheduled_at and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
 
     # Validate image IDs belong to this series
     valid_ids = {img.id for img in s.images if img.deleted_at is None}
@@ -453,7 +456,7 @@ def post_now(
     post_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #5
 ) -> PostResult:
     p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
@@ -473,7 +476,7 @@ def schedule_post(
     post_id: str,
     body: PostScheduleRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #5
 ) -> PostResponse:
     p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
@@ -486,7 +489,9 @@ def schedule_post(
 
 @router.delete("/api/posts/{post_id}/schedule")
 def cancel_post_schedule(
-    post_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    post_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #5
 ) -> PostResponse:
     p = get_owned(Post, post_id, user, db)
     if p.status != "scheduled":
