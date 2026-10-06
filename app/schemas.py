@@ -39,6 +39,7 @@ class SettingsResponse(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
+    invite_code: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     google_api_key: str | None = None

@@ -8,11 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AIVariant, AppSettings, Series
+from app.routers.auth import require_admin
 from app.schemas import AIProviderModelStat, AIStatsResponse, SettingsUpdate
 from app.services.ai.catalogue import IMAGE_EDIT_MODELS, PROVIDER_MODELS
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
-stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
+# ponytail: whole-router admin gate is the #1b stopgap; relax per-route once settings go per-user (#2)
+_admin_only = [Depends(require_admin)]
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=_admin_only)
+stats_router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=_admin_only)
 
 _SECRET_FIELDS = {
     "anthropic_api_key",
