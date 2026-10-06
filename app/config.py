@@ -24,6 +24,10 @@ class AppConfig:
         os.getenv("SESSION_SECRET", "")
         or hashlib.sha256(f"session:{os.getenv('AUTH_PASSWORD', '')}".encode()).hexdigest()
     )
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_oauth_redirect_uri: str = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "")
+    owner_email: str = os.getenv("OWNER_EMAIL", "")
 
 
 @lru_cache

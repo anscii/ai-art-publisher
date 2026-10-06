@@ -1,15 +1,29 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from app.models import AIVariant, Image, Series
+from app.models import AIVariant, Image, Series, User
 
 
 def _now():
     return datetime.now(timezone.utc)
 
 
+def _owner(db):
+    owner = db.query(User).filter(User.email == "fixture-owner@example.com").first()
+    if not owner:
+        owner = User(email="fixture-owner@example.com", google_sub="g-fixture")
+        db.add(owner)
+        db.flush()
+    return owner
+
+
 def _series(db, title="S", deleted=False):
-    s = Series(title=title, original_folder_name=title, deleted_at=_now() if deleted else None)
+    s = Series(
+        title=title,
+        original_folder_name=title,
+        deleted_at=_now() if deleted else None,
+        user_id=_owner(db).id,
+    )
     db.add(s)
     db.flush()
     return s
