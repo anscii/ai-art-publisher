@@ -1,21 +1,27 @@
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Collection, Series
+from app.models import Collection, Series, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user
 from app.schemas import CollectionCreate, CollectionResponse, CollectionUpdate
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
 
 
-def _build_counts(db: Session) -> dict[str, tuple[int, dict[str, int]]]:
+def _build_counts(db: Session, user: User) -> dict[str, tuple[int, dict[str, int]]]:
     rows = db.execute(
         select(Series.collection_id, Series.status, func.count().label("cnt"))
-        .where(Series.deleted_at.is_(None), Series.collection_id.isnot(None))
+        .where(
+            Series.user_id == user.id,
+            Series.deleted_at.is_(None),
+            Series.collection_id.isnot(None),
+        )
         .group_by(Series.collection_id, Series.status)
     ).all()
     totals: dict[str, int] = defaultdict(int)
@@ -39,17 +45,27 @@ def collection_to_resp(c: Collection, counts: dict | None = None) -> CollectionR
 
 
 @router.get("")
-def list_collections(db: Session = Depends(get_db)) -> list[CollectionResponse]:
+def list_collections(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[CollectionResponse]:
     rows = db.scalars(
-        select(Collection).where(Collection.deleted_at.is_(None)).order_by(Collection.name)
+        select(Collection)
+        .where(Collection.user_id == user.id, Collection.deleted_at.is_(None))
+        .order_by(Collection.name)
     ).all()
-    counts = _build_counts(db)
+    counts = _build_counts(db, user)
     return [collection_to_resp(c, counts) for c in rows]
 
 
 @router.post("")
-def create_collection(body: CollectionCreate, db: Session = Depends(get_db)) -> CollectionResponse:
-    c = Collection(name=body.name, name_ru=body.name_ru, created_at=datetime.now(UTC))
+def create_collection(
+    body: CollectionCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CollectionResponse:
+    c = Collection(
+        user_id=user.id, name=body.name, name_ru=body.name_ru, created_at=datetime.now(UTC)
+    )
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -58,11 +74,12 @@ def create_collection(body: CollectionCreate, db: Session = Depends(get_db)) -> 
 
 @router.patch("/{collection_id}")
 def update_collection(
-    collection_id: str, body: CollectionUpdate, db: Session = Depends(get_db)
+    collection_id: str,
+    body: CollectionUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> CollectionResponse:
-    c = db.get(Collection, collection_id)
-    if not c or c.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Collection not found")
+    c = get_owned(Collection, collection_id, user, db)
     c.name = body.name
     c.name_ru = body.name_ru
     db.commit()
@@ -70,10 +87,10 @@ def update_collection(
 
 
 @router.delete("/{collection_id}")
-def delete_collection(collection_id: str, db: Session = Depends(get_db)):
-    c = db.get(Collection, collection_id)
-    if not c or c.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Collection not found")
+def delete_collection(
+    collection_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    c = get_owned(Collection, collection_id, user, db)
     c.deleted_at = datetime.now(UTC)
     members = db.scalars(select(Series).where(Series.collection_id == collection_id)).all()
     for s in members:

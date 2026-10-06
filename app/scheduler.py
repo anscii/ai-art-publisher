@@ -16,6 +16,7 @@ def run_scheduled_posts():
     db = SessionLocal()
     try:
         now = datetime.now(UTC)
+        # ponytail: unscoped — only Admins can schedule/post until #5
         due = db.scalars(
             select(Post)
             .options(selectinload(Post.post_images).selectinload(PostImage.image))

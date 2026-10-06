@@ -36,6 +36,7 @@ def get_landing_recent(db: Session = Depends(get_db)) -> LandingRecentResponse:
     settings = get_or_create_settings(db)
     base_url = get_public_base_url(settings)
 
+    # ponytail: unscoped — only Admins can schedule/post until #5
     recent = db.scalars(
         select(Post)
         .options(selectinload(Post.post_images).selectinload(PostImage.image))
