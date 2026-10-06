@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Image, Series
+from app.models import Image, Series, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user
 from app.routers.series import image_to_resp, series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -42,10 +44,9 @@ def upload_images(
     series_id: str,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
     results = []
@@ -76,10 +77,9 @@ def register_image(
     series_id: str,
     body: RegisterImageBody,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
     img = Image(
         series_id=series_id,
         r2_key=body.r2_key,
@@ -99,10 +99,9 @@ def reorder_images(
     series_id: str,
     body: ReorderImagesBody,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
     images = {img.id: img for img in s.images}
     for idx, img_id in enumerate(body.image_ids):
         if img_id in images:
@@ -116,13 +115,10 @@ def move_image(
     image_id: str,
     body: MoveImageBody,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    img = db.get(Image, image_id)
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
-    target = db.get(Series, body.target_series_id)
-    if not target:
-        raise HTTPException(status_code=404, detail="Target series not found")
+    img = get_owned(Image, image_id, user, db)
+    target = get_owned(Series, body.target_series_id, user, db)
     img.series_id = body.target_series_id
     img.order_index = _next_order(target)
     db.commit()
@@ -134,10 +130,9 @@ def update_image_status(
     image_id: str,
     body: ImageStatusUpdate,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    img = db.get(Image, image_id)
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
+    img = get_owned(Image, image_id, user, db)
     if body.status not in {"pending", "posted", "skip"}:
         raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
     img.status = body.status
@@ -146,10 +141,12 @@ def update_image_status(
 
 
 @router.delete("/api/images/{image_id}")
-def delete_image(image_id: str, db: Session = Depends(get_db)):
-    img = db.get(Image, image_id)
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
+def delete_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    img = get_owned(Image, image_id, user, db)
     img.deleted_at = datetime.now(UTC)
     db.commit()
     return series_to_detail(img.series, db)

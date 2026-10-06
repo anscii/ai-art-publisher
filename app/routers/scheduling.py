@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_config
 from app.database import get_db
 from app.enums import Platform
-from app.models import Post, PostImage
+from app.models import Post, PostImage, Series, User
+from app.routers.auth import get_current_user
 from app.routers.settings import get_or_create_settings
 from app.scheduler import run_scheduled_posts
 from app.schemas import QueueItem
@@ -28,7 +29,9 @@ def trigger_scheduler(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/api/queue")
-def get_queue(db: Session = Depends(get_db)) -> list[QueueItem]:
+def get_queue(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[QueueItem]:
     settings = get_or_create_settings(db)
     base_url = get_public_base_url(settings)
     posts = db.scalars(
@@ -37,7 +40,12 @@ def get_queue(db: Session = Depends(get_db)) -> list[QueueItem]:
             selectinload(Post.series),
             selectinload(Post.post_images).selectinload(PostImage.image),
         )
-        .where(Post.status == "scheduled", Post.deleted_at.is_(None))
+        .join(Post.series)
+        .where(
+            Post.status == "scheduled",
+            Post.deleted_at.is_(None),
+            Series.user_id == user.id,
+        )
         .order_by(Post.scheduled_at)
     ).all()
     items = []

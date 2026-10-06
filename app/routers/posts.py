@@ -10,7 +10,9 @@ import app.database as _db_module
 from app.config import get_config
 from app.database import get_db
 from app.enums import Platform
-from app.models import AIVariant, Post, PostImage, Series
+from app.models import AIVariant, Post, PostImage, Series, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user
 from app.routers.settings import get_or_create_settings
 from app.schemas import PostBatchCreate, PostResponse, PostResult, PostScheduleRequest, PostUpdate
 from app.services.facebook import FacebookService
@@ -308,10 +310,10 @@ def _create_post_images(post: Post, image_ids: list[str], db: Session) -> None:
 
 
 @router.get("/api/series/{series_id}/posts")
-def list_posts(series_id: str, db: Session = Depends(get_db)) -> list[PostResponse]:
-    s = db.get(Series, series_id)
-    if not s or s.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Series not found")
+def list_posts(
+    series_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[PostResponse]:
+    get_owned(Series, series_id, user, db)
     posts = db.scalars(
         select(Post)
         .where(Post.series_id == series_id, Post.deleted_at.is_(None))
@@ -322,11 +324,12 @@ def list_posts(series_id: str, db: Session = Depends(get_db)) -> list[PostRespon
 
 @router.post("/api/series/{series_id}/posts", status_code=201)
 def create_posts(
-    series_id: str, body: PostBatchCreate, db: Session = Depends(get_db)
+    series_id: str,
+    body: PostBatchCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> list[PostResponse]:
-    s = db.get(Series, series_id)
-    if not s or s.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
 
     # Validate image IDs belong to this series
     valid_ids = {img.id for img in s.images if img.deleted_at is None}
@@ -385,18 +388,21 @@ def create_posts(
 
 
 @router.get("/api/posts/{post_id}")
-def get_post(post_id: str, db: Session = Depends(get_db)) -> PostResponse:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+def get_post(
+    post_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> PostResponse:
+    p = get_owned(Post, post_id, user, db)
     return post_to_resp(p)
 
 
 @router.patch("/api/posts/{post_id}")
-def update_post(post_id: str, body: PostUpdate, db: Session = Depends(get_db)) -> PostResponse:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+def update_post(
+    post_id: str,
+    body: PostUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> PostResponse:
+    p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
         raise HTTPException(status_code=400, detail="Cannot edit a posted post")
 
@@ -414,9 +420,7 @@ def update_post(post_id: str, body: PostUpdate, db: Session = Depends(get_db)) -
         p.collection_line_ru = body.collection_line_ru
     if body.image_ids is not None:
         # Validate image IDs belong to the series
-        series = db.get(Series, p.series_id)
-        if not series:
-            raise HTTPException(status_code=404, detail="Series not found")
+        series = p.series
         valid_ids = {img.id for img in series.images if img.deleted_at is None}
         bad = set(body.image_ids) - valid_ids
         if bad:
@@ -433,10 +437,10 @@ def update_post(post_id: str, body: PostUpdate, db: Session = Depends(get_db)) -
 
 
 @router.delete("/api/posts/{post_id}")
-def delete_post(post_id: str, db: Session = Depends(get_db)) -> dict:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+def delete_post(
+    post_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
         raise HTTPException(status_code=400, detail="Cannot delete a posted post")
     p.deleted_at = datetime.now(UTC)
@@ -446,11 +450,12 @@ def delete_post(post_id: str, db: Session = Depends(get_db)) -> dict:
 
 @router.post("/api/posts/{post_id}/post")
 def post_now(
-    post_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    post_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> PostResult:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+    p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
         return PostResult(success=False, message="Already posted")
     if p.status == "sending":
@@ -465,11 +470,12 @@ def post_now(
 
 @router.post("/api/posts/{post_id}/schedule")
 def schedule_post(
-    post_id: str, body: PostScheduleRequest, db: Session = Depends(get_db)
+    post_id: str,
+    body: PostScheduleRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> PostResponse:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+    p = get_owned(Post, post_id, user, db)
     if p.status == "posted":
         raise HTTPException(status_code=400, detail="Cannot reschedule a posted post")
     p.scheduled_at = body.datetime_utc.replace(tzinfo=None)
@@ -479,10 +485,10 @@ def schedule_post(
 
 
 @router.delete("/api/posts/{post_id}/schedule")
-def cancel_post_schedule(post_id: str, db: Session = Depends(get_db)) -> PostResponse:
-    p = db.get(Post, post_id)
-    if not p or p.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Post not found")
+def cancel_post_schedule(
+    post_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> PostResponse:
+    p = get_owned(Post, post_id, user, db)
     if p.status != "scheduled":
         raise HTTPException(status_code=400, detail="Post is not scheduled")
     p.scheduled_at = None

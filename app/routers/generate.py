@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 import app.database as _db_module
 from app.database import get_db
-from app.models import AIVariant, Series
+from app.models import AIVariant, Series, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -311,10 +313,9 @@ def generate_descriptions(
     body: GenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
     if not body.include_images and not body.hint:
         raise HTTPException(status_code=400, detail="Hint is required when not including images")
     if body.include_images and not s.images:
@@ -344,10 +345,9 @@ def generate_full(
     body: GenerateFullRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = get_owned(Series, series_id, user, db)
     if not body.description.strip():
         raise HTTPException(status_code=400, detail="description is required")
     if s.generation_status in ("generating_draft", "generating_full"):
@@ -380,14 +380,13 @@ def delete_variant(
     variant_id: str,
     cascade: bool = False,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
     from sqlalchemy import select as _select
 
     from app.models import Post
 
-    v = db.get(AIVariant, variant_id)
-    if not v or v.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Variant not found")
+    v = get_owned(AIVariant, variant_id, user, db)
 
     used = (
         db.scalar(
@@ -457,10 +456,9 @@ def update_variant_semantic(
     variant_id: str,
     body: AIVariantSemanticUpdate,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    v = db.get(AIVariant, variant_id)
-    if not v:
-        raise HTTPException(status_code=404, detail="AIVariant not found")
+    v = get_owned(AIVariant, variant_id, user, db)
     if body.instagram_seo is not None:
         v.instagram_seo = body.instagram_seo or None
     if body.pinterest_title is not None:

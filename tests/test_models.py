@@ -26,7 +26,7 @@ def test_series_defaults():
 
 def test_collection_model():
     db = _TestingSessionLocal()
-    c = models.Collection(name="Cycle One")
+    c = models.Collection(name="Cycle One", user_id=_owner_id(db))
     db.add(c)
     db.commit()
     db.refresh(c)

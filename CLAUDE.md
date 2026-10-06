@@ -33,12 +33,15 @@ uv run uvicorn app.main:app --reload
 
 ```
 app/
+  ownership.py     — get_owned(Model, id, user, db): the only way routers resolve client-supplied IDs (404 for other users' / soft-deleted rows)
   main.py          — FastAPI app, router wiring, static files, lifespan, session auth middleware, landing page (cached at startup)
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations(), settings bootstrap
   models.py        — Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
   schemas.py       — Pydantic request/response types incl. TrashSeries/TrashImage/TrashResponse
   config.py        — AppConfig (DATABASE_URL, DATA_DIR, DEBUG, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, SCHEDULER_SECRET, BACKUP_TOKEN, FAKE_POSTING, FAKE_AI, LOCAL_STORAGE, etc.)
   routers/
+    collections.py — Collection CRUD, scoped to the calling user
+    image_ai_fix.py — Fix with AI: preview / keep / discard temp image
     series.py      — CRUD + list + delete (soft); canonical serializers series_to_detail/image_to_resp
     images.py      — upload, register, reorder, move, PATCH status, DELETE (soft)
     generate.py    — AI description generation (include_images flag)
@@ -62,7 +65,7 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 29 migrations (001–029); latest: 029_telegram_stories.py
+  versions/        — 36 migrations (001–036); latest: 036_collection_user_id.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -100,6 +103,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 ## API conventions
 
 - All series/image endpoints are under `app/routers/` with FastAPI `APIRouter`
+- Routers never `db.get()` a client-supplied ID. Resolve with `get_owned(Model, id, user, db)` from `app/ownership.py`; Trash passes `include_deleted=True`.
 - `series_to_detail(s, db)` and `image_to_resp(img, base_url)` in `app/routers/series.py` are the canonical serializers — import them where needed. Note: `series_to_detail` takes the SQLAlchemy session `db` (not a base URL string) — it fetches settings internally.
 - `get_or_create_settings(db)` in `app/routers/settings.py` is the way to access settings in any router
 - `DELETE /api/images/{id}` returns the updated `SeriesDetail` (soft deletes and refreshes in one call)
