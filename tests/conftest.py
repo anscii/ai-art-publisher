@@ -147,3 +147,18 @@ def mock_storage():
 def auth_config(monkeypatch):
     monkeypatch.setattr(AppConfig, "auth_username", "admin")
     monkeypatch.setattr(AppConfig, "auth_password", "hunter2")
+
+
+def login_as(client, db, email="me@example.com", google_sub="g-me", is_admin=False):
+    """Create a user (non-admin by default) and log the TestClient in as them via session cookie."""
+    from app.config import get_config
+    from app.models import User
+    from app.routers.auth import COOKIE_NAME, create_user_session_token
+
+    u = User(email=email, google_sub=google_sub, is_admin=is_admin)
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    token = create_user_session_token(get_config().session_secret, u.id)
+    client.cookies.set(COOKIE_NAME, token)
+    return u

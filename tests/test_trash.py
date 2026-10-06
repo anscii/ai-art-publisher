@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from app.models import AIVariant, Image, Series, User
+from app.models import AIVariant, Image, Series
+from app.routers.auth import _get_or_create_local_user
 
 
 def _now():
@@ -9,12 +10,8 @@ def _now():
 
 
 def _owner(db):
-    owner = db.query(User).filter(User.email == "fixture-owner@example.com").first()
-    if not owner:
-        owner = User(email="fixture-owner@example.com", google_sub="g-fixture")
-        db.add(owner)
-        db.flush()
-    return owner
+    # The user the unauthenticated TestClient acts as.
+    return _get_or_create_local_user(db)
 
 
 def _series(db, title="S", deleted=False):

@@ -5,7 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AIVariant, Image, Series
+from app.models import AIVariant, Image, Series, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user
 from app.routers.settings import get_or_create_settings
 from app.schemas import TrashImage, TrashResponse, TrashSeries, TrashVariant
 from app.services.storage import get_public_base_url, get_storage_from_settings
@@ -16,19 +18,23 @@ router = APIRouter(prefix="/api/trash", tags=["trash"])
 
 
 @router.get("")
-def get_trash(db: Session = Depends(get_db)) -> TrashResponse:
+def get_trash(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> TrashResponse:
     settings = get_or_create_settings(db)
     base_url = get_public_base_url(settings)
 
     del_series = db.scalars(
-        select(Series).where(Series.deleted_at.isnot(None)).order_by(Series.deleted_at.desc())
+        select(Series)
+        .where(Series.deleted_at.isnot(None), Series.user_id == user.id)
+        .order_by(Series.deleted_at.desc())
     ).all()
 
     del_images = db.scalars(
         select(Image)
         .where(Image.deleted_at.isnot(None))
         .join(Series, Image.series_id == Series.id)
-        .where(Series.deleted_at.is_(None))
+        .where(Series.deleted_at.is_(None), Series.user_id == user.id)
         .order_by(Image.deleted_at.desc())
     ).all()
 
@@ -36,7 +42,7 @@ def get_trash(db: Session = Depends(get_db)) -> TrashResponse:
         select(AIVariant)
         .where(AIVariant.deleted_at.isnot(None))
         .join(Series, AIVariant.series_id == Series.id)
-        .where(Series.deleted_at.is_(None))
+        .where(Series.deleted_at.is_(None), Series.user_id == user.id)
         .order_by(AIVariant.deleted_at.desc())
     ).all()
 
@@ -80,50 +86,60 @@ def get_trash(db: Session = Depends(get_db)) -> TrashResponse:
 
 
 @router.post("/series/{series_id}/restore")
-def restore_series(series_id: str, db: Session = Depends(get_db)) -> dict:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Not found")
+def restore_series(
+    series_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    s = get_owned(Series, series_id, user, db, include_deleted=True)
     s.deleted_at = None
     db.commit()
     return {"restored": series_id}
 
 
 @router.post("/images/{image_id}/restore")
-def restore_image(image_id: str, db: Session = Depends(get_db)) -> dict:
-    img = db.get(Image, image_id)
-    if not img:
-        raise HTTPException(status_code=404, detail="Not found")
+def restore_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    img = get_owned(Image, image_id, user, db, include_deleted=True)
     img.deleted_at = None
     db.commit()
     return {"restored": image_id}
 
 
 @router.post("/variants/{variant_id}/restore")
-def restore_variant(variant_id: str, db: Session = Depends(get_db)) -> dict:
-    v = db.get(AIVariant, variant_id)
-    if not v:
-        raise HTTPException(status_code=404, detail="Not found")
+def restore_variant(
+    variant_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    v = get_owned(AIVariant, variant_id, user, db, include_deleted=True)
     v.deleted_at = None
     db.commit()
     return {"restored": variant_id}
 
 
 @router.delete("/variants/{variant_id}")
-def permanently_delete_variant(variant_id: str, db: Session = Depends(get_db)) -> dict:
-    v = db.get(AIVariant, variant_id)
-    if not v:
-        raise HTTPException(status_code=404, detail="Not found")
+def permanently_delete_variant(
+    variant_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    v = get_owned(AIVariant, variant_id, user, db, include_deleted=True)
     db.delete(v)
     db.commit()
     return {"deleted": variant_id}
 
 
 @router.delete("/series/{series_id}")
-def permanently_delete_series(series_id: str, db: Session = Depends(get_db)) -> dict:
-    s = db.get(Series, series_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Not found")
+def permanently_delete_series(
+    series_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    s = get_owned(Series, series_id, user, db, include_deleted=True)
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
     for img in s.images:
@@ -147,10 +163,12 @@ def permanently_delete_series(series_id: str, db: Session = Depends(get_db)) -> 
 
 
 @router.delete("/images/{image_id}")
-def permanently_delete_image(image_id: str, db: Session = Depends(get_db)) -> dict:
-    img = db.get(Image, image_id)
-    if not img:
-        raise HTTPException(status_code=404, detail="Not found")
+def permanently_delete_image(
+    image_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    img = get_owned(Image, image_id, user, db, include_deleted=True)
     settings = get_or_create_settings(db)
     try:
         get_storage_from_settings(settings).delete(img.r2_key)
@@ -163,20 +181,22 @@ def permanently_delete_image(image_id: str, db: Session = Depends(get_db)) -> di
 
 
 @router.delete("")
-def empty_trash(db: Session = Depends(get_db)) -> dict:
+def empty_trash(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     settings = get_or_create_settings(db)
-    del_series = db.scalars(select(Series).where(Series.deleted_at.isnot(None))).all()
+    del_series = db.scalars(
+        select(Series).where(Series.deleted_at.isnot(None), Series.user_id == user.id)
+    ).all()
     del_images = db.scalars(
         select(Image)
         .where(Image.deleted_at.isnot(None))
         .join(Series, Image.series_id == Series.id)
-        .where(Series.deleted_at.is_(None))
+        .where(Series.deleted_at.is_(None), Series.user_id == user.id)
     ).all()
     del_variants = db.scalars(
         select(AIVariant)
         .where(AIVariant.deleted_at.isnot(None))
         .join(Series, AIVariant.series_id == Series.id)
-        .where(Series.deleted_at.is_(None))
+        .where(Series.deleted_at.is_(None), Series.user_id == user.id)
     ).all()
     logger.info(
         "Ready to delete %s series, %s images, %s variants",

@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Image
+from app.models import Image, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user, require_admin
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import AIFixKeepRequest, AIFixPreviewResponse, AIFixRequest, SeriesDetail
@@ -14,7 +16,10 @@ from app.services.ai.catalogue import DEFAULT_IMAGE_EDIT_MODEL, image_edit_provi
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.image_ai_fix")
-router = APIRouter(tags=["image_ai_fix"])
+router = APIRouter(
+    tags=["image_ai_fix"],
+    dependencies=[Depends(require_admin)],  # stopgap-1b: lift in #2
+)
 
 _TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
 _ALLOWED_EXTS = {"png", "jpg", "jpeg"}
@@ -30,6 +35,7 @@ def _content_type_from_key(key: str) -> str:
 def ai_fix_discard(
     temp_key: str,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> None:
     if not _TEMP_KEY_RE.match(temp_key):
         raise HTTPException(status_code=400, detail="Invalid temp_key")
@@ -43,10 +49,9 @@ def ai_fix_preview(
     image_id: str,
     body: AIFixRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> AIFixPreviewResponse:
-    img = db.get(Image, image_id)
-    if not img or img.deleted_at:
-        raise HTTPException(status_code=404, detail="Image not found")
+    img = get_owned(Image, image_id, user, db)
 
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
@@ -102,13 +107,12 @@ def ai_fix_keep(
     image_id: str,
     body: AIFixKeepRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
     if not _TEMP_KEY_RE.match(body.temp_key):
         raise HTTPException(status_code=400, detail="Invalid temp_key")
 
-    img = db.get(Image, image_id)
-    if not img or img.deleted_at:
-        raise HTTPException(status_code=404, detail="Image not found")
+    img = get_owned(Image, image_id, user, db)
 
     series = img.series
     settings = get_or_create_settings(db)

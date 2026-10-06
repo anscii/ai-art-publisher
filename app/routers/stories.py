@@ -13,7 +13,9 @@ import app.database as _db_module
 from app.config import get_config
 from app.database import get_db
 from app.enums import Platform
-from app.models import Image, Post, Story, StoryFrame
+from app.models import Image, Post, Story, StoryFrame, User
+from app.ownership import get_owned
+from app.routers.auth import get_current_user, require_admin
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
     StoryCreateRequest,
@@ -151,28 +153,17 @@ def _story_to_resp(story: Story) -> StoryResponse:
     )
 
 
-def _get_story_or_404(story_id: str, db: Session) -> Story:
-    story = db.get(Story, story_id)
-    if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
-    return story
-
-
-def _get_frame_or_404(frame_id: str, db: Session) -> StoryFrame:
-    frame = db.get(StoryFrame, frame_id)
-    if not frame:
-        raise HTTPException(status_code=404, detail="Story frame not found")
-    return frame
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
 @router.post("/api/posts/{post_id}/stories", response_model=StoryResponse)
-def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(get_db)):
-    post = db.get(Post, post_id)
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
+def create_story(
+    post_id: str,
+    body: StoryCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    post = get_owned(Post, post_id, user, db)
     if post.platform not in (Platform.instagram, Platform.telegram):
         raise HTTPException(
             status_code=400,
@@ -234,13 +225,18 @@ def create_story(post_id: str, body: StoryCreateRequest, db: Session = Depends(g
 
 
 @router.get("/api/stories/{story_id}", response_model=StoryResponse)
-def get_story(story_id: str, db: Session = Depends(get_db)):
-    return _story_to_resp(_get_story_or_404(story_id, db))
+def get_story(story_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return _story_to_resp(get_owned(Story, story_id, user, db))
 
 
 @router.patch("/api/stories/{story_id}", response_model=StoryResponse)
-def patch_story(story_id: str, body: StoryUpdate, db: Session = Depends(get_db)):
-    story = _get_story_or_404(story_id, db)
+def patch_story(
+    story_id: str,
+    body: StoryUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    story = get_owned(Story, story_id, user, db)
     if "link_area" in body.model_fields_set:
         story.link_area_json = json.dumps(body.link_area) if body.link_area else None
     story.updated_at = datetime.now(UTC).replace(tzinfo=None)
@@ -250,8 +246,13 @@ def patch_story(story_id: str, body: StoryUpdate, db: Session = Depends(get_db))
 
 
 @router.patch("/api/story-frames/{frame_id}", response_model=StoryResponse)
-def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(get_db)):
-    frame = _get_frame_or_404(frame_id, db)
+def update_frame(
+    frame_id: str,
+    body: StoryFrameUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    frame = get_owned(StoryFrame, frame_id, user, db)
     story = frame.story
 
     content_fields = {
@@ -266,6 +267,11 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
         "font_size",
     }
     changes = body.model_dump(exclude_unset=True)
+    iid = changes.get("source_image_id")
+    if iid is not None:
+        img = get_owned(Image, iid, user, db)
+        if img.series_id != story.post.series_id:
+            raise HTTPException(status_code=400, detail="Image not in this story's series")
     for field, value in changes.items():
         setattr(frame, field, value)
     content_changed = bool(changes.keys() & content_fields)
@@ -285,8 +291,13 @@ def update_frame(frame_id: str, body: StoryFrameUpdate, db: Session = Depends(ge
 
 
 @router.post("/api/stories/{story_id}/reorder", response_model=StoryResponse)
-def reorder_frames(story_id: str, body: StoryReorderRequest, db: Session = Depends(get_db)):
-    story = _get_story_or_404(story_id, db)
+def reorder_frames(
+    story_id: str,
+    body: StoryReorderRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    story = get_owned(Story, story_id, user, db)
     frame_map = {f.id: f for f in story.frames}
 
     if set(body.frame_ids) != set(frame_map.keys()):
@@ -304,8 +315,10 @@ def reorder_frames(story_id: str, body: StoryReorderRequest, db: Session = Depen
 
 
 @router.post("/api/stories/{story_id}/frames", response_model=StoryResponse)
-def add_text_frame(story_id: str, db: Session = Depends(get_db)):
-    story = _get_story_or_404(story_id, db)
+def add_text_frame(
+    story_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    story = get_owned(Story, story_id, user, db)
 
     frames_sorted = sorted(story.frames, key=lambda f: f.position)
     last_frame = frames_sorted[-1] if frames_sorted else None
@@ -350,10 +363,12 @@ def add_text_frame(story_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/stories/{story_id}/render", response_model=StoryResponse)
-def render_story(story_id: str, db: Session = Depends(get_db)):
+def render_story(
+    story_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
     from app.services.story_renderer import StoryRenderer
 
-    story = _get_story_or_404(story_id, db)
+    story = get_owned(Story, story_id, user, db)
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
 
@@ -566,8 +581,9 @@ def publish_story(
     story_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #5
 ):
-    story = _get_story_or_404(story_id, db)
+    story = get_owned(Story, story_id, user, db)
 
     enabled_frames = [f for f in story.frames if f.is_enabled]
     if not enabled_frames:

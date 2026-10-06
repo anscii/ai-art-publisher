@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import AIVariant, Image, Post, PostImage, Series, Story, User
+from app.models import AIVariant, Collection, Image, Post, PostImage, Series, Story, User
+from app.ownership import get_owned
 from app.routers.auth import get_current_user
 from app.routers.posts import post_to_resp
 from app.routers.settings import get_or_create_settings
@@ -145,17 +146,6 @@ def series_to_list_item(s: Series, base_url: str) -> SeriesListItem:
     )
 
 
-def get_owned_series(series_id: str, user: User, db: Session) -> Series:
-    series = (
-        db.query(Series)
-        .filter(Series.id == series_id, Series.user_id == user.id, Series.deleted_at.is_(None))
-        .first()
-    )
-    if not series:
-        raise HTTPException(status_code=404, detail="Series not found")
-    return series
-
-
 def _assign_collection_index(s: Series, new_cid: str | None, db: Session) -> None:
     old_cid = s.collection_id
     if new_cid == old_cid:
@@ -263,7 +253,7 @@ def save_queue(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = get_owned_series(series_id, user, db)
+    s = get_owned(Series, series_id, user, db)
     selected = set(body.image_ids)
     for img in s.images:
         if img.deleted_at or img.status in ("posted", "skip"):
@@ -280,7 +270,7 @@ def get_generation_status(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    s = get_owned_series(series_id, user, db)
+    s = get_owned(Series, series_id, user, db)
     if s.generation_status in ("generating_draft", "generating_full"):
         response.status_code = 202
     return {"generation_status": s.generation_status, "generation_error": s.generation_error}
@@ -292,7 +282,7 @@ def get_series(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = get_owned_series(series_id, user, db)
+    s = get_owned(Series, series_id, user, db)
     return series_to_detail(s, db)
 
 
@@ -303,8 +293,14 @@ def update_series(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    s = get_owned_series(series_id, user, db)
+    s = get_owned(Series, series_id, user, db)
     updates = body.model_dump(exclude_unset=True)
+    if updates.get("collection_id") is not None:
+        get_owned(Collection, updates["collection_id"], user, db)
+    if updates.get("chosen_variant_id") is not None and updates["chosen_variant_id"] not in {
+        v.id for v in s.ai_variants
+    }:
+        raise HTTPException(status_code=400, detail="Variant not in series")
     if "collection_id" in updates:
         _assign_collection_index(s, updates["collection_id"], db)
     for field, value in updates.items():
@@ -322,7 +318,7 @@ def delete_series(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    s = get_owned_series(series_id, user, db)
+    s = get_owned(Series, series_id, user, db)
     s.deleted_at = datetime.now(UTC)
     db.commit()
     return {"deleted": series_id}
