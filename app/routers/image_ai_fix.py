@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Image, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import AIFixKeepRequest, AIFixPreviewResponse, AIFixRequest, SeriesDetail
@@ -16,7 +16,10 @@ from app.services.ai.catalogue import DEFAULT_IMAGE_EDIT_MODEL, image_edit_provi
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.image_ai_fix")
-router = APIRouter(tags=["image_ai_fix"])
+router = APIRouter(
+    tags=["image_ai_fix"],
+    dependencies=[Depends(require_admin)],  # stopgap-1b: lift in #2
+)
 
 _TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
 _ALLOWED_EXTS = {"png", "jpg", "jpeg"}

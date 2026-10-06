@@ -188,6 +188,11 @@ async def login(
     return resp
 
 
+@router.get("/api/me")
+def me(user: User = Depends(get_current_user)) -> dict:
+    return {"email": user.email, "is_admin": user.is_admin}
+
+
 @router.get("/auth/logout", include_in_schema=False)
 async def logout():
     resp = RedirectResponse("/", status_code=303)

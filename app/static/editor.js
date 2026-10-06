@@ -443,6 +443,7 @@ function buildThumb(img, seriesId, orderNum) {
   dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
   const fixLi = document.createElement('li');
+  fixLi.className = 'admin-only';
   const fixA = h('a', { cls: 'dropdown-item small', href: '#' });
   fixA.appendChild(icon('bi bi-magic me-1'));
   fixA.appendChild(document.createTextNode('Fix with AI'));
@@ -1460,7 +1461,7 @@ function buildGenerateCard(seriesId) {
   const errorLog  = h('div', { cls: 'collapse', id: 'genErrorLog' }, errorList);
   const errorDiv  = h('div', { cls: 'alert alert-danger small py-1 px-2 mt-2 mb-0 d-none', id: 'genError' });
 
-  return h('section', { cls: 'px-4 pb-4' },
+  return h('section', { cls: 'px-4 pb-4 admin-only' },
     h('div', { cls: 'aap-card aap-card--gen' },
       h('div', { cls: 'aap-panel-head' },
         h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent', text: '\u2736 Generate' }),
@@ -1975,14 +1976,14 @@ function buildPostRow(post, imgMap, series) {
   actions.appendChild(viewBtn);
 
   if (post.status !== 'posted' && post.status !== 'sending') {
-    const postNowBtn = h('button', { cls: 'aap-icon-btn', title: 'Post now', 'aria-label': 'Post now' },
+    const postNowBtn = h('button', { cls: 'aap-icon-btn admin-only', title: 'Post now', 'aria-label': 'Post now' },
       icon('bi bi-send'));
     postNowBtn.addEventListener('click', () => postNow(post.id));
     actions.appendChild(postNowBtn);
   }
 
   if (post.status === 'draft' || post.status === 'failed') {
-    const schedBtn = h('button', { cls: 'aap-icon-btn', title: 'Schedule', 'aria-label': 'Schedule' },
+    const schedBtn = h('button', { cls: 'aap-icon-btn admin-only', title: 'Schedule', 'aria-label': 'Schedule' },
       icon('bi bi-calendar-plus'));
     schedBtn.addEventListener('click', () => {
       const pickerId = 'sched-picker-' + post.id;
@@ -2184,7 +2185,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     collLineRuInput.value = num ? `◈ ${nameRu} — ${num}` : `◈ ${nameRu}`;
   }
 
-  const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2', id: 'pf_sched' });
+  const schedInput = h('input', { type: 'datetime-local', cls: 'form-control form-control-sm mb-2 admin-only', id: 'pf_sched' });
 
   // ── Shared payload builder ────────────────────────────────────────────────
   function _buildCreatePayload() {
@@ -2230,7 +2231,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
   });
 
   // ── Save & send ───────────────────────────────────────────────────────────
-  const saveAndSendBtn = h('button', { cls: 'btn btn-sm btn-success me-1' });
+  const saveAndSendBtn = h('button', { cls: 'btn btn-sm btn-success me-1 admin-only' });
   saveAndSendBtn.appendChild(icon('bi bi-send-fill me-1'));
   saveAndSendBtn.appendChild(document.createTextNode('Save & send'));
   saveAndSendBtn.addEventListener('click', async () => {
@@ -2267,7 +2268,7 @@ function buildCreatePostForm(series, imgMap, onClose) {
     h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Select images' }), imgGrid,
     h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Platforms' }), platformRow,
     enBlock, ruBlock,
-    h('div', { cls: 'small text-muted mb-1 fw-medium', text: 'Schedule (optional)' }),
+    h('div', { cls: 'small text-muted mb-1 fw-medium admin-only', text: 'Schedule (optional)' }),
     schedInput,
     h('div', null, saveBtn, saveAndSendBtn, cancelBtn));
 }
@@ -2903,7 +2904,7 @@ function _renderStoryEditorV2(body) {
     }
   });
 
-  const publishBtn = h('button', { cls: 'va__btn', text: 'Publish Stories', 'data-story-publish-btn': story.id });
+  const publishBtn = h('button', { cls: 'va__btn admin-only', text: 'Publish Stories', 'data-story-publish-btn': story.id });
   publishBtn.disabled = story.status !== 'rendered' && story.status !== 'failed';
   publishBtn.addEventListener('click', async () => {
     publishBtn.disabled = true;

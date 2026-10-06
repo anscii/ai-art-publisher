@@ -15,7 +15,7 @@ from app.database import get_db
 from app.enums import Platform
 from app.models import Image, Post, Story, StoryFrame, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
     StoryCreateRequest,
@@ -581,7 +581,7 @@ def publish_story(
     story_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #5
 ):
     story = get_owned(Story, story_id, user, db)
 

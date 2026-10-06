@@ -45,7 +45,7 @@ app/
     series.py      — CRUD + list + delete (soft); canonical serializers series_to_detail/image_to_resp
     images.py      — upload, register, reorder, move, PATCH status, DELETE (soft)
     generate.py    — AI description generation (include_images flag)
-    auth.py        — POST /auth/login, GET /auth/logout; session token helpers
+    auth.py        — POST /auth/login, GET /auth/logout; session token helpers; `get_current_user` / `require_admin` deps; GET /api/me
     posts.py       — create/execute posts; _after_post_success marks queued→posted
     scheduling.py  — schedule/cancel/queue endpoints
     settings.py    — AppSettings CRUD + connection test
@@ -108,6 +108,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - `get_or_create_settings(db)` in `app/routers/settings.py` is the way to access settings in any router
 - `DELETE /api/images/{id}` returns the updated `SeriesDetail` (soft deletes and refreshes in one call)
 - `PATCH /api/images/{id}/status` returns the updated `SeriesDetail`
+- Routes that use the Owner's AI keys or posting tokens take `Depends(require_admin)` and carry a `# stopgap-1b: lift in #N` comment; `tests/test_admin_gate.py::GATE_INVENTORY` lists them and must be edited when a gate is lifted
 
 ## Frontend conventions
 
@@ -117,6 +118,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - `App` global holds state: `series`, `currentSeries`, `activeStatuses`, etc.
 - `apiFetch(method, path, body)` — API wrapper with error handling
 - `showToast(msg, type)` / `showConfirm(message, onOk)` — UI utilities in `app.js`
+- `App.user` — `{email, is_admin}` from `GET /api/me`; sets `body.is-admin`. Class `admin-only` hides an element unless the body has `is-admin` (rule in `aap/app.css`) — presentation only, the backend 403 is the guard
 - `updateSeriesItem(series)` — refreshes a single series card in the left list
 - `loadSeriesDetail(id)` — reloads and re-renders the full editor panel
 - `showView(view)` — switches between `'editor'`, `'queue'`, `'trash'`, `'list'` (mobile)

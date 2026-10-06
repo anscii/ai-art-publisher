@@ -599,7 +599,7 @@ async function refreshQueue() {
         platformPill,
         h('div', { cls: 'd-flex align-items-center gap-1' },
           (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Edit post', 'aria-label': 'Edit post' }, icon('bi bi-pencil')); b.addEventListener('click', () => _openQueueEditPost(item.post_id, item.series_id, dataRow)); return b; })(),
-          (() => { const b = h('button', { cls: 'aap-icon-btn', title: 'Reschedule', 'aria-label': 'Reschedule' }, icon('bi bi-calendar-plus')); b.addEventListener('click', () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow)); return b; })(),
+          (() => { const b = h('button', { cls: 'aap-icon-btn admin-only', title: 'Reschedule', 'aria-label': 'Reschedule' }, icon('bi bi-calendar-plus')); b.addEventListener('click', () => _openQueueEdit(item.post_id, item.scheduled_at, dataRow)); return b; })(),
           h('button', { cls: 'btn aap-btn aap-btn--sm aap-btn-danger', text: 'Cancel', onclick: () => cancelPostScheduleItem(item.post_id) })));
       table.appendChild(dataRow);
     });
@@ -1114,6 +1114,7 @@ function toggleTheme() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  apiFetch('GET', '/api/me').then(u => { App.user = u; document.body.classList.toggle('is-admin', !!u.is_admin); }).catch(() => {});
   apiFetch('GET', '/api/settings/providers').then(d => { PROVIDER_MODELS = d; }).catch(() => {});
   apiFetch('GET', '/api/collections').then(data => { App.collections = data; _populateCollectionFilter(); }).catch(() => {});
   initLightbox();

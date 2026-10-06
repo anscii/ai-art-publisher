@@ -11,7 +11,7 @@ import app.database as _db_module
 from app.database import get_db
 from app.models import AIVariant, Series, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -313,7 +313,7 @@ def generate_descriptions(
     body: GenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #2
 ) -> SeriesDetail:
     s = get_owned(Series, series_id, user, db)
     if not body.include_images and not body.hint:
@@ -345,7 +345,7 @@ def generate_full(
     body: GenerateFullRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # stopgap-1b: lift in #2
 ) -> SeriesDetail:
     s = get_owned(Series, series_id, user, db)
     if not body.description.strip():

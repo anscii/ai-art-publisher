@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Image, Series, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_admin
 from app.routers.series import image_to_resp, series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.schemas import (
@@ -77,7 +77,7 @@ def register_image(
     series_id: str,
     body: RegisterImageBody,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),  # admin-only: accepts an arbitrary r2_key (import script)
 ):
     s = get_owned(Series, series_id, user, db)
     img = Image(
