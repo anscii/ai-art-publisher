@@ -7,17 +7,15 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AIVariant, AppSettings, Series
-from app.routers.auth import require_admin
+from app.models import AIVariant, AppSettings, Series, User
+from app.routers.auth import get_current_user, require_admin
 from app.schemas import AIProviderModelStat, AIStatsResponse, SettingsUpdate
-from app.services.ai.catalogue import IMAGE_EDIT_MODELS, PROVIDER_MODELS
 
-# ponytail: whole-router admin gate is the #1b stopgap; relax per-route once settings go per-user (#2)
-_admin_only = [Depends(require_admin)]
-router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=_admin_only)
-stats_router = APIRouter(prefix="/api/stats", tags=["stats"], dependencies=_admin_only)
+# ponytail: instance settings stay admin-only until posting creds go per-user (#5)
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_admin)])
+stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
 
-_SECRET_FIELDS = {
+SECRET_FIELDS = {
     "anthropic_api_key",
     "openai_api_key",
     "google_api_key",
@@ -44,18 +42,13 @@ def get_or_create_settings(db: Session) -> AppSettings:
     return s
 
 
-def _mask(field: str, value: str) -> str:
-    return "****" if field in _SECRET_FIELDS and value else value
+def mask(field: str, value: str) -> str:
+    return "****" if field in SECRET_FIELDS and value else value
 
 
 def _to_dict(s: AppSettings) -> dict:
     fields = [c.key for c in AppSettings.__table__.columns if c.key != "id"]
-    return {f: _mask(f, getattr(s, f)) for f in fields}
-
-
-@router.get("/providers")
-def get_providers() -> dict:
-    return {**PROVIDER_MODELS, "image_edit": IMAGE_EDIT_MODELS}
+    return {f: mask(f, getattr(s, f)) for f in fields}
 
 
 @router.get("")
@@ -82,10 +75,6 @@ def test_connection(service: str, db: Session = Depends(get_db)) -> dict:
             s.facebook_page_access_token, s.facebook_page_id
         ),
         "pinterest": lambda: _test_pinterest(s.pinterest_access_token),
-        "anthropic": lambda: _test_anthropic(s.anthropic_api_key),
-        "openai": lambda: _test_openai(s.openai_api_key),
-        "google": lambda: _test_google(s.google_api_key),
-        "deepseek": lambda: _test_deepseek(s.deepseek_api_key),
         "openrouter": lambda: _test_openrouter(s.openrouter_api_key),
         "r2": lambda: _test_r2(s),
     }
@@ -206,13 +195,18 @@ def _test_openrouter(key: str) -> dict:
 @stats_router.get("/ai", response_model=AIStatsResponse)
 def get_ai_stats(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
     range: str = Query("all", pattern="^(all|week)$"),
 ):
     since: datetime | None = None
     if range == "week":
         since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
 
-    base_q = db.query(AIVariant).filter(AIVariant.deleted_at.is_(None))
+    base_q = (
+        db.query(AIVariant)
+        .join(Series, Series.id == AIVariant.series_id)
+        .filter(AIVariant.deleted_at.is_(None), Series.user_id == user.id)
+    )
     if since is not None:
         base_q = base_q.filter(AIVariant.generated_at >= since)
 
@@ -229,7 +223,7 @@ def get_ai_stats(
     )
     chosen_q = (
         db.query(AIVariant.provider, AIVariant.model, func.count().label("count"))
-        .filter(AIVariant.deleted_at.is_(None))
+        .filter(AIVariant.deleted_at.is_(None), Series.user_id == user.id)
         .join(Series, Series.chosen_variant_id == AIVariant.id)
     )
     if since is not None:

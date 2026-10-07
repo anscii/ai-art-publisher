@@ -16,12 +16,7 @@ _POST_BODY = {
 }
 
 GATED = [
-    ("POST", "/api/series/{series_id}/generate", {}),
-    ("POST", "/api/series/{series_id}/generate-full", {"description": "d"}),
     ("POST", "/api/series/{series_id}/images/register", {"r2_key": "k", "original_filename": "f"}),
-    ("POST", "/api/images/{image_id}/ai-fix", {"hint": "h"}),
-    ("POST", "/api/images/{image_id}/ai-fix/keep", {"temp_key": "tmp/" + "0" * 36 + ".png"}),
-    ("DELETE", "/api/images/ai-fix/tmp?temp_key=tmp/" + "0" * 36 + ".png", None),
     ("POST", "/api/posts/{post_id}/post", None),
     ("POST", "/api/posts/{post_id}/schedule", {"datetime_utc": "2030-01-01T00:00:00Z"}),
     ("DELETE", "/api/posts/{post_id}/schedule", None),
@@ -31,18 +26,11 @@ GATED = [
 # Lifting a stopgap in #2 / #5 must edit this set on purpose.
 GATE_INVENTORY = frozenset(
     {
-        ("DELETE", "/api/images/ai-fix/tmp"),
         ("DELETE", "/api/posts/{post_id}/schedule"),
         ("GET", "/api/settings"),
         ("GET", "/api/settings/pinterest/boards"),
-        ("GET", "/api/settings/providers"),
-        ("GET", "/api/stats/ai"),
-        ("POST", "/api/images/{image_id}/ai-fix"),
-        ("POST", "/api/images/{image_id}/ai-fix/keep"),
         ("POST", "/api/posts/{post_id}/post"),
         ("POST", "/api/posts/{post_id}/schedule"),
-        ("POST", "/api/series/{series_id}/generate"),
-        ("POST", "/api/series/{series_id}/generate-full"),
         ("POST", "/api/series/{series_id}/images/register"),
         ("POST", "/api/settings/test/{service}"),
         ("POST", "/api/stories/{story_id}/publish"),

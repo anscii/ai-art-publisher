@@ -44,13 +44,6 @@ def _bootstrap_settings(db):
         db.add(s)
     env_map = {
         "invite_code": "INVITE_CODE",
-        "anthropic_api_key": "ANTHROPIC_API_KEY",
-        "openai_api_key": "OPENAI_API_KEY",
-        "google_api_key": "GOOGLE_API_KEY",
-        "default_provider": "DEFAULT_PROVIDER",
-        "anthropic_default_model": "ANTHROPIC_DEFAULT_MODEL",
-        "openai_default_model": "OPENAI_DEFAULT_MODEL",
-        "google_default_model": "GOOGLE_DEFAULT_MODEL",
         "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
         "telegram_channel_id": "TELEGRAM_CHANNEL_ID",
         "instagram_access_token": "INSTAGRAM_ACCESS_TOKEN",

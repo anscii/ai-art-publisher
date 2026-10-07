@@ -24,6 +24,7 @@ from app.routers import series as series_router
 from app.routers import settings as settings_router
 from app.routers import stories as stories_router
 from app.routers import trash as trash_router
+from app.routers import user_settings as user_settings_router
 from app.routers.auth import auth_enabled, is_authenticated
 
 
@@ -161,6 +162,7 @@ app.include_router(auth_router.router)
 app.include_router(backup_router.router)
 app.include_router(settings_router.router)
 app.include_router(settings_router.stats_router)
+app.include_router(user_settings_router.router)
 app.include_router(collections_router.router)
 app.include_router(series_router.router)
 app.include_router(image_ai_fix_router.router)

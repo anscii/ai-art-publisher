@@ -11,9 +11,10 @@ import app.database as _db_module
 from app.database import get_db
 from app.models import AIVariant, Series, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user, require_admin
+from app.routers.auth import get_current_user
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
+from app.routers.user_settings import get_user_settings
 from app.schemas import (
     AIVariantSemanticUpdate,
     GenerateFullRequest,
@@ -21,7 +22,7 @@ from app.schemas import (
     SeriesDetail,
 )
 from app.services.ai.base import AIProvider
-from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
+from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS, PROVIDER_LABEL
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.generate")
@@ -81,13 +82,13 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
-def _get_api_key(settings, provider: str) -> str:
+def _get_api_key(us, provider: str) -> str:
     return {
-        "anthropic": settings.anthropic_api_key,
-        "openai": settings.openai_api_key,
-        "google": settings.google_api_key,
-        "deepseek": settings.deepseek_api_key,
-        "openrouter": settings.openrouter_api_key,
+        "anthropic": us.anthropic_api_key,
+        "openai": us.openai_api_key,
+        "google": us.google_api_key,
+        "deepseek": us.deepseek_api_key,
+        "openrouter": us.openrouter_api_key,
     }.get(provider, "")
 
 
@@ -103,8 +104,9 @@ def _resolve_actual_provider_model(
     return provider_name, actual_model or model
 
 
-def _build_board_context(settings) -> str:
-    if not settings.pinterest_board_map:
+def _build_board_context(settings, user: User) -> str:
+    # stopgap-1b: lift in #5 (board names are the Owner's posting config)
+    if not user.is_admin or not settings.pinterest_board_map:
         return ""
     try:
         _bm = json.loads(settings.pinterest_board_map)
@@ -127,14 +129,15 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
         return
 
     settings = get_or_create_settings(db)
-    provider_name = body_data.get("provider") or settings.default_provider
+    us = get_user_settings(s.user_id, db)
+    provider_name = body_data.get("provider") or us.default_provider
     model = (
         body_data.get("model")
-        or getattr(settings, f"{provider_name}_default_model", None)
+        or getattr(us, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
 
-    api_key = _get_api_key(settings, provider_name)
+    api_key = _get_api_key(us, provider_name)
 
     include_images = body_data.get("include_images", False)
     selected_image_ids = body_data.get("selected_image_ids")
@@ -150,7 +153,7 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
             data = storage.download_bytes(img.r2_key)
             images_b64.append(base64.b64encode(data).decode())
 
-    board_context = _build_board_context(settings)
+    board_context = _build_board_context(settings, s.user)
     hint = body_data.get("hint")
     augmented_hint = (hint or "") + board_context if board_context else hint
 
@@ -202,15 +205,16 @@ def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
         return
 
     settings = get_or_create_settings(db)
-    provider_name = body_data.get("provider") or settings.default_provider
+    us = get_user_settings(s.user_id, db)
+    provider_name = body_data.get("provider") or us.default_provider
     model = (
         body_data.get("model")
-        or getattr(settings, f"{provider_name}_default_model", None)
+        or getattr(us, f"{provider_name}_default_model", None)
         or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
     )
 
-    api_key = _get_api_key(settings, provider_name)
-    board_context = _build_board_context(settings)
+    api_key = _get_api_key(us, provider_name)
+    board_context = _build_board_context(settings, s.user)
     hint = body_data.get("hint")
     augmented_hint = (hint or "") + board_context if board_context else hint
 
@@ -313,7 +317,7 @@ def generate_descriptions(
     body: GenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(require_admin),  # stopgap-1b: lift in #2
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
     s = get_owned(Series, series_id, user, db)
     if not body.include_images and not body.hint:
@@ -323,13 +327,16 @@ def generate_descriptions(
     if s.generation_status in ("generating_draft", "generating_full"):
         raise HTTPException(status_code=409, detail="Generation already in progress")
 
-    settings = get_or_create_settings(db)
-    provider_name = body.provider or settings.default_provider
+    us = get_user_settings(user.id, db)
+    provider_name = body.provider or us.default_provider
     from app.config import get_config
 
-    api_key = _get_api_key(settings, provider_name)
+    api_key = _get_api_key(us, provider_name)
     if not api_key and not get_config().fake_ai:
-        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
+        raise HTTPException(
+            status_code=400,
+            detail=f"No {PROVIDER_LABEL.get(provider_name, provider_name)} key. Add one in Settings.",
+        )
 
     s.generation_status = "generating_draft"
     s.generation_error = None
@@ -345,7 +352,7 @@ def generate_full(
     body: GenerateFullRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(require_admin),  # stopgap-1b: lift in #2
+    user: User = Depends(get_current_user),
 ) -> SeriesDetail:
     s = get_owned(Series, series_id, user, db)
     if not body.description.strip():
@@ -359,13 +366,16 @@ def generate_full(
         if not existing or existing.series_id != series_id:
             raise HTTPException(status_code=404, detail="Variant not found")
 
-    settings = get_or_create_settings(db)
-    provider_name = body.provider or settings.default_provider
+    us = get_user_settings(user.id, db)
+    provider_name = body.provider or us.default_provider
     from app.config import get_config
 
-    api_key = _get_api_key(settings, provider_name)
+    api_key = _get_api_key(us, provider_name)
     if not api_key and not get_config().fake_ai:
-        raise HTTPException(status_code=400, detail=f"API key for {provider_name} not configured")
+        raise HTTPException(
+            status_code=400,
+            detail=f"No {PROVIDER_LABEL.get(provider_name, provider_name)} key. Add one in Settings.",
+        )
 
     s.generation_status = "generating_full"
     s.generation_error = None
