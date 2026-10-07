@@ -22,7 +22,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routers.generate import _get_api_key, get_provider  # noqa: E402
+from app.routers.generate import get_provider  # noqa: E402
+from app.services.ai.access import own_key  # noqa: E402
 from app.services.ai.catalogue import PROVIDER_MODELS  # noqa: E402
 from scripts._utils import FakeSettings  # noqa: E402
 
@@ -188,7 +189,7 @@ def main() -> None:
     for provider, models in PROVIDER_MODELS.items():
         if args.providers and provider not in args.providers:
             continue
-        key = _get_api_key(settings, provider)
+        key = own_key(settings, provider)
         if not key:
             print(
                 f"[skip] {provider}: no API key (set {provider.upper()}_API_KEY)", file=sys.stderr

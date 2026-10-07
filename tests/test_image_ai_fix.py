@@ -32,7 +32,7 @@ def fake_ai(monkeypatch):
 
 
 class TestAiFixPreview:
-    def test_returns_preview_url_and_temp_key(self, client):
+    def test_returns_preview_url_and_temp_key(self, client, db):
         sid = _make_series(client)
         img_id = _register_image(client, sid)
         storage = _mock_storage()
@@ -43,7 +43,7 @@ class TestAiFixPreview:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["temp_key"].startswith("tmp/")
+        assert data["temp_key"].startswith(f"tmp/{_uid(db)}/")
         assert "preview_url" in data
         storage.download_bytes.assert_called_once()
         storage.upload_bytes.assert_called_once()
@@ -167,24 +167,35 @@ class TestAiFixKeep:
         )
         assert resp.status_code == 400
 
-    def test_404_for_missing_image(self, client):
+    def test_404_for_missing_image(self, client, db):
         resp = client.post(
             "/api/images/nonexistent/ai-fix/keep",
-            json={"temp_key": _VALID_TEMP_KEY},
+            json={"temp_key": _my_temp_key(client, db)},
         )
         assert resp.status_code == 404
 
 
-_VALID_TEMP_KEY = "tmp/12345678-1234-1234-1234-123456789abc.png"
+def _uid(db) -> str:
+    from app.models import User
+
+    return db.query(User).one().id
+
+
+def _my_temp_key(client, db) -> str:
+    from app.models import User
+
+    client.get("/api/me")  # ensures the local user exists
+    return f"tmp/{db.query(User).one().id}/12345678-1234-1234-1234-123456789abc.png"
 
 
 class TestAiFixDiscard:
-    def test_deletes_temp_key(self, client):
+    def test_deletes_temp_key(self, client, db):
+        key = _my_temp_key(client, db)
         storage = _mock_storage()
         with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
-            resp = client.delete(f"/api/images/ai-fix/tmp?temp_key={_VALID_TEMP_KEY}")
+            resp = client.delete(f"/api/images/ai-fix/tmp?temp_key={key}")
         assert resp.status_code == 204
-        storage.delete.assert_called_once_with(_VALID_TEMP_KEY)
+        storage.delete.assert_called_once_with(key)
 
     def test_rejects_non_tmp_key(self, client):
         storage = _mock_storage()
@@ -217,6 +228,7 @@ class TestAiFixNonAdmin:
         from tests.conftest import login_as
 
         u = login_as(client, db)
+        self._uid = u.id
         s = Series(name="mine", user_id=u.id)
         db.add(s)
         db.commit()
@@ -264,7 +276,7 @@ class TestAiFixNonAdmin:
 
     def test_keep_and_discard_not_forbidden(self, client, db):
         img_id = self._setup(client, db)
-        key = "tmp/" + "0" * 36 + ".png"
+        key = f"tmp/{self._uid}/" + "0" * 36 + ".png"
         with patch(
             "app.routers.image_ai_fix.get_storage_from_settings", return_value=_mock_storage()
         ):
@@ -272,3 +284,88 @@ class TestAiFixNonAdmin:
             discard = client.delete(f"/api/images/ai-fix/tmp?temp_key={key}")
         assert keep.status_code == 200
         assert discard.status_code == 204
+
+
+class TestAiFixTempKeyOwnership:
+    def test_other_users_temp_key_rejected(self, client, db):
+        from tests.conftest import login_as
+
+        a = login_as(client, db, "a@example.com", "g-a")
+        key = f"tmp/{a.id}/" + "1" * 36 + ".png"
+        b = login_as(client, db, "b@example.com", "g-b")
+        # B owns an image so only the key can be at fault
+        from app.models import Image, Series
+
+        ser = Series(name="b", user_id=b.id)
+        db.add(ser)
+        db.commit()
+        img = Image(series_id=ser.id, r2_key="images/b.jpg", original_filename="b.jpg")
+        db.add(img)
+        db.commit()
+        img_id = img.id
+        storage = _mock_storage()
+        with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
+            keep = client.post(f"/api/images/{img_id}/ai-fix/keep", json={"temp_key": key})
+            discard = client.delete(f"/api/images/ai-fix/tmp?temp_key={key}")
+        assert keep.status_code == 400
+        assert discard.status_code == 400
+        storage.copy.assert_not_called()
+        storage.delete.assert_not_called()
+
+    def test_old_style_key_rejected(self, client, db):
+        sid = _make_series(client)
+        img_id = _register_image(client, sid)
+        key = "tmp/" + "0" * 36 + ".png"
+        assert (
+            client.post(f"/api/images/{img_id}/ai-fix/keep", json={"temp_key": key}).status_code
+            == 400
+        )
+        assert client.delete(f"/api/images/ai-fix/tmp?temp_key={key}").status_code == 400
+
+
+class TestAiFixLedger:
+    def test_success_records_image_fix_row(self, client, db, monkeypatch):
+        from app.models import AIRequest
+
+        monkeypatch.setattr(AppConfig, "fake_ai", False)
+        sid = _make_series(client)
+        img_id = _register_image(client, sid)
+        client.put("/api/me/settings", json={"openai_api_key": "sk-mine"})
+        with (
+            patch(
+                "app.routers.image_ai_fix.get_storage_from_settings",
+                return_value=_mock_storage(),
+            ),
+            patch("app.services.ai.image_edit.edit_image", return_value=(b"x", 0.04)),
+        ):
+            resp = client.post(
+                f"/api/images/{img_id}/ai-fix", json={"hint": "fix", "model": "gpt-image-2"}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["temp_key"].startswith(f"tmp/{_uid(db)}/")
+        db.expire_all()
+        (row,) = db.query(AIRequest).all()
+        assert row.kind == "image_fix"
+        assert row.via_default_access is False
+        assert row.cost_usd == pytest.approx(0.04)
+        assert row.model == "gpt-image-2"
+
+    def test_failed_edit_records_nothing(self, client, db, monkeypatch):
+        from app.models import AIRequest
+
+        monkeypatch.setattr(AppConfig, "fake_ai", False)
+        sid = _make_series(client)
+        img_id = _register_image(client, sid)
+        client.put("/api/me/settings", json={"openai_api_key": "sk-mine"})
+        with (
+            patch(
+                "app.routers.image_ai_fix.get_storage_from_settings",
+                return_value=_mock_storage(),
+            ),
+            patch("app.services.ai.image_edit.edit_image", side_effect=RuntimeError("boom")),
+        ):
+            resp = client.post(
+                f"/api/images/{img_id}/ai-fix", json={"hint": "fix", "model": "gpt-image-2"}
+            )
+        assert resp.status_code == 502
+        assert db.query(AIRequest).count() == 0

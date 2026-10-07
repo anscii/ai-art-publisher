@@ -67,7 +67,10 @@ def graph(client, db):
         "trashed_variant_id": tvar.id,
     }
     client.cookies.clear()
-    login_as(client, db, "b@example.com", "g-b", is_admin=True)  # gates answer 403 to non-admins
+    b = login_as(
+        client, db, "b@example.com", "g-b", is_admin=True
+    )  # gates answer 403 to non-admins
+    ids["user_id"] = b.id
     return ids
 
 
@@ -107,7 +110,11 @@ FOREIGN = [
     ("PUT", "/api/images/{image_id}/move", {"target_series_id": "{series_id}"}),
     ("PATCH", "/api/images/{image_id}/status", {"status": "skip"}),
     ("POST", "/api/images/{image_id}/ai-fix", {"hint": "h"}),
-    ("POST", "/api/images/{image_id}/ai-fix/keep", {"temp_key": "tmp/" + "0" * 36 + ".png"}),
+    (
+        "POST",
+        "/api/images/{image_id}/ai-fix/keep",
+        {"temp_key": "tmp/{user_id}/" + "0" * 36 + ".png"},
+    ),
     ("DELETE", "/api/ai_variants/{variant_id}", None),
     ("PATCH", "/api/ai_variants/{variant_id}", {"instagram_seo": "x"}),
     ("GET", "/api/posts/{post_id}", None),

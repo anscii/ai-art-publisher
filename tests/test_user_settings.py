@@ -71,3 +71,50 @@ def test_put_empty_string_clears_key(client, db):
     client.put("/api/me/settings", json={"anthropic_api_key": "sk-real"})
     client.put("/api/me/settings", json={"anthropic_api_key": ""})
     assert client.get("/api/me/settings").json()["anthropic_api_key"] == ""
+
+
+def test_default_ai_block_reflects_instance_settings_and_usage(client, db):
+    from app.models import AIRequest
+    from app.routers.settings import get_or_create_settings
+
+    u = login_as(client, db)
+    assert client.get("/api/me/settings").json()["default_ai"] == {
+        "enabled": False,
+        "used_today": 0,
+        "daily_limit": 20,
+    }
+    s = get_or_create_settings(db)
+    s.default_ai_openrouter_key = "sk-inst"
+    s.default_ai_daily_limit = 5
+    db.add_all(
+        [
+            AIRequest(
+                user_id=u.id,
+                kind="draft",
+                provider="openrouter",
+                model="m",
+                via_default_access=True,
+            ),
+            AIRequest(
+                user_id=u.id,
+                kind="draft",
+                provider="openrouter",
+                model="m",
+                via_default_access=False,
+            ),
+        ]
+    )
+    db.commit()
+    assert client.get("/api/me/settings").json()["default_ai"] == {
+        "enabled": True,
+        "used_today": 1,
+        "daily_limit": 5,
+    }
+
+
+def test_put_ignores_default_ai_key(client, db):
+    login_as(client, db)
+    r = client.put("/api/me/settings", json={"default_ai": {"enabled": True, "daily_limit": 99}})
+    assert r.status_code == 200
+    assert "default_ai" not in r.json()
+    assert client.get("/api/me/settings").json()["default_ai"]["daily_limit"] == 20

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 import app.database as _db_module
 from app.database import get_db
-from app.models import AIVariant, Series, User
+from app.models import AIRequest, AIVariant, Series, User
 from app.ownership import get_owned
 from app.routers.auth import get_current_user
 from app.routers.series import series_to_detail
@@ -21,8 +21,9 @@ from app.schemas import (
     GenerateRequest,
     SeriesDetail,
 )
+from app.services.ai.access import own_key, record_request, resolve_ai_access
 from app.services.ai.base import AIProvider
-from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS, PROVIDER_LABEL
+from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.generate")
@@ -82,14 +83,19 @@ def get_provider(provider_name: str, api_key: str) -> AIProvider:
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
-def _get_api_key(us, provider: str) -> str:
-    return {
-        "anthropic": us.anthropic_api_key,
-        "openai": us.openai_api_key,
-        "google": us.google_api_key,
-        "deepseek": us.deepseek_api_key,
-        "openrouter": us.openrouter_api_key,
-    }.get(provider, "")
+def _resolve_model(us, provider: str, requested: str | None) -> str:
+    return (
+        requested
+        or getattr(us, f"{provider}_default_model", None)
+        or PROVIDER_DEFAULT_MODELS.get(provider, "")
+    )
+
+
+def _task_key(us, settings, provider: str, req: AIRequest | None) -> str:
+    """Key for a background call: the instance key iff the counted ledger row was via default."""
+    if req and req.via_default_access:
+        return settings.default_ai_openrouter_key
+    return own_key(us, provider)
 
 
 def _resolve_actual_provider_model(
@@ -131,13 +137,9 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
     settings = get_or_create_settings(db)
     us = get_user_settings(s.user_id, db)
     provider_name = body_data.get("provider") or us.default_provider
-    model = (
-        body_data.get("model")
-        or getattr(us, f"{provider_name}_default_model", None)
-        or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
-    )
-
-    api_key = _get_api_key(us, provider_name)
+    model = _resolve_model(us, provider_name, body_data.get("model"))
+    req = db.get(AIRequest, rid) if (rid := body_data.get("ai_request_id")) else None
+    api_key = _task_key(us, settings, provider_name, req)
 
     include_images = body_data.get("include_images", False)
     selected_image_ids = body_data.get("selected_image_ids")
@@ -193,6 +195,8 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
         )
         db.add(v)
 
+    if req:
+        req.cost_usd = variants_data[0].cost_usd if variants_data else 0.0
     s.generation_status = "idle"
     s.generation_error = None
     db.commit()
@@ -207,13 +211,9 @@ def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
     settings = get_or_create_settings(db)
     us = get_user_settings(s.user_id, db)
     provider_name = body_data.get("provider") or us.default_provider
-    model = (
-        body_data.get("model")
-        or getattr(us, f"{provider_name}_default_model", None)
-        or PROVIDER_DEFAULT_MODELS.get(provider_name, "")
-    )
-
-    api_key = _get_api_key(us, provider_name)
+    model = _resolve_model(us, provider_name, body_data.get("model"))
+    req = db.get(AIRequest, rid) if (rid := body_data.get("ai_request_id")) else None
+    api_key = _task_key(us, settings, provider_name, req)
     board_context = _build_board_context(settings, s.user)
     hint = body_data.get("hint")
     augmented_hint = (hint or "") + board_context if board_context else hint
@@ -270,6 +270,8 @@ def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
     v.pinterest_board = vd.pinterest_board or None
     v.archive_metadata = json.dumps(vd.archive_metadata) if vd.archive_metadata else None
 
+    if req:
+        req.cost_usd = vd.cost_usd
     s.generation_status = "idle"
     s.generation_error = None
     db.commit()
@@ -328,21 +330,28 @@ def generate_descriptions(
         raise HTTPException(status_code=409, detail="Generation already in progress")
 
     us = get_user_settings(user.id, db)
+    settings = get_or_create_settings(db)
     provider_name = body.provider or us.default_provider
-    from app.config import get_config
-
-    api_key = _get_api_key(us, provider_name)
-    if not api_key and not get_config().fake_ai:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No {PROVIDER_LABEL.get(provider_name, provider_name)} key. Add one in Settings.",
-        )
-
+    model = _resolve_model(us, provider_name, body.model)
+    access = resolve_ai_access(us, settings, provider_name, model)
+    req_id = record_request(
+        db,
+        user_id=user.id,
+        kind="draft",
+        provider=provider_name,
+        model=model,
+        via_default=access.via_default,
+        limit=settings.default_ai_daily_limit,
+    )
     s.generation_status = "generating_draft"
     s.generation_error = None
-    db.commit()
+    db.commit()  # ledger row + status in one commit
 
-    background_tasks.add_task(_generate_variants_background, series_id, body.model_dump())
+    background_tasks.add_task(
+        _generate_variants_background,
+        series_id,
+        {**body.model_dump(), "provider": provider_name, "model": model, "ai_request_id": req_id},
+    )
     return series_to_detail(s, db)
 
 
@@ -367,21 +376,28 @@ def generate_full(
             raise HTTPException(status_code=404, detail="Variant not found")
 
     us = get_user_settings(user.id, db)
+    settings = get_or_create_settings(db)
     provider_name = body.provider or us.default_provider
-    from app.config import get_config
-
-    api_key = _get_api_key(us, provider_name)
-    if not api_key and not get_config().fake_ai:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No {PROVIDER_LABEL.get(provider_name, provider_name)} key. Add one in Settings.",
-        )
-
+    model = _resolve_model(us, provider_name, body.model)
+    access = resolve_ai_access(us, settings, provider_name, model)
+    req_id = record_request(
+        db,
+        user_id=user.id,
+        kind="full",
+        provider=provider_name,
+        model=model,
+        via_default=access.via_default,
+        limit=settings.default_ai_daily_limit,
+    )
     s.generation_status = "generating_full"
     s.generation_error = None
-    db.commit()
+    db.commit()  # ledger row + status in one commit
 
-    background_tasks.add_task(_generate_full_background, series_id, body.model_dump())
+    background_tasks.add_task(
+        _generate_full_background,
+        series_id,
+        {**body.model_dump(), "provider": provider_name, "model": model, "ai_request_id": req_id},
+    )
     return series_to_detail(s, db)
 
 
