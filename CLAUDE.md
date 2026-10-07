@@ -37,7 +37,7 @@ app/
   crypto.py        — Fernet encrypt/decrypt + EncryptedStr column type (key: SETTINGS_ENCRYPTION_KEY, derived from SESSION_SECRET if unset)
   main.py          — FastAPI app, router wiring, static files, lifespan, session auth middleware, landing page (cached at startup)
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations(), settings bootstrap
-  models.py        — User, UserSettings, Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
+  models.py        — User, UserSettings, Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings, AIRequest ORM models
   schemas.py       — Pydantic request/response types incl. TrashSeries/TrashImage/TrashResponse
   config.py        — AppConfig (DATABASE_URL, DATA_DIR, DEBUG, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, SCHEDULER_SECRET, BACKUP_TOKEN, FAKE_POSTING, FAKE_AI, LOCAL_STORAGE, etc.)
   routers/
@@ -57,6 +57,7 @@ app/
   services/
     storage.py     — R2StorageService (boto3, S3-compatible)
     ai/            — AIProvider ABC + Anthropic / OpenAI / Google / DeepSeek implementations
+    ai/access.py   — resolve_ai_access / record_request / own_key: the only way AI calls pick a key and hit the AI Request ledger
     story_renderer.py — PIL-based 1080×1920 JPEG renderer; fonts loaded via @lru_cache (process-wide)
     telegram.py    — TelegramService.post_media_group()
     telegram_stories.py — MTProto story posting via Telethon; post_stories(images) batches N frames in one session
@@ -67,7 +68,7 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 37 migrations (001–037); latest: 037_user_settings.py
+  versions/        — 38 migrations (001–038); latest: 038_ai_requests.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -108,6 +109,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - Routers never `db.get()` a client-supplied ID. Resolve with `get_owned(Model, id, user, db)` from `app/ownership.py`; Trash passes `include_deleted=True`.
 - `series_to_detail(s, db)` and `image_to_resp(img, base_url)` in `app/routers/series.py` are the canonical serializers — import them where needed. Note: `series_to_detail` takes the SQLAlchemy session `db` (not a base URL string) — it fetches settings internally.
 - `get_or_create_settings(db)` in `app/routers/settings.py` is the way to access *instance* settings (storage, posting). `get_user_settings(user_id, db)` in `app/routers/user_settings.py` is the way to read a User's AI keys/models — never read AI keys from `AppSettings`
+- AI calls go through `resolve_ai_access` + `record_request` in `app/services/ai/access.py`; never read provider keys directly. `AppSettings.default_ai_openrouter_key` is the instance's Default AI Access key
 - `DELETE /api/images/{id}` returns the updated `SeriesDetail` (soft deletes and refreshes in one call)
 - `PATCH /api/images/{id}/status` returns the updated `SeriesDetail`
 - Routes that use the Owner's AI keys or posting tokens take `Depends(require_admin)` and carry a `# stopgap-1b: lift in #N` comment; `tests/test_admin_gate.py::GATE_INVENTORY` lists them and must be edited when a gate is lifted
