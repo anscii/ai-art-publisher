@@ -16,6 +16,7 @@ from app.routers.settings import (
 )
 from app.schemas import UserSettingsUpdate
 from app.services.ai.access import default_ai_enabled, used_today
+from app.services.ai.base import DEFAULT_STYLE_GUIDE
 from app.services.ai.catalogue import IMAGE_EDIT_MODELS, PROVIDER_MODELS
 
 router = APIRouter(tags=["user_settings"])
@@ -49,6 +50,7 @@ def get_my_settings(db: Session = Depends(get_db), user: User = Depends(get_curr
     s = get_or_create_settings(db)
     return {
         **_to_dict(get_user_settings(user.id, db)),
+        "default_style_guide": DEFAULT_STYLE_GUIDE,
         "default_ai": {
             "enabled": default_ai_enabled(s),
             "used_today": used_today(user.id, db),

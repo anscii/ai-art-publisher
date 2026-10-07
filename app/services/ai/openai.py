@@ -62,7 +62,12 @@ class OpenAIProvider(AIProvider):
         content.append({"type": "text", "text": build_user_text(images_b64, hint)})
 
         messages: list[Any] = [
-            {"role": "system", "content": build_step1_system_prompt(num_variants, language)},
+            {
+                "role": "system",
+                "content": build_step1_system_prompt(
+                    num_variants, language, style_guide=self.style_guide
+                ),
+            },
             {"role": "user", "content": content},
         ]
 
@@ -109,7 +114,10 @@ class OpenAIProvider(AIProvider):
         hint: str | None = None,
     ) -> AIVariantData:
         messages: list[Any] = [
-            {"role": "system", "content": build_step2_system_prompt(language)},
+            {
+                "role": "system",
+                "content": build_step2_system_prompt(language, style_guide=self.style_guide),
+            },
             {"role": "user", "content": build_step2_user_text(description, language, hint)},
         ]
         if logger.isEnabledFor(logging.DEBUG):

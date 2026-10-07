@@ -7,40 +7,21 @@ from typing import Any
 
 MAX_OUTPUT_TOKENS = 8192
 
-_BASE_CRAFT = """You write captions for AI-generated speculative fiction artwork. The author reads obsessively across genres — Zelazny, Bradbury, Alastair Reynolds, Lovecraft, Neil Gaiman, Terry Pratchett — and is bored by anything predictable. Your job is to make each description feel like a torn page from a book the reader hasn't found yet.
+DEFAULT_STYLE_GUIDE = """You write short captions for artwork posted on social media. Each caption is a small fragment of the world inside the image — a moment, a voice, a story the picture belongs to — not a description of the picture itself.
 
-CRAFT PRINCIPLES (drawn from authors the reader loves):
-
-Like Zelazny: myths and gods made intimate and flawed. The cosmic made personal. Prose that is precise and a little dangerous. Characters who are ancient and tired and still funny about it.
-
-Like Bradbury: the exact sensory detail that cracks something open. Melancholy that doesn't wallow. The ordinary made strange by one degree of tilt. Loss that is beautiful without being sentimental.
-
-Like Reynolds: the weight of deep time. Civilizations as geological events. Technology so advanced it has no obligation to be comprehensible. The cold logic of physics as the real horror. Posthuman perspectives where human emotion is the anomaly.
-
-Like Lovecraft: the incomprehensible as dread, not gore. The horror of realizing the universe was not designed with you in mind. The specific texture of a mind encountering something it was not built to process. (But without his bigotry — the cosmos is indifferent to everyone equally.)
-
-Like Gaiman: mythology made intimate. Gods riding buses. Fairy tale logic with real emotional weight. The uncanny living quietly in the mundane. Strangeness that illuminates something true rather than something terrible.
-
-Like Pratchett: the absurd taken completely seriously. Humor as the delivery system for genuine philosophy. Satire that loves its targets. A joke that lands and then keeps going and becomes something else entirely. Comedy as depth, not decoration.
-
-GENRES IN PLAY: sci-fi, magic realism, dark fantasy, space opera, mythpunk, cosmic horror, dark academy, biopunk, far-future, fairy tale retellings, fantastic love stories with actual tension. Mix freely and don't default to horror. Humor and wit can infuse any of these — as spice, not main dish. Relationship dynamics may occasionally include bromance and BL elements — not as genre-defining, but as a layer of texture when it fits the image. A horror story can be funny. A space opera can be about grief. A fairy tale can be genuinely frightening.
-
-WHAT MAKES A GOOD DESCRIPTION:
-- Implies more than it states. One specific unusual detail — a proper noun, a broken physical law, an unexplained scar in the timeline — does more than three paragraphs of atmosphere.
-- Subverts the obvious reading. Find the angle that isn't the first thing you'd think of. The ancient temple might be a functioning bureaucracy. The monster might be the narrator. The apocalypse might be Tuesday.
-- Raises questions it refuses to answer. The reader finishes and thinks "but who was she" or "why did it stop" or "what's the second moon for".
-- Has a specific POV with a specific relationship to what they're seeing — a survivor who finds this ordinary, a scholar mid-career-mistake, something with the wrong number of sensory organs, someone in love with exactly the wrong person.
-- Earns its register. Horror, tragedy, moral complexity — welcome if they serve something. So is joy, absurdity, and wit. Not every fragment needs to be dark.
-- Humor is not decoration. Pratchett-level absurdism, Zelazny-level wit, Gaiman-level wry fairytale logic — all valid and valued. The funniest line can carry the most weight.
-- Social-media safe: no explicit gore, no graphic sexual content, nothing that reads as targeted hate. Dread, darkness, and difficult themes handled with craft are fine.
-- Include unexpected plot twists, vivid descriptions, and emotional depth.
+WHAT MAKES A GOOD CAPTION:
+- Implies more than it states. One specific, concrete detail — a name, an object, a rule of this world — does more than a paragraph of atmosphere.
+- Has a point of view. Someone is speaking or noticing, and they have a relationship to what they see.
+- Finds an angle beyond the first, most obvious reading of the image.
+- Leaves a question open; the reader should want to look at the image again.
+- Matches the register of the artwork: playful, tender, eerie, funny or serious — whatever the image earns. Humor is welcome.
+- Social-media safe: no explicit gore, no graphic sexual content, nothing that reads as targeted hate.
 
 WHAT TO AVOID:
-- "Ancient", "mystical", "ethereal", "enchanted", "timeless", "otherworldly" as filler words
-- Describing what the image looks like (the reader can see it)
-- The first interpretation you think of — it's almost always the predictable one
-- Moral lessons and uplifting endings
-- Prose that performs depth without containing any"""
+- Describing what the image shows (the reader can see it).
+- Filler adjectives: "mystical", "ethereal", "enchanted", "timeless", "otherworldly", "stunning", "breathtaking".
+- Moral lessons, clichés, and generic inspirational endings.
+- Prose that sounds deep without saying anything."""
 
 _DISCOVERY_SECTION = """
 
@@ -83,25 +64,19 @@ _STEP1_PLATFORM = {"en": "Instagram", "ru": "Telegram"}
 _STEP2_PRIMARY_LABEL = {"en": "English", "ru": "Russian"}
 _STEP2_SECONDARY_KEY = {"en": "description_ru", "ru": "description_en"}
 _STEP2_SECONDARY_LABEL = {"en": "Russian", "ru": "English"}
-_STEP2_SECONDARY_PLATFORM = {
-    "en": "Telegram — friends who read a lot, know Bulgakov, Strugatsky, Henry Lion Oldie, Marina and Sergey Dyachenko. Conversational but sharp, dense with implication.",
-    "ru": "Instagram — speculative fiction readers who grew up on Zelazny, Bradbury, Lovecraft, Reynolds.",
-}
-
-_STEP2_SECONDARY_TRADITION = {
-    "en": "Russian literary tradition — allusive, philosophically weighted, comfortable with strangeness as everyday fact",
-    "ru": "English speculative fiction tradition — precise, dangerous, intimate with the cosmic, a bit weird",
-}
+_STEP2_SECONDARY_PLATFORM = {"en": "Telegram", "ru": "Instagram"}
 
 
-def build_step1_system_prompt(num_variants: int = 3, language: str = "en") -> str:
+def build_step1_system_prompt(
+    num_variants: int = 3, language: str = "en", style_guide: str = ""
+) -> str:
     key = _STEP1_KEY.get(language, "description_en")
     platform = _STEP1_PLATFORM.get(language, "Instagram")
     return (
-        _BASE_CRAFT
+        (style_guide.strip() or DEFAULT_STYLE_GUIDE)
         + f"""
 
-Generate {num_variants} variants differing radically in approach, tone, and implied genre — not just topic. Do not cluster in horror or darkness. Span the range: eerie, melancholic, philosophically strange, tender — and occasionally, one variant may carry genuine wit or absurdist logic.
+Generate {num_variants} variants differing radically in approach, tone, and implied genre — not just topic. Vary tone and angle between variants.
 Each variant must be a JSON object with exactly one key:
 
 - {key}: 2-4 sentences for {platform}. A fragment of a world. Use \\n\\n between paragraphs — break on meaning and rhythm, not mechanically after every sentence.
@@ -110,34 +85,29 @@ Respond ONLY with valid JSON array of {num_variants} objects. No markdown, no pr
     )
 
 
-def build_step2_system_prompt(language: str = "en") -> str:
+def build_step2_system_prompt(language: str = "en", style_guide: str = "") -> str:
     primary_label = _STEP2_PRIMARY_LABEL.get(language, "English")
     secondary_key = _STEP2_SECONDARY_KEY.get(language, "description_ru")
     secondary_label = _STEP2_SECONDARY_LABEL.get(language, "Russian")
-    secondary_platform = _STEP2_SECONDARY_PLATFORM.get(
-        language, "Telegram, for friends who read a lot — conversational but sharp"
-    )
-    secondary_tradition = _STEP2_SECONDARY_TRADITION.get(
-        language, "Russian literary tradition — allusive, philosophically weighted"
-    )
+    secondary_platform = _STEP2_SECONDARY_PLATFORM.get(language, "Telegram")
     return (
-        _BASE_CRAFT
+        (style_guide.strip() or DEFAULT_STYLE_GUIDE)
         + _DISCOVERY_SECTION
         + f"""
 
 The user provides a finalized {primary_label} description. Do NOT alter it. Generate everything else for the content package.
 
 PARALLEL COMPOSITION RULE (critical):
-Do NOT translate anything. The {secondary_label} title and description must be written fresh, as if a {secondary_label}-speaking author with the same sensibility encountered the same image independently — working from the {secondary_tradition}. Similar atmosphere, similar core strangeness. But a different entry point, different detail foregrounded, different rhythm. The {secondary_label} reader should feel this was written for them, not translated at them. Variation is not a flaw — it is the goal.
+Do NOT translate anything. The {secondary_label} title and description must be written fresh, as if a {secondary_label}-speaking author with the same sensibility encountered the same image independently — working from the {secondary_label}-language literary tradition. Similar atmosphere, similar core mood. But a different entry point, different detail foregrounded, different rhythm. The {secondary_label} reader should feel this was written for them, not translated at them. Variation is not a flaw — it is the goal.
 
 Generate a single JSON object with these exact keys:
 
-- title: 3-6 words, specific and strange, not generic (English). Drawn from the atmosphere of the provided description.
-- title_ru: 3-6 words in Russian — NOT a translation of title. A parallel name: same strangeness, different angle. Could lean on a different detail or metaphor entirely.
+- title: 3-6 words, specific, not generic (English). Drawn from the atmosphere of the provided description.
+- title_ru: 3-6 words in Russian — NOT a translation of title. A parallel name: same mood, different angle. Could lean on a different detail or metaphor entirely.
 - {secondary_key}: Written natively in {secondary_label} for {secondary_platform}. Slightly similar world as the provided description — slightly similar atmosphere, mood, themes — but composed fresh. Allow a shifted emphasis, a different image foregrounded, different angle. 2-4 sentences. Use \\n\\n between paragraphs — break on meaning and rhythm, not mechanically.
 - instagram:
     seo: short atmospheric semantic phrase layer, 3-8 fragments separated by •
-    tags: up to 5 English hashtags (array of strings with #) mixing discoverability + strange in-world taxonomy
+    tags: up to 5 English hashtags (array of strings with #) mixing discoverability + in-world taxonomy
 - pinterest:
     title: concrete searchable visual title, 5-12 words
     description: 1-2 sentences optimized for Pinterest search while preserving atmosphere
@@ -302,6 +272,8 @@ def attach_usage(
 
 
 class AIProvider(ABC):
+    style_guide: str = ""
+
     @abstractmethod
     def generate_variants(
         self,

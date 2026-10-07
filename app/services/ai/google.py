@@ -53,7 +53,9 @@ class GoogleProvider(AIProvider):
             model=model,
             contents=parts,
             config=types.GenerateContentConfig(
-                system_instruction=build_step1_system_prompt(num_variants, language),
+                system_instruction=build_step1_system_prompt(
+                    num_variants, language, style_guide=self.style_guide
+                ),
                 temperature=1.0,
                 top_p=0.95,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
@@ -87,7 +89,9 @@ class GoogleProvider(AIProvider):
             model=model,
             contents=user_text,
             config=types.GenerateContentConfig(
-                system_instruction=build_step2_system_prompt(language),
+                system_instruction=build_step2_system_prompt(
+                    language, style_guide=self.style_guide
+                ),
                 temperature=1.0,
                 top_p=0.95,
                 max_output_tokens=MAX_OUTPUT_TOKENS,

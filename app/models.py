@@ -317,6 +317,7 @@ class UserSettings(Base):
     deepseek_default_model: Mapped[str] = mapped_column(String, default="")
     openrouter_default_model: Mapped[str] = mapped_column(String, default="")
     image_edit_model: Mapped[str] = mapped_column(String, default="")
+    style_guide: Mapped[str] = mapped_column(Text, default="", server_default="")
 
 
 class AIRequest(Base):

@@ -145,3 +145,62 @@ def test_clearing_saved_key_removes_it(page, live_server):
     page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
 
     assert httpx.get(f"{live_server}/api/me/settings", timeout=5).json()["deepseek_api_key"] == ""
+
+
+def test_style_guide_default_edit_and_clear(page, live_server):
+    _api_put(live_server, {"style_guide": ""})
+    try:
+        _open_settings(page, live_server)
+        sg = page.locator("#s_style_guide")
+        page.wait_for_function("document.getElementById('s_style_guide').placeholder.length > 20")
+        assert sg.input_value() == ""
+
+        page.get_by_role("button", name="Start from default").click()
+        default_text = sg.input_value()
+        assert "WHAT MAKES A GOOD CAPTION" in default_text
+
+        sg.fill("MY E2E STYLE")
+        page.locator("#settingsModal").get_by_role("button", name="Save").click()
+        page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
+
+        _open_settings(page, live_server)
+        page.wait_for_function("document.getElementById('s_style_guide').value === 'MY E2E STYLE'")
+
+        sg.fill("")
+        page.locator("#settingsModal").get_by_role("button", name="Save").click()
+        page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
+
+        _open_settings(page, live_server)
+        page.wait_for_function("document.getElementById('s_style_guide').placeholder.length > 20")
+        assert sg.input_value() == ""
+    finally:
+        _api_put(live_server, {"style_guide": ""})
+
+
+def test_style_guide_clear_in_same_modal_after_save(page, live_server):
+    """Save a guide, then clear and save again without reopening: the server must get ''."""
+    _api_put(live_server, {"style_guide": ""})
+    try:
+        _open_settings(page, live_server)
+        sg = page.locator("#s_style_guide")
+        page.wait_for_function("document.getElementById('s_style_guide').placeholder.length > 20")
+        save = page.locator("#settingsModal").get_by_role("button", name="Save")
+
+        saved = page.locator("#toastContainer").get_by_text("Settings saved")
+
+        sg.fill("TEMP STYLE")
+        save.click()
+        saved.wait_for(timeout=5000)
+        assert (
+            httpx.get(f"{live_server}/api/me/settings", timeout=5).json()["style_guide"]
+            == "TEMP STYLE"
+        )
+
+        sg.fill("")
+        # the "Settings saved" toast sits over the Save button until it auto-hides
+        page.evaluate("document.getElementById('toastContainer').replaceChildren()")
+        save.click()
+        saved.wait_for(timeout=5000)
+        assert httpx.get(f"{live_server}/api/me/settings", timeout=5).json()["style_guide"] == ""
+    finally:
+        _api_put(live_server, {"style_guide": ""})

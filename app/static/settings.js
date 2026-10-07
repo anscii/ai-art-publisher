@@ -41,6 +41,7 @@ const _MY_FIELDS = [
   'default_provider',
   'anthropic_default_model', 'openai_default_model', 'google_default_model',
   'deepseek_default_model', 'openrouter_default_model', 'image_edit_model',
+  'style_guide',
 ];
 const _INSTANCE_FIELDS = [
   'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
@@ -66,6 +67,8 @@ async function loadSettings() {
       const el = document.getElementById('s_' + f);
       if (el && !el.list && el.tagName !== 'SELECT') { el.value = s[f] ?? ''; el.dataset.loaded = el.value; }
     });
+    const sg = document.getElementById('s_style_guide');
+    if (sg) sg.placeholder = s.default_style_guide || '';
     const da = s.default_ai;
     const usage = document.getElementById('defaultAiUsage');
     if (usage) usage.textContent = da?.enabled ? `Free access today: ${da.used_today} / ${da.daily_limit}` : '';
@@ -88,12 +91,18 @@ async function loadSettings() {
   } catch (e) { showToast('Failed to load settings: ' + e.message, 'danger'); }
 }
 
+function startStyleGuideFromDefault() {
+  const el = document.getElementById('s_style_guide');
+  el.value = el.placeholder;
+}
+
 function _collect(fields) {
   const body = {};
   fields.forEach(f => {
     const el = document.getElementById('s_' + f);
     if (!el) return;
     const val = el.value.trim();
+    if (f === 'style_guide') { body[f] = val; return; }  // not a secret: always send, so clearing works
     if (val && val !== '****') body[f] = f === 'default_ai_daily_limit' ? Number(val) : val;
     else if (!val && el.dataset.loaded === '****') body[f] = '';  // user cleared a saved secret
   });
@@ -105,6 +114,7 @@ async function saveSettings() {
     await apiFetch('PUT', '/api/me/settings', _collect(_MY_FIELDS));
     if (App.user?.is_admin) await apiFetch('PUT', '/api/settings', _collect(_INSTANCE_FIELDS));
     showToast('Settings saved', 'success');
+    await loadSettings();  // refresh masks and dataset.loaded so a second save in the same modal sees saved state
   } catch (e) { showToast(e.message, 'danger'); }
 }
 

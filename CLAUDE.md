@@ -68,7 +68,7 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 38 migrations (001–038); latest: 038_ai_requests.py
+  versions/        — 39 migrations (001–039); latest: 039_user_style_guide.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -112,6 +112,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - AI calls go through `resolve_ai_access` + `record_request` in `app/services/ai/access.py`; never read provider keys directly. `AppSettings.default_ai_openrouter_key` is the instance's Default AI Access key
 - `DELETE /api/images/{id}` returns the updated `SeriesDetail` (soft deletes and refreshes in one call)
 - `PATCH /api/images/{id}/status` returns the updated `SeriesDetail`
+- Caption taste lives in `UserSettings.style_guide` / `DEFAULT_STYLE_GUIDE`; prompt builders take `style_guide=`; never put personal taste back into `base.py`.
 - Routes that use the Owner's AI keys or posting tokens take `Depends(require_admin)` and carry a `# stopgap-1b: lift in #N` comment; `tests/test_admin_gate.py::GATE_INVENTORY` lists them and must be edited when a gate is lifted
 
 ## Frontend conventions

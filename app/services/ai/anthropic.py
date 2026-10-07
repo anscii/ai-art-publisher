@@ -70,7 +70,7 @@ class AnthropicProvider(AIProvider):
         resp = self._client.messages.create(
             model=model,
             max_tokens=MAX_OUTPUT_TOKENS,
-            system=build_step1_system_prompt(num_variants, language),
+            system=build_step1_system_prompt(num_variants, language, style_guide=self.style_guide),
             messages=messages,
         )
         text = _response_text(resp, model)
@@ -108,7 +108,7 @@ class AnthropicProvider(AIProvider):
         resp = self._client.messages.create(
             model=model,
             max_tokens=MAX_OUTPUT_TOKENS,
-            system=build_step2_system_prompt(language),
+            system=build_step2_system_prompt(language, style_guide=self.style_guide),
             messages=messages,
         )
         text = _response_text(resp, model)
