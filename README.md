@@ -357,6 +357,7 @@ Set `LOCAL_STORAGE=true` to skip R2 entirely and store uploads in `DATA_DIR/uplo
 |---|---|---|
 | `AUTH_USERNAME` | _(unset)_ | Basic Auth username; unset = no auth |
 | `AUTH_PASSWORD` | _(unset)_ | Basic Auth password |
+| `SETTINGS_ENCRYPTION_KEY` | _(derived from `SESSION_SECRET`)_ | Fernet key encrypting per-user API keys at rest; required in prod. Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `SESSION_SECRET` | _(unset)_ | HMAC key for session cookies; derived from `AUTH_PASSWORD` if unset |
 | `FAKE_POSTING` | `false` | Skip real API calls in posting routes |
 | `FAKE_AI` | `false` | Return stub AI variants without API calls |

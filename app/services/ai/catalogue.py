@@ -73,6 +73,14 @@ PROVIDER_MODELS: dict[str, list[dict[str, str]]] = {
 
 # Fallback defaults when no per-provider model is configured in DB settings.
 # Intentionally mid-tier (balanced cost/quality).
+PROVIDER_LABEL: dict[str, str] = {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "google": "Google",
+    "deepseek": "DeepSeek",
+    "openrouter": "OpenRouter",
+}
+
 PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-5-5",
     "openai": "gpt-6.1-sol",

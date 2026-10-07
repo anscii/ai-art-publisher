@@ -443,7 +443,6 @@ function buildThumb(img, seriesId, orderNum) {
   dropItems.appendChild(hdr2);
   buildMoveToItems(img.id, seriesId, false).forEach(li => dropItems.appendChild(li));
   const fixLi = document.createElement('li');
-  fixLi.className = 'admin-only';
   const fixA = h('a', { cls: 'dropdown-item small', href: '#' });
   fixA.appendChild(icon('bi bi-magic me-1'));
   fixA.appendChild(document.createTextNode('Fix with AI'));
@@ -1461,7 +1460,7 @@ function buildGenerateCard(seriesId) {
   const errorLog  = h('div', { cls: 'collapse', id: 'genErrorLog' }, errorList);
   const errorDiv  = h('div', { cls: 'alert alert-danger small py-1 px-2 mt-2 mb-0 d-none', id: 'genError' });
 
-  return h('section', { cls: 'px-4 pb-4 admin-only' },
+  return h('section', { cls: 'px-4 pb-4' },
     h('div', { cls: 'aap-card aap-card--gen' },
       h('div', { cls: 'aap-panel-head' },
         h('span', { cls: 'aap-panel-head__label aap-panel-head__label--accent', text: '\u2736 Generate' }),

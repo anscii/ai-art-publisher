@@ -53,11 +53,11 @@
     <i class="bi bi-trash3" style="font-size:14px;"></i>
     <span class="d-none d-sm-inline">Trash</span>
   </button>
-  <button class="aap-nav-btn admin-only" id="navStats" aria-label="Stats" onclick="showView('stats')">
+  <button class="aap-nav-btn" id="navStats" aria-label="Stats" onclick="showView('stats')">
     <i class="bi bi-bar-chart" style="font-size:14px;"></i>
     <span class="d-none d-sm-inline">Stats</span>
   </button>
-  <button class="aap-nav-btn aap-nav-btn--icon-only admin-only" aria-label="Settings"
+  <button class="aap-nav-btn aap-nav-btn--icon-only" aria-label="Settings"
           data-bs-toggle="modal" data-bs-target="#settingsModal"
           onclick="loadSettings()">
     <i class="bi bi-gear" style="font-size:14px;"></i>
@@ -294,7 +294,7 @@
 
         <!-- AI Providers -->
         <section class="aap-settings-section">
-          <h3 class="aap-section-label">AI Providers</h3>
+          <h3 class="aap-section-label">My AI</h3>
           <div class="aap-settings-section__rows">
             <div class="aap-secret-row">
               <span class="aap-secret-row__label">Anthropic API Key</span>
@@ -339,35 +339,38 @@
               </div>
               <div class="aap-field-block">
                 <span class="aap-field-block__label">Anthropic model</span>
-                <select class="form-select aap-input" id="s_anthropic_default_model"></select>
+                <input class="form-control aap-input" list="dl_anthropic" id="s_anthropic_default_model" autocomplete="off"><datalist id="dl_anthropic"></datalist>
               </div>
               <div class="aap-field-block">
                 <span class="aap-field-block__label">OpenAI model</span>
-                <select class="form-select aap-input" id="s_openai_default_model"></select>
+                <input class="form-control aap-input" list="dl_openai" id="s_openai_default_model" autocomplete="off"><datalist id="dl_openai"></datalist>
               </div>
             </div>
             <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr 1fr;">
               <div class="aap-field-block">
                 <span class="aap-field-block__label">Google model</span>
-                <select class="form-select aap-input" id="s_google_default_model"></select>
+                <input class="form-control aap-input" list="dl_google" id="s_google_default_model" autocomplete="off"><datalist id="dl_google"></datalist>
               </div>
               <div class="aap-field-block">
                 <span class="aap-field-block__label">DeepSeek model</span>
-                <select class="form-select aap-input" id="s_deepseek_default_model"></select>
+                <input class="form-control aap-input" list="dl_deepseek" id="s_deepseek_default_model" autocomplete="off"><datalist id="dl_deepseek"></datalist>
               </div>
               <div class="aap-field-block">
                 <span class="aap-field-block__label">OpenRouter model</span>
-                <select class="form-select aap-input" id="s_openrouter_default_model"></select>
+                <input class="form-control aap-input" list="dl_openrouter" id="s_openrouter_default_model" autocomplete="off"><datalist id="dl_openrouter"></datalist>
               </div>
             </div>
             <div class="d-grid gap-2" style="grid-template-columns: 1fr 1fr 1fr;">
               <div class="aap-field-block">
                 <span class="aap-field-block__label">Image edit model (Fix with AI)</span>
-                <select class="form-select aap-input" id="s_image_edit_model"></select>
+                <input class="form-control aap-input" list="dl_image_edit" id="s_image_edit_model" autocomplete="off"><datalist id="dl_image_edit"></datalist>
               </div>
             </div>
           </div>
         </section>
+
+        <div class="admin-only">
+        <h3 class="aap-section-label">Instance</h3>
 
         <!-- Channels -->
         <section class="aap-settings-section">
@@ -465,6 +468,7 @@
             </div>
           </div>
         </section>
+        </div>
 
       </div>
       <footer class="aap-modal__foot">
@@ -513,7 +517,7 @@
                 aria-labelledby="lightboxMoveBtn"></ul>
           </div>
           <button class="btn aap-btn" id="lightboxMarkPostedBtn">✓ Mark posted</button>
-          <button class="btn aap-btn admin-only" id="lightboxFixAiBtn">✦ Fix with AI</button>
+          <button class="btn aap-btn" id="lightboxFixAiBtn">✦ Fix with AI</button>
           <button class="btn aap-btn aap-btn-danger" id="lightboxDeleteBtn">× Delete</button>
         </div>
         <nav class="aap-filmstrip" id="lightboxFilmstrip"></nav>

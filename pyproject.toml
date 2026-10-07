@@ -22,6 +22,7 @@ dependencies = [
   "tqdm==4.67.1",
   "alembic==1.14.1",
   "telethon>=1.36",
+  "cryptography>=49",
 ]
 
 [dependency-groups]

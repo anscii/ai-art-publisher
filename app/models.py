@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.crypto import EncryptedStr
 from app.database import Base
 
 
@@ -276,18 +277,8 @@ class AppSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     invite_code: Mapped[str] = mapped_column(String, default="")
-    anthropic_api_key: Mapped[str] = mapped_column(String, default="")
-    openai_api_key: Mapped[str] = mapped_column(String, default="")
-    google_api_key: Mapped[str] = mapped_column(String, default="")
-    default_provider: Mapped[str] = mapped_column(String, default="anthropic")
-    anthropic_default_model: Mapped[str] = mapped_column(String, default="")
-    openai_default_model: Mapped[str] = mapped_column(String, default="")
-    google_default_model: Mapped[str] = mapped_column(String, default="")
-    deepseek_api_key: Mapped[str] = mapped_column(String, default="")
-    deepseek_default_model: Mapped[str] = mapped_column(String, default="")
+    # Default AI Access key (PR 2B); the Owner's personal keys live in UserSettings
     openrouter_api_key: Mapped[str] = mapped_column(String, default="")
-    openrouter_default_model: Mapped[str] = mapped_column(String, default="")
-    image_edit_model: Mapped[str] = mapped_column(String, default="")
     telegram_bot_token: Mapped[str] = mapped_column(String, default="")
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
     telegram_api_id: Mapped[str] = mapped_column(String, default="")
@@ -305,3 +296,23 @@ class AppSettings(Base):
     r2_secret_key: Mapped[str] = mapped_column(String, default="")
     r2_bucket: Mapped[str] = mapped_column(String, default="")
     r2_public_base_url: Mapped[str] = mapped_column(String, default="")
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    anthropic_api_key: Mapped[str] = mapped_column(EncryptedStr, default="")
+    openai_api_key: Mapped[str] = mapped_column(EncryptedStr, default="")
+    google_api_key: Mapped[str] = mapped_column(EncryptedStr, default="")
+    deepseek_api_key: Mapped[str] = mapped_column(EncryptedStr, default="")
+    openrouter_api_key: Mapped[str] = mapped_column(EncryptedStr, default="")
+    default_provider: Mapped[str] = mapped_column(String, default="openrouter")
+    anthropic_default_model: Mapped[str] = mapped_column(String, default="")
+    openai_default_model: Mapped[str] = mapped_column(String, default="")
+    google_default_model: Mapped[str] = mapped_column(String, default="")
+    deepseek_default_model: Mapped[str] = mapped_column(String, default="")
+    openrouter_default_model: Mapped[str] = mapped_column(String, default="")
+    image_edit_model: Mapped[str] = mapped_column(String, default="")

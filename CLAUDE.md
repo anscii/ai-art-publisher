@@ -34,9 +34,10 @@ uv run uvicorn app.main:app --reload
 ```
 app/
   ownership.py     — get_owned(Model, id, user, db): the only way routers resolve client-supplied IDs (404 for other users' / soft-deleted rows)
+  crypto.py        — Fernet encrypt/decrypt + EncryptedStr column type (key: SETTINGS_ENCRYPTION_KEY, derived from SESSION_SECRET if unset)
   main.py          — FastAPI app, router wiring, static files, lifespan, session auth middleware, landing page (cached at startup)
   database.py      — SQLAlchemy engine (SQLite WAL), init_db(), _run_migrations(), settings bootstrap
-  models.py        — Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
+  models.py        — User, UserSettings, Collection, Series, Image, AIVariant, Post, PostImage, Story, StoryFrame, AppSettings ORM models
   schemas.py       — Pydantic request/response types incl. TrashSeries/TrashImage/TrashResponse
   config.py        — AppConfig (DATABASE_URL, DATA_DIR, DEBUG, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, SCHEDULER_SECRET, BACKUP_TOKEN, FAKE_POSTING, FAKE_AI, LOCAL_STORAGE, etc.)
   routers/
@@ -48,7 +49,8 @@ app/
     auth.py        — POST /auth/login, GET /auth/logout; session token helpers; `get_current_user` / `require_admin` deps; GET /api/me
     posts.py       — create/execute posts; _after_post_success marks queued→posted
     scheduling.py  — schedule/cancel/queue endpoints
-    settings.py    — AppSettings CRUD + connection test
+    settings.py    — AppSettings (instance config: R2, invite code, posting, Default AI Access key) CRUD + connection test, admin-only; /api/stats/ai per user
+    user_settings.py — UserSettings (per-user AI keys/models, Fernet-encrypted) GET/PUT /api/me/settings + test; GET /api/settings/providers
     trash.py       — GET /api/trash, restore, permanent delete, empty trash
     stories.py     — Story + StoryFrame CRUD, /render (PIL image generation), /publish (IG Stories or Telegram Stories)
     landing.py     — public API: RecentPostCard + LandingRecentResponse for landing dispatch grid
@@ -65,7 +67,7 @@ app/
     app.js, editor.js, posting.js, settings.js, stats.js
   templates/       — index.html (Bootstrap 5.3 + SortableJS + AAP design), landing.html (public)
 alembic/           — Alembic migration environment
-  versions/        — 36 migrations (001–036); latest: 036_collection_user_id.py
+  versions/        — 37 migrations (001–037); latest: 037_user_settings.py
 scripts/
   import_local.py      — bulk import CLI (boto3 direct upload + API register)
   migrate.py           — DB migration script used by fly.toml release_command
@@ -83,7 +85,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - **`auto_stop_machines = "suspend"`** in fly.toml — machine suspends between requests but wakes on demand; APScheduler keeps it alive between ticks.
 - **AAP design system** — `app/static/aap/tokens.css` (CSS custom properties) + `app/static/aap/app.css` (component styles). Replaces Bootstrap-only dark theme. Status display uses `STATUS_DISPLAY_GROUPS` / `statusDisplay()` / `activeDbStatuses()` in `app.js` (approved→draft, partial_posted→active in UI labels).
 - **No innerHTML in JS** — all DOM manipulation uses `createElement`/`textContent`/`setAttribute`. The `h()` helper in `app.js` enforces this. A security hook blocks writes containing `innerHTML`.
-- **Settings DB table** (`AppSettings`, id=1) — single-row config. Bootstrapped from env vars on first boot via `_bootstrap_settings()`.
+- **Settings DB table** (`AppSettings`, id=1) — single-row *instance* config (R2, invite code, posting tokens, Default AI Access OpenRouter key). Bootstrapped from env vars on first boot via `_bootstrap_settings()`. Per-user AI keys/models live in `UserSettings` (PK `user_id`), key columns encrypted via `EncryptedStr`.
 - **JSON fields** (`tags_instagram`, `tags_telegram`, `scheduled_targets`) are stored as JSON strings in SQLite. Deserialized in `series.py` helpers before returning to the API.
 - **Alembic migrations** — `scripts/migrate.py` is the entry point used by both `make migrate` and fly.toml `release_command`. On fresh installs it runs `create_all` + `stamp head`; on existing DBs it runs `upgrade head`. `_run_migrations()` in `database.py` is skipped for in-memory (test) DBs.
 - **Soft delete** — `Series.deleted_at` and `Image.deleted_at` (nullable DateTime). Soft-deleted items are hidden from all normal views and only visible in the Trash panel (`GET /api/trash`). Hard delete only happens from Trash (permanent delete / empty trash).
@@ -105,7 +107,7 @@ data/              — SQLite DB (gitignored, mounted as Fly.io volume in prod)
 - All series/image endpoints are under `app/routers/` with FastAPI `APIRouter`
 - Routers never `db.get()` a client-supplied ID. Resolve with `get_owned(Model, id, user, db)` from `app/ownership.py`; Trash passes `include_deleted=True`.
 - `series_to_detail(s, db)` and `image_to_resp(img, base_url)` in `app/routers/series.py` are the canonical serializers — import them where needed. Note: `series_to_detail` takes the SQLAlchemy session `db` (not a base URL string) — it fetches settings internally.
-- `get_or_create_settings(db)` in `app/routers/settings.py` is the way to access settings in any router
+- `get_or_create_settings(db)` in `app/routers/settings.py` is the way to access *instance* settings (storage, posting). `get_user_settings(user_id, db)` in `app/routers/user_settings.py` is the way to read a User's AI keys/models — never read AI keys from `AppSettings`
 - `DELETE /api/images/{id}` returns the updated `SeriesDetail` (soft deletes and refreshes in one call)
 - `PATCH /api/images/{id}/status` returns the updated `SeriesDetail`
 - Routes that use the Owner's AI keys or posting tokens take `Depends(require_admin)` and carry a `# stopgap-1b: lift in #N` comment; `tests/test_admin_gate.py::GATE_INVENTORY` lists them and must be edited when a gate is lifted

@@ -499,7 +499,9 @@ def test_create_posts_copies_seo_from_chosen_variant(client):
     from app.services.ai.base import AIVariantData
 
     sid, img_id = _series_with_image(client)
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
 
     fake_with_seo = [
         AIVariantData(

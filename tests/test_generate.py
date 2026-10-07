@@ -86,8 +86,12 @@ _FAKE = [
 def test_generate_uses_provider_default_model(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
-        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-opus-4-7"},
+        "/api/me/settings",
+        json={
+            "default_provider": "anthropic",
+            "anthropic_api_key": "sk-test",
+            "anthropic_default_model": "claude-opus-4-7",
+        },
     )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -102,7 +106,9 @@ def test_generate_uses_provider_default_model(client):
 
 def test_generate_response_includes_cost_usd(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -128,7 +134,10 @@ def test_generate_creates_variants(client):
         p.generate_variants = MagicMock(return_value=_FAKE)
         mp.return_value = p
         # need an api key set
-        client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+        client.put(
+            "/api/me/settings",
+            json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"},
+        )
         resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
     assert resp.status_code == 202
     variants = client.get(f"/api/series/{sid}").json()["ai_variants"]
@@ -143,7 +152,9 @@ def test_generate_appends_not_replaces(client):
         f"/api/series/{sid}/images/register",
         json={"r2_key": "images/test.jpg", "original_filename": "test.jpg"},
     )
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     for _ in range(2):
         with (
             patch("app.routers.generate.get_provider") as mp,
@@ -160,14 +171,18 @@ def test_generate_appends_not_replaces(client):
 
 def test_generate_no_images_returns_400(client):
     sid = client.post("/api/series", json={"title": "Empty"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     resp = client.post(f"/api/series/{sid}/generate", json={"include_images": True})
     assert resp.status_code == 400
 
 
 def test_generate_text_only_requires_hint(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     resp = client.post(f"/api/series/{sid}/generate", json={})
     assert resp.status_code == 400
     assert "Hint" in resp.json()["detail"]
@@ -175,7 +190,9 @@ def test_generate_text_only_requires_hint(client):
 
 def test_generate_text_only_with_hint(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -187,7 +204,9 @@ def test_generate_text_only_with_hint(client):
 
 def _make_series_with_variants(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -199,7 +218,9 @@ def _make_series_with_variants(client):
 
 def test_generate_saves_hint_on_variants(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -212,7 +233,9 @@ def test_generate_saves_hint_on_variants(client):
 
 def test_generate_hint_none_when_omitted(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     client.post(
         f"/api/series/{sid}/images/register",
         json={"r2_key": "images/test.jpg", "original_filename": "test.jpg"},
@@ -259,7 +282,14 @@ def test_delete_variant_not_found(client):
 def _make_draft_and_full(client):
     """Create a draft variant (step-1) and a dependent full variant (step-2, different provider)."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test", "openai_api_key": "sk-oa"})
+    client.put(
+        "/api/me/settings",
+        json={
+            "default_provider": "anthropic",
+            "anthropic_api_key": "sk-test",
+            "openai_api_key": "sk-oa",
+        },
+    )
     # Step-1 draft (anthropic)
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -423,7 +453,9 @@ def _register_images(client, sid, keys):
 
 def test_generate_selected_image_ids_used_in_order(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     img_ids = _register_images(client, sid, ["images/a.jpg", "images/b.jpg", "images/c.jpg"])
 
     captured = {}
@@ -452,7 +484,9 @@ def test_generate_selected_image_ids_used_in_order(client):
 
 def test_generate_selected_image_ids_capped_at_3(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     img_ids = _register_images(client, sid, [f"images/{c}.jpg" for c in "abcd"])
 
     captured = {}
@@ -503,7 +537,9 @@ def test_extract_json_repairs_cyrillic_hashtags():
 
 def test_generate_fallback_to_order_index_without_selected_ids(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     _register_images(client, sid, ["images/x.jpg", "images/y.jpg"])
 
     captured = {}
@@ -547,7 +583,9 @@ _FAKE_SEMANTIC = [
 
 def test_generate_response_includes_semantic_fields(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_SEMANTIC)
@@ -567,7 +605,9 @@ def test_generate_response_includes_semantic_fields(client):
 
 def test_patch_variant_semantic_fields(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -592,7 +632,9 @@ def test_patch_variant_semantic_fields(client):
 
 def test_patch_variant_partial_update_preserves_other_fields(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_SEMANTIC)
@@ -616,7 +658,9 @@ def test_series_detail_chosen_variant_includes_hint(client):
     """Chosen variant hint must be in series detail so the frontend can
     pre-fill the generate hint field on load without requiring a re-click."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -635,7 +679,9 @@ def test_series_detail_returns_semantic_fields_on_chosen_variant(client):
     """Series detail exposes semantic fields on the chosen variant so the
     frontend can pre-fill the Semantic Layer section on load."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_SEMANTIC)
@@ -718,7 +764,9 @@ def test_build_step2_system_prompt_language_ru():
 
 def test_generate_num_variants_passed_to_provider(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     captured = {}
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -736,7 +784,9 @@ def test_generate_num_variants_passed_to_provider(client):
 def test_generate_returns_newest_variants_first(client):
     """series_to_detail sorts by generated_at desc — new drafts must be at index 0."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     # First batch: 1 full variant
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -772,8 +822,12 @@ def test_generate_partial_variant_has_model_field(client):
     """Partial (step-1) variants must carry the model name for display."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
-        json={"anthropic_api_key": "sk-test", "anthropic_default_model": "claude-sonnet-4-6"},
+        "/api/me/settings",
+        json={
+            "default_provider": "anthropic",
+            "anthropic_api_key": "sk-test",
+            "anthropic_default_model": "claude-sonnet-4-6",
+        },
     )
     _draft = [
         AIVariantData(
@@ -844,7 +898,9 @@ _FAKE_EXPANDED = AIVariantData(
 
 def test_generate_step1_passes_language_to_provider(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     captured = {}
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -861,7 +917,9 @@ def test_generate_step1_passes_language_to_provider(client):
 
 def test_generate_step1_ru_passes_language_to_provider(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     captured = {}
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -878,7 +936,9 @@ def test_generate_step1_ru_passes_language_to_provider(client):
 
 def test_generate_step1_stores_partial_variant(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN)
@@ -897,7 +957,9 @@ def test_generate_step1_stores_partial_variant(client):
 
 def test_generate_full_creates_new_variant(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
@@ -917,7 +979,9 @@ def test_generate_full_creates_new_variant(client):
 
 def test_generate_full_updates_existing_variant(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN)
@@ -944,7 +1008,9 @@ def test_generate_full_updates_existing_variant(client):
 def test_generate_full_same_provider_draft_updates_in_place(client):
     """Draft + same provider/model as full gen → update in-place, no new record."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN[:1])
@@ -981,7 +1047,14 @@ def test_generate_full_same_provider_draft_updates_in_place(client):
 def test_generate_full_different_provider_creates_new_variant(client):
     """Draft + different provider for full gen → new variant created, draft preserved."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test", "openai_api_key": "sk-oa"})
+    client.put(
+        "/api/me/settings",
+        json={
+            "default_provider": "anthropic",
+            "anthropic_api_key": "sk-test",
+            "openai_api_key": "sk-oa",
+        },
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN[:1])
@@ -1022,7 +1095,9 @@ def test_generate_full_different_provider_creates_new_variant(client):
 def test_generate_full_on_full_variant_creates_new(client):
     """Regenerating full content on an already-full variant creates new record, original untouched."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
@@ -1076,7 +1151,9 @@ def test_generate_full_missing_series_404(client):
 
 def test_generate_full_empty_description_400(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     resp = client.post(
         f"/api/series/{sid}/generate-full",
         json={"description": "   ", "language": "en"},
@@ -1086,7 +1163,9 @@ def test_generate_full_empty_description_400(client):
 
 def test_generate_full_invalid_variant_id_404(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
@@ -1100,7 +1179,9 @@ def test_generate_full_invalid_variant_id_404(client):
 
 def test_generate_full_passes_language_to_provider(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     captured = {}
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -1122,7 +1203,7 @@ def test_generate_full_passes_language_to_provider(client):
 def test_generate_uses_openrouter_provider(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or-key", "default_provider": "openrouter"},
     )
     with patch("app.routers.generate.get_provider") as mp:
@@ -1137,7 +1218,7 @@ def test_generate_uses_openrouter_provider(client):
 def test_generate_openrouter_uses_default_model_from_settings(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={
             "openrouter_api_key": "sk-or-key",
             "default_provider": "openrouter",
@@ -1156,7 +1237,7 @@ def test_generate_openrouter_uses_default_model_from_settings(client):
 
 def test_generate_openrouter_no_key_returns_400(client):
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"default_provider": "openrouter"})
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
     resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
     assert resp.status_code == 400
     assert "openrouter" in resp.json()["detail"].lower()
@@ -1233,7 +1314,7 @@ def test_generate_openrouter_stores_actual_model_and_provider(client):
     """When OpenRouter returns a real model, store actual provider+model in AIVariant."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or", "default_provider": "openrouter"},
     )
     actual_variants = _make_actual_variants("google/gemma-3-27b-it:free")
@@ -1252,7 +1333,7 @@ def test_generate_openrouter_no_actual_model_stores_requested(client):
     """When actual_model is None, store the requested provider+model."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or", "default_provider": "openrouter"},
     )
     actual_variants = _make_actual_variants(None)
@@ -1271,7 +1352,7 @@ def test_generate_full_openrouter_stores_actual_provider_and_model(client):
     """generate-full stores actual provider+model when OpenRouter resolves it."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or", "default_provider": "openrouter"},
     )
     expanded = AIVariantData(
@@ -1301,7 +1382,7 @@ def test_generate_full_openrouter_same_actual_model_updates_draft_in_place(clien
     """Draft stored with actual provider/model; same actual model on expand → in-place update."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or", "default_provider": "openrouter"},
     )
     # Step 1: create draft with actual_model set
@@ -1346,7 +1427,7 @@ def test_generate_full_openrouter_different_actual_model_creates_new_record(clie
     """Different actual model on expand → new record created, draft preserved."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
     client.put(
-        "/api/settings",
+        "/api/me/settings",
         json={"openrouter_api_key": "sk-or", "default_provider": "openrouter"},
     )
     # Step 1: draft with google model
@@ -1397,7 +1478,14 @@ def test_generate_full_openrouter_different_actual_model_creates_new_record(clie
 def test_generate_full_new_record_sets_draft_id(client):
     """New full-gen variant from a draft must carry draft_id pointing to the source."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test", "openai_api_key": "sk-oa"})
+    client.put(
+        "/api/me/settings",
+        json={
+            "default_provider": "anthropic",
+            "anthropic_api_key": "sk-test",
+            "openai_api_key": "sk-oa",
+        },
+    )
     # Step 1: draft with anthropic
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
@@ -1430,7 +1518,9 @@ def test_generate_full_new_record_sets_draft_id(client):
 def test_generate_full_in_place_draft_id_is_none(client):
     """In-place update (same provider/model) must not set draft_id."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN[:1])
@@ -1457,7 +1547,9 @@ def test_generate_full_in_place_draft_id_is_none(client):
 def test_generate_full_no_variant_id_draft_id_is_none(client):
     """Fresh generate-full without variant_id must have draft_id=None."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.expand_variant = MagicMock(return_value=_FAKE_EXPANDED)
@@ -1474,7 +1566,9 @@ def test_generate_full_no_variant_id_draft_id_is_none(client):
 def test_generate_step1_draft_id_is_none(client):
     """Step-1 variants (generate endpoint) always have draft_id=None."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE_PARTIAL_EN)
@@ -1492,7 +1586,9 @@ def test_generate_step1_draft_id_is_none(client):
 def test_generate_returns_generating_status_immediately(client):
     """POST /generate responds with generation_status='generating_draft' before BG task runs."""
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     with patch("app.routers.generate.get_provider") as mp:
         p = MagicMock()
         p.generate_variants = MagicMock(return_value=_FAKE)
@@ -1507,7 +1603,9 @@ def test_generate_409_when_already_generating(client, db):
     from app.models import Series as _Series
 
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     # Manually set generation_status to simulate an in-progress generation.
     s = db.get(_Series, sid)
     s.generation_status = "generating_draft"
@@ -1521,7 +1619,9 @@ def test_generate_full_409_when_already_generating(client, db):
     from app.models import Series as _Series
 
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     s = db.get(_Series, sid)
     s.generation_status = "generating_full"
     db.commit()
@@ -1538,7 +1638,9 @@ def test_generate_background_sets_idle_on_success(client, db):
     from app.routers.generate import _run_generate_variants
 
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     s = db.get(_Series, sid)
     s.generation_status = "generating_draft"
     db.commit()
@@ -1575,7 +1677,9 @@ def test_generate_full_background_sets_idle_on_success(client, db):
     from app.routers.generate import _run_generate_full
 
     sid = client.post("/api/series", json={"title": "T"}).json()["id"]
-    client.put("/api/settings", json={"anthropic_api_key": "sk-test"})
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
     s = db.get(_Series, sid)
     s.generation_status = "generating_full"
     db.commit()
@@ -1602,3 +1706,93 @@ def test_generate_full_background_sets_idle_on_success(client, db):
     s = db.get(_Series, sid)
     assert s.generation_status == "idle"
     assert len(s.ai_variants) == 1
+
+
+# ── per-user keys / non-admin access (2A) ─────────────────────────────────────
+
+
+def _own_series(db, user, name="mine"):
+    from app.models import Series
+
+    s = Series(name=name, user_id=user.id)
+    db.add(s)
+    db.commit()
+    return s.id
+
+
+def test_non_admin_generates_with_own_key(client, db):
+    from tests.conftest import login_as
+
+    u = login_as(client, db)
+    sid = _own_series(db, u)
+    client.put("/api/me/settings", json={"anthropic_api_key": "sk-mine"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = client.post(
+            f"/api/series/{sid}/generate", json={"hint": "a fox", "provider": "anthropic"}
+        )
+    assert resp.status_code == 202
+    assert mp.call_args.args == ("anthropic", "sk-mine")
+    assert client.get(f"/api/series/{sid}").json()["ai_variants"]
+
+
+def test_non_admin_fake_ai_generates_without_key(client, db, monkeypatch):
+    from app.config import AppConfig
+    from tests.conftest import login_as
+
+    monkeypatch.setattr(AppConfig, "fake_ai", True)
+    u = login_as(client, db)
+    sid = _own_series(db, u)
+    resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    assert resp.status_code == 202
+
+
+def test_non_admin_without_key_gets_settings_hint(client, db):
+    from tests.conftest import login_as
+
+    u = login_as(client, db)
+    sid = _own_series(db, u)
+    resp = client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", "provider": "google"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "No Google key. Add one in Settings."
+    resp = client.post(
+        f"/api/series/{sid}/generate-full", json={"description": "d", "provider": "openai"}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "No OpenAI key. Add one in Settings."
+
+
+def test_other_users_key_is_not_used(client, db):
+    from tests.conftest import login_as
+
+    login_as(client, db, email="a@x.com", google_sub="ga")
+    client.put("/api/me/settings", json={"anthropic_api_key": "sk-a"})
+    b = login_as(client, db, email="b@x.com", google_sub="gb")
+    sid = _own_series(db, b)
+    resp = client.post(
+        f"/api/series/{sid}/generate", json={"hint": "a fox", "provider": "anthropic"}
+    )
+    assert resp.status_code == 400
+    assert "Add one in Settings" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("is_admin,expected", [(False, False), (True, True)])
+def test_board_context_only_for_admin_owned_series(client, db, is_admin, expected):
+    import app.routers.generate as gen
+    from app.routers.settings import get_or_create_settings
+    from tests.conftest import login_as
+
+    u = login_as(client, db, is_admin=is_admin)
+    sid = _own_series(db, u)
+    get_or_create_settings(db).pinterest_board_map = '{"Dark Fantasy Art": "1"}'
+    client.put(
+        "/api/me/settings", json={"anthropic_api_key": "sk", "default_provider": "anthropic"}
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        gen._run_generate_variants(sid, {"hint": "a fox"}, db)
+    assert ("Existing Pinterest boards" in p.generate_variants.call_args.args[2]) is expected

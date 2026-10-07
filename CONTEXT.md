@@ -39,11 +39,16 @@ A User with elevated rights over the instance: managing app settings and other U
 **Invite Code**:
 A single shared secret required to complete signup, set by the Owner. Revoking it (rotating or clearing the value) blocks all future signups immediately without affecting existing Users — the Owner's mitigation if the signup link leaks.
 
+**AI Request**:
+One call to an AI provider made on a User's behalf: generating caption drafts, expanding a draft into a full caption, or an AI image fix. Every AI Request is recorded against the User who made it, whichever credentials it used, and the record outlives the Series it was made for.
+_Avoid_: generation (ambiguous between one request and the caption variants it returns)
+
 **Quota**:
-A Free-tier User's monthly spending cap on AI generation, measured in the actual USD cost of their generations (not raw token count). Once a User's spend for the month reaches Quota, they can no longer generate using the app-provided Default AI Access, and must supply their own AI provider credentials to continue.
+A cap on how many AI requests a User may make through Default AI Access per day. The cap is one number for the whole instance, the same for every User, set by an Admin; setting it to zero switches Default AI Access off. Counts requests, not captions produced and not money: one request that returns three caption variants counts once, and a request that fails still counts. Requests made with the User's own AI credentials never count. Once a User reaches Quota they can no longer draw on Default AI Access until the next day, and must supply their own AI provider credentials to keep generating.
+_Avoid_: spend cap, budget (Quota is not measured in USD)
 
 **Default AI Access**:
-The Owner's own AI provider key, used automatically for Users who haven't configured their own provider credentials. Points at free-tier OpenRouter models so it costs the Owner nothing regardless of how many Users draw on it.
+An OpenRouter key held by the instance (supplied by the Owner) that any User without their own OpenRouter key draws on. Limited to free OpenRouter models, so it costs the Owner nothing regardless of how many Users draw on it. Separate from the Owner's personal AI credentials: the Owner, like every User, keeps their own keys, and no other User ever generates with them.
 
 **Quick Capture**:
 An Android entry point (PWA share-target) that creates a new Series directly from photos shared out of the phone's gallery/camera, without opening the desktop editor. Distinct from normal Series creation/editing, which stays on the full desktop-oriented UI.

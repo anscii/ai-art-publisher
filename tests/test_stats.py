@@ -1,10 +1,11 @@
 from app.models import AIVariant, Series, User
 
 
-def _make_series(db, name="s1"):
-    owner = User(email="fixture-owner@example.com", google_sub="g-fixture")
-    db.add(owner)
-    db.commit()
+def _make_series(db, name="s1", owner=None):
+    if owner is None:
+        from app.routers.auth import _get_or_create_local_user
+
+        owner = _get_or_create_local_user(db)  # the user an auth-less TestClient acts as
     s = Series(name=name, user_id=owner.id)
     db.add(s)
     db.commit()
@@ -84,3 +85,24 @@ def test_ai_stats_cost_per_selection(client, db):
     row = resp.json()["rows"][0]
     assert row["cost_per_selection"] is not None
     assert abs(row["cost_per_selection"] - 0.016) < 1e-9
+
+
+def test_stats_scoped_per_user_and_open_to_non_admin(client, db):
+    from tests.conftest import login_as
+
+    a = login_as(client, db, email="a@x.com", google_sub="ga")
+    b = User(email="b@x.com", google_sub="gb")
+    db.add(b)
+    db.commit()
+    _make_variant(db, _make_series(db, "sa", owner=a).id)
+    _make_variant(db, _make_series(db, "sb", owner=b).id)
+    _make_variant(db, _make_series(db, "sb2", owner=b).id)
+
+    sb3 = _make_series(db, "sb3", owner=b)
+    sb3.chosen_variant_id = _make_variant(db, sb3.id).id
+    db.commit()
+
+    resp = client.get("/api/stats/ai")
+    assert resp.status_code == 200
+    assert resp.json()["total_generated"] == 1
+    assert resp.json()["total_chosen"] == 0  # B's chosen variant must not leak into A's stats
