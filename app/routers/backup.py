@@ -46,6 +46,12 @@ def trigger_backup(request: Request, db: Session = Depends(get_db)):
     settings = get_or_create_settings(db)
     if not settings.r2_endpoint or not settings.r2_access_key:
         raise HTTPException(status_code=500, detail="R2 not configured")
+    bucket = cfg.backup_bucket
+    if not bucket or bucket == settings.r2_bucket:
+        raise HTTPException(
+            status_code=500,
+            detail="BACKUP_BUCKET must be set to a private bucket distinct from the image bucket",
+        )
 
     _log.info("backup started")
 
@@ -72,7 +78,7 @@ def trigger_backup(request: Request, db: Session = Depends(get_db)):
 
     s3 = _r2_client(settings)
     s3.put_object(
-        Bucket=settings.r2_bucket,
+        Bucket=bucket,
         Key=key,
         Body=compressed,
         ContentType="application/gzip",
@@ -81,11 +87,11 @@ def trigger_backup(request: Request, db: Session = Depends(get_db)):
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=cfg.backup_retention_days)
     # list_objects_v2 returns up to 1000 objects; sufficient for ~2.7 years of daily backups
-    resp = s3.list_objects_v2(Bucket=settings.r2_bucket, Prefix=_BACKUP_PREFIX)
+    resp = s3.list_objects_v2(Bucket=bucket, Prefix=_BACKUP_PREFIX)
     deleted = 0
     for obj in resp.get("Contents", []):
         if obj["LastModified"] < cutoff and obj["Key"] != key:
-            s3.delete_object(Bucket=settings.r2_bucket, Key=obj["Key"])
+            s3.delete_object(Bucket=bucket, Key=obj["Key"])
             deleted += 1
     _log.info("backup cleanup: deleted %d old backup(s)", deleted)
 

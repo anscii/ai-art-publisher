@@ -362,6 +362,7 @@ Set `LOCAL_STORAGE=true` to skip R2 entirely and store uploads in `DATA_DIR/uplo
 | `FAKE_AI` | `false` | Return stub AI variants without API calls |
 | `SCHEDULER_SECRET` | _(unset)_ | Token for `/internal/scheduler/trigger` endpoint |
 | `BACKUP_TOKEN` | _(unset)_ | Token for `/internal/backup-db` download endpoint |
+| `BACKUP_BUCKET` | _(unset)_ | **Private** R2 bucket for DB dumps. Required for backups; must not be the public image bucket (the dump holds all credentials in plaintext) |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 
 All API keys can also be set via the Settings UI (⚙️) after first boot — they are stored in the `AppSettings` DB row. Environment variables take precedence on first boot only.
