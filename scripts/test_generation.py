@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routers.generate import _get_api_key, get_provider  # noqa: E402
+from app.routers.generate import get_provider  # noqa: E402
+from app.services.ai.access import own_key  # noqa: E402
 from app.services.ai.catalogue import PROVIDER_DEFAULT_MODELS  # noqa: E402
 from scripts._utils import FakeSettings  # noqa: E402
 
@@ -50,7 +51,7 @@ def main() -> None:
     args = parser.parse_args()
 
     model = args.model or PROVIDER_DEFAULT_MODELS.get(args.provider, "")
-    api_key = _get_api_key(FakeSettings(), args.provider)
+    api_key = own_key(FakeSettings(), args.provider)
     if not api_key:
         print(f"Error: no API key for provider '{args.provider}' (set env var)", file=sys.stderr)
         sys.exit(1)

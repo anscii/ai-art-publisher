@@ -12,10 +12,21 @@ def test_update_then_get_masks_token(client):
     assert "anthropic_api_key" not in resp.json()
 
 
-def test_openrouter_api_key_masked(client):
-    client.put("/api/settings", json={"openrouter_api_key": "sk-or-key"})
+def test_default_ai_openrouter_key_masked(client):
+    client.put("/api/settings", json={"default_ai_openrouter_key": "sk-or-key"})
     data = client.get("/api/settings").json()
-    assert data["openrouter_api_key"] == "****"
+    assert data["default_ai_openrouter_key"] == "****"
+    assert "openrouter_api_key" not in data
+
+
+def test_default_ai_daily_limit(client):
+    assert client.get("/api/settings").json()["default_ai_daily_limit"] == 20
+    r = client.put("/api/settings", json={"default_ai_daily_limit": 5})
+    assert r.json()["default_ai_daily_limit"] == 5
+    client.put("/api/settings", json={"default_ai_daily_limit": 0})
+    assert client.get("/api/settings").json()["default_ai_daily_limit"] == 0
+    assert client.put("/api/settings", json={"default_ai_daily_limit": -1}).status_code == 422
+    assert client.put("/api/settings", json={"default_ai_daily_limit": 1001}).status_code == 422
 
 
 def test_partial_update_preserves_other_fields(client):

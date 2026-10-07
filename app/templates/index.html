@@ -326,6 +326,7 @@
               <button type="button" class="aap-icon-btn" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
               <button type="button" class="btn aap-btn aap-btn--sm" onclick="testConn('openrouter',this)">Test</button>
             </div>
+            <div id="defaultAiUsage" class="small text-muted"></div>
             <div class="d-grid gap-2 mt-2" style="grid-template-columns: 1fr 1fr 1fr;">
               <div class="aap-field-block">
                 <span class="aap-field-block__label">Default provider</span>
@@ -371,6 +372,23 @@
 
         <div class="admin-only">
         <h3 class="aap-section-label">Instance</h3>
+
+        <!-- Default AI Access -->
+        <section class="aap-settings-section">
+          <h3 class="aap-section-label">Default AI Access</h3>
+          <div class="aap-settings-section__rows">
+            <div class="aap-secret-row">
+              <span class="aap-secret-row__label">OpenRouter &middot; Default Key</span>
+              <input type="password" class="form-control aap-input aap-input--secret" id="s_default_ai_openrouter_key" aria-label="Default AI OpenRouter Key" autocomplete="off">
+              <button type="button" class="aap-icon-btn" aria-label="Show password" onclick="togglePass(this)"><i class="bi bi-eye"></i></button>
+              <button type="button" class="btn aap-btn aap-btn--sm" onclick="testConn('default_ai',this)">Test</button>
+            </div>
+            <div class="aap-field-block">
+              <span class="aap-field-block__label">Free requests per user per day (0 = off)</span>
+              <input type="number" min="0" class="form-control aap-input" id="s_default_ai_daily_limit" aria-label="Free requests per user per day">
+            </div>
+          </div>
+        </section>
 
         <!-- Channels -->
         <section class="aap-settings-section">

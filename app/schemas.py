@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.enums import Platform
 
@@ -26,7 +26,8 @@ class UserSettingsUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     invite_code: str | None = None
-    openrouter_api_key: str | None = None
+    default_ai_openrouter_key: str | None = None
+    default_ai_daily_limit: int | None = Field(None, ge=0, le=1000)
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
     telegram_api_id: str | None = None

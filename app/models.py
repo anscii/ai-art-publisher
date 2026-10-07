@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.crypto import EncryptedStr
@@ -277,8 +277,9 @@ class AppSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     invite_code: Mapped[str] = mapped_column(String, default="")
-    # Default AI Access key (PR 2B); the Owner's personal keys live in UserSettings
-    openrouter_api_key: Mapped[str] = mapped_column(String, default="")
+    # Default AI Access key; the Owner's personal keys live in UserSettings
+    default_ai_openrouter_key: Mapped[str] = mapped_column(String, default="")
+    default_ai_daily_limit: Mapped[int] = mapped_column(Integer, default=20)
     telegram_bot_token: Mapped[str] = mapped_column(String, default="")
     telegram_channel_id: Mapped[str] = mapped_column(String, default="")
     telegram_api_id: Mapped[str] = mapped_column(String, default="")
@@ -316,3 +317,19 @@ class UserSettings(Base):
     deepseek_default_model: Mapped[str] = mapped_column(String, default="")
     openrouter_default_model: Mapped[str] = mapped_column(String, default="")
     image_edit_model: Mapped[str] = mapped_column(String, default="")
+
+
+class AIRequest(Base):
+    """One provider call (ledger). Rows with via_default_access count toward the daily Quota."""
+
+    __tablename__ = "ai_requests"
+    __table_args__ = (Index("ix_ai_requests_user_created", "user_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # draft / full / image_fix
+    provider: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    via_default_access: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

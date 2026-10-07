@@ -35,6 +35,15 @@ def _setup(tmp_path, monkeypatch) -> tuple[Config, str]:
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE user_settings"))
+        # undo 038
+        conn.execute(text("DROP TABLE ai_requests"))
+        conn.execute(text("ALTER TABLE app_settings DROP COLUMN default_ai_daily_limit"))
+        conn.execute(
+            text(
+                "ALTER TABLE app_settings RENAME COLUMN "
+                "default_ai_openrouter_key TO openrouter_api_key"
+            )
+        )
         for c in _OLD_COLS:
             conn.execute(
                 text(f"ALTER TABLE app_settings ADD COLUMN {c} VARCHAR NOT NULL DEFAULT ''")
