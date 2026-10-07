@@ -98,6 +98,11 @@ def test_stats_scoped_per_user_and_open_to_non_admin(client, db):
     _make_variant(db, _make_series(db, "sb", owner=b).id)
     _make_variant(db, _make_series(db, "sb2", owner=b).id)
 
+    sb3 = _make_series(db, "sb3", owner=b)
+    sb3.chosen_variant_id = _make_variant(db, sb3.id).id
+    db.commit()
+
     resp = client.get("/api/stats/ai")
     assert resp.status_code == 200
     assert resp.json()["total_generated"] == 1
+    assert resp.json()["total_chosen"] == 0  # B's chosen variant must not leak into A's stats

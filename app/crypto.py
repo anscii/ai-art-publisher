@@ -1,11 +1,14 @@
 import base64
 import hashlib
+import logging
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator
 
 from app.config import get_config
+
+logger = logging.getLogger("app.crypto")
 
 
 def _fernet() -> Fernet:
@@ -19,6 +22,11 @@ def _fernet() -> Fernet:
     return Fernet(key)
 
 
+def check_key() -> None:
+    """Fail fast at startup on a malformed SETTINGS_ENCRYPTION_KEY instead of a 500 per request."""
+    _fernet()
+
+
 def encrypt(value: str) -> str:
     return _fernet().encrypt(value.encode()).decode() if value else ""
 
@@ -29,7 +37,10 @@ def decrypt(value: str) -> str:
     try:
         return _fernet().decrypt(value.encode()).decode()
     except InvalidToken:
-        return ""  # wrong key: treat as unset, user re-enters
+        # Wrong SETTINGS_ENCRYPTION_KEY (or rows written under the derived key): the value reads
+        # as unset and the user re-enters it. Logged so it is not mistaken for "never set".
+        logger.warning("decrypt failed: SETTINGS_ENCRYPTION_KEY does not match stored ciphertext")
+        return ""
 
 
 class EncryptedStr(TypeDecorator[str]):

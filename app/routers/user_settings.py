@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import User, UserSettings
 from app.routers.auth import get_current_user
 from app.routers.settings import (
+    SECRET_FIELDS,
     _test_anthropic,
     _test_deepseek,
     _test_google,
@@ -54,6 +55,8 @@ def update_my_settings(
 ) -> dict:
     us = get_user_settings(user.id, db)
     for field, value in body.model_dump(exclude_none=True).items():
+        if field in SECRET_FIELDS and value == "****":
+            continue  # masked placeholder echoed back, not a new value
         setattr(us, field, value)
     db.commit()
     return _to_dict(us)

@@ -54,3 +54,20 @@ def test_providers_open_to_non_admin(client, db):
     resp = client.get("/api/settings/providers")
     assert resp.status_code == 200
     assert "anthropic" in resp.json()
+
+
+def test_put_masked_placeholder_does_not_overwrite_key(client, db):
+    u = login_as(client, db)
+    client.put("/api/me/settings", json={"anthropic_api_key": "sk-real"})
+    client.put("/api/me/settings", json={"anthropic_api_key": "****"})
+    from app.models import UserSettings
+
+    db.expire_all()
+    assert db.get(UserSettings, u.id).anthropic_api_key == "sk-real"
+
+
+def test_put_empty_string_clears_key(client, db):
+    login_as(client, db)
+    client.put("/api/me/settings", json={"anthropic_api_key": "sk-real"})
+    client.put("/api/me/settings", json={"anthropic_api_key": ""})
+    assert client.get("/api/me/settings").json()["anthropic_api_key"] == ""

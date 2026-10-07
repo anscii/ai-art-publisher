@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 import app.database as _db_module
 from app.config import get_config
+from app.crypto import check_key
 from app.database import init_db
 from app.models import Post, Series
 from app.routers import auth as auth_router
@@ -53,6 +54,7 @@ _main_logger = logging.getLogger("app.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    check_key()
     init_db()
     _configure_app_logging()  # after init_db so alembic's root handler exists to remove
     # Reset posts stuck in "sending" status from a previous process that was killed mid-task.

@@ -60,6 +60,8 @@ def get_settings(db: Session = Depends(get_db)) -> dict:
 def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)) -> dict:
     s = get_or_create_settings(db)
     for field, value in body.model_dump(exclude_none=True).items():
+        if field in SECRET_FIELDS and value == "****":
+            continue  # masked placeholder echoed back, not a new value
         setattr(s, field, value)
     db.commit()
     return _to_dict(s)

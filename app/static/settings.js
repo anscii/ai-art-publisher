@@ -55,10 +55,15 @@ const _AI_PROVIDERS = ['anthropic', 'openai', 'google', 'deepseek', 'openrouter'
 async function loadSettings() {
   try {
     const s = await apiFetch('GET', '/api/me/settings');
-    if (App.user?.is_admin) Object.assign(s, await apiFetch('GET', '/api/settings'));
+    if (App.user?.is_admin) {
+      // Only instance fields: /api/settings also has openrouter_api_key (the Default AI Access key),
+      // which must not overwrite the user's own key in the My AI block.
+      const inst = await apiFetch('GET', '/api/settings');
+      _INSTANCE_FIELDS.forEach(f => { s[f] = inst[f]; });
+    }
     [..._MY_FIELDS, ..._INSTANCE_FIELDS].forEach(f => {
       const el = document.getElementById('s_' + f);
-      if (el && !el.list && el.tagName !== 'SELECT') el.value = s[f] || '';
+      if (el && !el.list && el.tagName !== 'SELECT') { el.value = s[f] || ''; el.dataset.loaded = el.value; }
     });
     const provEl = document.getElementById('s_default_provider');
     if (provEl && s.default_provider) provEl.value = s.default_provider;
@@ -86,6 +91,7 @@ function _collect(fields) {
     if (!el) return;
     const val = el.value.trim();
     if (val && val !== '****') body[f] = val;
+    else if (!val && el.dataset.loaded === '****') body[f] = '';  // user cleared a saved secret
   });
   return body;
 }

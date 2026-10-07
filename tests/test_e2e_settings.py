@@ -94,3 +94,28 @@ def test_model_field_accepts_free_text(page, live_server):
         "() => document.getElementById('s_openrouter_default_model').value === 'vendor/custom-model-x'",
         timeout=5000,
     )
+
+
+def test_my_openrouter_key_not_overwritten_by_instance_key(page, live_server):
+    """Admin view: the instance (Default AI Access) OpenRouter key must not show in My AI."""
+    httpx.put(f"{live_server}/api/settings", json={"openrouter_api_key": "sk-instance"}, timeout=5)
+    _api_put(live_server, {"openrouter_api_key": ""})
+
+    _open_settings(page, live_server)
+    page.wait_for_function(
+        "() => document.querySelector('#s_r2_endpoint').dataset.loaded !== undefined"
+    )
+    assert page.locator("#s_openrouter_api_key").input_value() == ""
+
+
+def test_clearing_saved_key_removes_it(page, live_server):
+    _api_put(live_server, {"deepseek_api_key": "sk-deepseek-fake"})
+
+    _open_settings(page, live_server)
+    key = page.locator("#s_deepseek_api_key")
+    page.wait_for_function("() => document.querySelector('#s_deepseek_api_key').value === '****'")
+    key.fill("")
+    page.locator("#settingsModal").get_by_role("button", name="Save").click()
+    page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
+
+    assert httpx.get(f"{live_server}/api/me/settings", timeout=5).json()["deepseek_api_key"] == ""
