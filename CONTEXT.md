@@ -50,6 +50,10 @@ _Avoid_: spend cap, budget (Quota is not measured in USD)
 **Default AI Access**:
 An OpenRouter key held by the instance (supplied by the Owner) that any User without their own OpenRouter key draws on. Limited to free OpenRouter models, so it costs the Owner nothing regardless of how many Users draw on it. Separate from the Owner's personal AI credentials: the Owner, like every User, keeps their own keys, and no other User ever generates with them.
 
+**Style Guide**:
+A User's own description of the taste their captions should have (voice, genres, audiences). Replaces the default taste; never changes the caption format. Empty means the instance's neutral default.
+_Avoid_: prompt, system prompt (the style guide is only the taste part)
+
 **Quick Capture**:
 An Android entry point (PWA share-target) that creates a new Series directly from photos shared out of the phone's gallery/camera, without opening the desktop editor. Distinct from normal Series creation/editing, which stays on the full desktop-oriented UI.
 

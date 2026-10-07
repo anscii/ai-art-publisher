@@ -4,6 +4,7 @@ import pytest
 
 from app.models import AIVariant
 from app.services.ai.base import (
+    DEFAULT_STYLE_GUIDE,
     AIVariantData,
     _ensure_newlines,
     build_step1_system_prompt,
@@ -760,6 +761,76 @@ def test_build_step2_system_prompt_language_en():
 def test_build_step2_system_prompt_language_ru():
     prompt = build_step2_system_prompt("ru")
     assert "description_en" in prompt
+
+
+def test_prompts_start_with_default_or_custom_style_guide():
+    for build in (build_step1_system_prompt, build_step2_system_prompt):
+        assert build().startswith(DEFAULT_STYLE_GUIDE)
+        assert build(style_guide="  MY STYLE  ").startswith("MY STYLE")
+        assert DEFAULT_STYLE_GUIDE not in build(style_guide="MY STYLE")
+
+
+def test_prompts_keep_contract_markers_with_custom_style_guide():
+    p1 = build_step1_system_prompt(2, "en", style_guide="X")
+    p2 = build_step2_system_prompt("en", style_guide="X")
+    assert "description_en" in p1 and "Respond ONLY with valid JSON" in p1
+    for marker in ("description_ru", "title_ru", "archive_classification"):
+        assert marker in p2
+    assert "Respond ONLY with a valid JSON object" in p2
+
+
+def test_no_owner_taste_in_app_sources():
+    from pathlib import Path
+
+    names = [
+        "Zelazny", "Bradbury", "Reynolds", "Lovecraft", "Gaiman",
+        "Pratchett", "Bulgakov", "Strugatsky", "Dyachenko",
+    ]  # fmt: skip
+    for f in Path("app").rglob("*.py"):
+        text = f.read_text()
+        for n in names:
+            assert n not in text, f"{n} in {f}"
+
+
+def test_openai_provider_sends_style_guide_as_system_prefix():
+    from app.services.ai.openai import OpenAIProvider
+
+    with patch("openai.OpenAI"):
+        p = OpenAIProvider(api_key="sk-test")
+    p.style_guide = "X-STYLE"
+    resp = MagicMock()
+    resp.choices[
+        0
+    ].message.content = (
+        '{"title": "t", "title_ru": "т", "description_en": "a", "description_ru": "б"}'
+    )
+    resp.usage.prompt_tokens = resp.usage.completion_tokens = 1
+    p._call_api = MagicMock(return_value=resp)
+    p.expand_variant("desc", "en", "gpt-4o")
+    messages = p._call_api.call_args.args[1]
+    assert messages[0]["content"].startswith("X-STYLE")
+
+
+def _generate_with_style(client, db, email, sub, style):
+    from tests.conftest import login_as
+
+    login_as(client, db, email=email, google_sub=sub)
+    client.put(
+        "/api/me/settings",
+        json={"default_provider": "anthropic", "anthropic_api_key": "sk", "style_guide": style},
+    )
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        client.post(f"/api/series/{sid}/generate", json={"hint": "a fox"})
+    return p.style_guide
+
+
+def test_generate_applies_only_own_style_guide(client, db):
+    assert _generate_with_style(client, db, "a@x.com", "ga", "MY STYLE") == "MY STYLE"
+    assert _generate_with_style(client, db, "b@x.com", "gb", "") == ""
 
 
 def test_generate_num_variants_passed_to_provider(client):

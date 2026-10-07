@@ -160,6 +160,7 @@ def _run_generate_variants(series_id: str, body_data: dict, db: Session) -> None
     augmented_hint = (hint or "") + board_context if board_context else hint
 
     provider = get_provider(provider_name, api_key)
+    provider.style_guide = us.style_guide
     num_variants = body_data.get("num_variants", 1)
     language = body_data.get("language", "en")
     variants_data = _call_with_timeout(
@@ -219,6 +220,7 @@ def _run_generate_full(series_id: str, body_data: dict, db: Session) -> None:
     augmented_hint = (hint or "") + board_context if board_context else hint
 
     provider = get_provider(provider_name, api_key)
+    provider.style_guide = us.style_guide
     description = body_data["description"]
     language = body_data.get("language", "en")
     vd = _call_with_timeout(provider.expand_variant, description, language, model, augmented_hint)

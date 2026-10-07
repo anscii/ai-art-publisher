@@ -22,6 +22,7 @@ class UserSettingsUpdate(BaseModel):
     deepseek_default_model: str | None = None
     openrouter_default_model: str | None = None
     image_edit_model: str | None = None
+    style_guide: str | None = Field(None, max_length=8000)
 
 
 class SettingsUpdate(BaseModel):

@@ -118,3 +118,24 @@ def test_put_ignores_default_ai_key(client, db):
     assert r.status_code == 200
     assert "default_ai" not in r.json()
     assert client.get("/api/me/settings").json()["default_ai"]["daily_limit"] == 20
+
+
+def test_style_guide_round_trip_and_reset(client, db):
+    login_as(client, db)
+    client.put("/api/me/settings", json={"style_guide": "warm cats"})
+    assert client.get("/api/me/settings").json()["style_guide"] == "warm cats"
+    client.put("/api/me/settings", json={"style_guide": ""})
+    assert client.get("/api/me/settings").json()["style_guide"] == ""
+
+
+def test_style_guide_max_length(client, db):
+    login_as(client, db)
+    assert client.put("/api/me/settings", json={"style_guide": "x" * 8000}).status_code == 200
+    assert client.put("/api/me/settings", json={"style_guide": "x" * 8001}).status_code == 422
+
+
+def test_default_style_guide_exposed(client, db):
+    from app.services.ai.base import DEFAULT_STYLE_GUIDE
+
+    login_as(client, db)
+    assert client.get("/api/me/settings").json()["default_style_guide"] == DEFAULT_STYLE_GUIDE

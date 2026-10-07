@@ -367,6 +367,14 @@
                 <input class="form-control aap-input" list="dl_image_edit" id="s_image_edit_model" autocomplete="off"><datalist id="dl_image_edit"></datalist>
               </div>
             </div>
+            <div class="aap-field-block">
+              <span class="aap-field-block__label">Style guide</span>
+              <textarea class="form-control aap-input" id="s_style_guide" rows="10" maxlength="8000" aria-label="Style guide"></textarea>
+              <div class="d-flex align-items-center gap-2 mt-1">
+                <small class="text-muted">Your caption taste. Empty = the default shown here.</small>
+                <button type="button" class="btn aap-btn aap-btn--sm ms-auto" onclick="startStyleGuideFromDefault()">Start from default</button>
+              </div>
+            </div>
           </div>
         </section>
 

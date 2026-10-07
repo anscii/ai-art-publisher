@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -48,6 +49,7 @@ def main() -> None:
         choices=[1, 2],
         help="1=generate drafts, 2=generate drafts then expand first one (default: 1)",
     )
+    parser.add_argument("--style-file", help="Text file used as the style guide (default: none)")
     args = parser.parse_args()
 
     model = args.model or PROVIDER_DEFAULT_MODELS.get(args.provider, "")
@@ -60,6 +62,8 @@ def main() -> None:
     print(f"Hint: {args.hint}\n")
 
     provider = get_provider(args.provider, api_key)
+    if args.style_file:
+        provider.style_guide = Path(args.style_file).read_text()
 
     print("── Step 1: Generate drafts ──────────────────────────────")
     drafts = provider.generate_variants(
