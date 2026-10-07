@@ -98,7 +98,7 @@ def build_step2_system_prompt(language: str = "en", style_guide: str = "") -> st
 The user provides a finalized {primary_label} description. Do NOT alter it. Generate everything else for the content package.
 
 PARALLEL COMPOSITION RULE (critical):
-Do NOT translate anything. The {secondary_label} title and description must be written fresh, as if a {secondary_label}-speaking author with the same sensibility encountered the same image independently — working from the {secondary_label}-language literary tradition. Similar atmosphere, similar core strangeness. But a different entry point, different detail foregrounded, different rhythm. The {secondary_label} reader should feel this was written for them, not translated at them. Variation is not a flaw — it is the goal.
+Do NOT translate anything. The {secondary_label} title and description must be written fresh, as if a {secondary_label}-speaking author with the same sensibility encountered the same image independently — working from the {secondary_label}-language literary tradition. Similar atmosphere, similar core mood. But a different entry point, different detail foregrounded, different rhythm. The {secondary_label} reader should feel this was written for them, not translated at them. Variation is not a flaw — it is the goal.
 
 Generate a single JSON object with these exact keys:
 
