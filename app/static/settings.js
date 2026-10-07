@@ -35,27 +35,47 @@ function _setTestBtnState(btn, configured) {
   }
 }
 
+// Per-User AI settings (/api/me/settings) vs instance config (/api/settings, admin only).
+const _MY_FIELDS = [
+  'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key',
+  'default_provider',
+  'anthropic_default_model', 'openai_default_model', 'google_default_model',
+  'deepseek_default_model', 'openrouter_default_model', 'image_edit_model',
+];
+const _INSTANCE_FIELDS = [
+  'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
+  'telegram_api_hash', 'telegram_session_string',
+  'instagram_access_token', 'instagram_user_id',
+  'facebook_page_access_token', 'facebook_page_id',
+  'pinterest_access_token', 'pinterest_default_board_id',
+  'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
+];
+const _AI_PROVIDERS = ['anthropic', 'openai', 'google', 'deepseek', 'openrouter'];
+
 async function loadSettings() {
   try {
-    const s = await apiFetch('GET', '/api/settings');
-    const fields = [
-      'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key',
-      'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
-      'telegram_api_hash', 'telegram_session_string',
-      'instagram_access_token', 'instagram_user_id',
-      'facebook_page_access_token', 'facebook_page_id',
-      'pinterest_access_token', 'pinterest_default_board_id',
-      'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
-    ];
-    fields.forEach(f => { const el = document.getElementById('s_' + f); if (el) el.value = s[f] || ''; });
+    const s = await apiFetch('GET', '/api/me/settings');
+    if (App.user?.is_admin) {
+      // Only instance fields: /api/settings also has openrouter_api_key (the Default AI Access key),
+      // which must not overwrite the user's own key in the My AI block.
+      const inst = await apiFetch('GET', '/api/settings');
+      _INSTANCE_FIELDS.forEach(f => { s[f] = inst[f]; });
+    }
+    [..._MY_FIELDS, ..._INSTANCE_FIELDS].forEach(f => {
+      const el = document.getElementById('s_' + f);
+      if (el && !el.list && el.tagName !== 'SELECT') { el.value = s[f] || ''; el.dataset.loaded = el.value; }
+    });
     const provEl = document.getElementById('s_default_provider');
     if (provEl && s.default_provider) provEl.value = s.default_provider;
-    ['anthropic', 'openai', 'google', 'deepseek', 'openrouter'].forEach(p => {
-      const el = document.getElementById('s_' + p + '_default_model');
-      if (el) buildProviderModelSelect(el, p, { selectedValue: s[p + '_default_model'] || '' });
+    // Model fields are <input list=datalist>: fill the datalist, then set the (free-text) value.
+    [..._AI_PROVIDERS, 'image_edit'].forEach(p => {
+      const input = document.getElementById(p === 'image_edit' ? 's_image_edit_model' : 's_' + p + '_default_model');
+      const dl = document.getElementById('dl_' + p);
+      if (!input || !dl) return;
+      const val = s[p === 'image_edit' ? 'image_edit_model' : p + '_default_model'] || '';
+      buildProviderModelSelect(dl, p, { selectedValue: val });
+      input.value = val;
     });
-    const imgEditEl = document.getElementById('s_image_edit_model');
-    if (imgEditEl) buildProviderModelSelect(imgEditEl, 'image_edit', { selectedValue: s.image_edit_model || '' });
     // Initialise Test button states: green if value is '****' (key saved), red if empty.
     _SECRET_FIELD_IDS.forEach(id => {
       const input = document.getElementById(id);
@@ -64,27 +84,22 @@ async function loadSettings() {
   } catch (e) { showToast('Failed to load settings: ' + e.message, 'danger'); }
 }
 
-async function saveSettings() {
-  const fields = [
-    'anthropic_api_key', 'openai_api_key', 'google_api_key', 'deepseek_api_key', 'openrouter_api_key', 'default_provider',
-    'anthropic_default_model', 'openai_default_model', 'google_default_model', 'deepseek_default_model', 'openrouter_default_model',
-    'image_edit_model',
-    'telegram_bot_token', 'telegram_channel_id', 'telegram_api_id',
-    'telegram_api_hash', 'telegram_session_string',
-    'instagram_access_token', 'instagram_user_id',
-    'facebook_page_access_token', 'facebook_page_id',
-    'pinterest_access_token', 'pinterest_default_board_id',
-    'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
-  ];
+function _collect(fields) {
   const body = {};
   fields.forEach(f => {
     const el = document.getElementById('s_' + f);
     if (!el) return;
     const val = el.value.trim();
     if (val && val !== '****') body[f] = val;
+    else if (!val && el.dataset.loaded === '****') body[f] = '';  // user cleared a saved secret
   });
+  return body;
+}
+
+async function saveSettings() {
   try {
-    await apiFetch('PUT', '/api/settings', body);
+    await apiFetch('PUT', '/api/me/settings', _collect(_MY_FIELDS));
+    if (App.user?.is_admin) await apiFetch('PUT', '/api/settings', _collect(_INSTANCE_FIELDS));
     showToast('Settings saved', 'success');
   } catch (e) { showToast(e.message, 'danger'); }
 }
@@ -106,7 +121,7 @@ async function testConn(service, btn) {
   btn.disabled = true;
   btn.textContent = '…';
   try {
-    const result = await apiFetch('POST', '/api/settings/test/' + service);
+    const result = await apiFetch('POST', (_AI_PROVIDERS.includes(service) ? '/api/me/settings/test/' : '/api/settings/test/') + service);
     _setTestBtnState(btn, result.ok);
     showToast(result.message, result.ok ? 'success' : 'danger');
   } catch (e) {

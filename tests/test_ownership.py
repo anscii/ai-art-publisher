@@ -166,7 +166,10 @@ def _api_routes():
 def test_foreign_table_covers_every_id_route():
     actual = {
         (m, r.path) for r in _api_routes() if "{" in r.path for m in r.methods - {"HEAD", "OPTIONS"}
-    } - {("POST", "/api/settings/test/{service}")}
+    } - {
+        ("POST", "/api/settings/test/{service}"),
+        ("POST", "/api/me/settings/test/{provider}"),
+    }
     assert {(m, p) for m, p, _ in FOREIGN} == actual
 
 

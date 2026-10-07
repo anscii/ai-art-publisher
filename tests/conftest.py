@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -97,6 +98,7 @@ def reset_config(monkeypatch):
     monkeypatch.setattr(AppConfig, "google_client_secret", "")
     monkeypatch.setattr(AppConfig, "google_oauth_redirect_uri", "")
     monkeypatch.setattr(AppConfig, "owner_email", "")
+    monkeypatch.setattr(AppConfig, "settings_encryption_key", Fernet.generate_key().decode())
 
 
 @pytest.fixture(autouse=True)

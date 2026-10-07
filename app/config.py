@@ -20,10 +20,14 @@ class AppConfig:
     scheduler_secret: str = os.getenv("SCHEDULER_SECRET", "")
     backup_token: str = os.getenv("BACKUP_TOKEN", "")
     backup_retention_days: int = int(os.getenv("BACKUP_RETENTION_DAYS", "30"))
+    # Private bucket for DB dumps. Must differ from the public image bucket: the dump
+    # holds every credential in plaintext, and R2 public access is bucket-wide.
+    backup_bucket: str = os.getenv("BACKUP_BUCKET", "")
     session_secret: str = (
         os.getenv("SESSION_SECRET", "")
         or hashlib.sha256(f"session:{os.getenv('AUTH_PASSWORD', '')}".encode()).hexdigest()
     )
+    settings_encryption_key: str = os.getenv("SETTINGS_ENCRYPTION_KEY", "")
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     google_oauth_redirect_uri: str = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "")

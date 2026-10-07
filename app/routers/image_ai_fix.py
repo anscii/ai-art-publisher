@@ -8,22 +8,19 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Image, User
 from app.ownership import get_owned
-from app.routers.auth import get_current_user, require_admin
+from app.routers.auth import get_current_user
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
+from app.routers.user_settings import get_user_settings
 from app.schemas import AIFixKeepRequest, AIFixPreviewResponse, AIFixRequest, SeriesDetail
 from app.services.ai.catalogue import DEFAULT_IMAGE_EDIT_MODEL, image_edit_provider
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.image_ai_fix")
-router = APIRouter(
-    tags=["image_ai_fix"],
-    dependencies=[Depends(require_admin)],  # stopgap-1b: lift in #2
-)
+router = APIRouter(tags=["image_ai_fix"])
 
 _TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
 _ALLOWED_EXTS = {"png", "jpg", "jpeg"}
-_PROVIDER_LABEL = {"openai": "OpenAI", "google": "Google"}
 
 
 def _content_type_from_key(key: str) -> str:
@@ -67,15 +64,17 @@ def ai_fix_preview(
             temp_key=temp_key,
         )
 
-    model = body.model or settings.image_edit_model or DEFAULT_IMAGE_EDIT_MODEL
+    us = get_user_settings(user.id, db)
+    model = body.model or us.image_edit_model or DEFAULT_IMAGE_EDIT_MODEL
     try:
         provider = image_edit_provider(model)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    api_key = settings.openai_api_key if provider == "openai" else settings.google_api_key
+    api_key = us.openai_api_key if provider == "openai" else us.google_api_key
     if not api_key:
         raise HTTPException(
-            status_code=400, detail=f"{_PROVIDER_LABEL[provider]} API key not configured"
+            status_code=400,
+            detail="Fix with AI needs your own OpenAI or Google key. Add one in Settings.",
         )
 
     image_bytes = storage.download_bytes(img.r2_key)

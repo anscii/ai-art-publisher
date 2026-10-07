@@ -120,7 +120,7 @@ class TestRouterModelSelection:
 
     def test_uses_configured_google_model_and_returns_cost(self, client):
         client.put(
-            "/api/settings",
+            "/api/me/settings",
             json={"google_api_key": "gk", "image_edit_model": "gemini-3.1-flash-image"},
         )
         img_id, storage = _setup(client)
@@ -136,7 +136,7 @@ class TestRouterModelSelection:
         assert ed.call_args.args[:3] == ("google", "gk", "gemini-3.1-flash-image")
 
     def test_default_model_when_unset(self, client):
-        client.put("/api/settings", json={"openai_api_key": "ok"})
+        client.put("/api/me/settings", json={"openai_api_key": "ok"})
         img_id, storage = _setup(client)
         with (
             patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage),
@@ -149,7 +149,7 @@ class TestRouterModelSelection:
 
     def test_request_model_overrides_setting(self, client):
         client.put(
-            "/api/settings",
+            "/api/me/settings",
             json={
                 "openai_api_key": "ok",
                 "google_api_key": "gk",
@@ -171,7 +171,7 @@ class TestRouterModelSelection:
 
     def test_google_model_requires_google_key(self, client):
         client.put(
-            "/api/settings",
+            "/api/me/settings",
             json={"openai_api_key": "ok", "image_edit_model": "gemini-3-pro-image"},
         )
         img_id, storage = _setup(client)
@@ -182,7 +182,7 @@ class TestRouterModelSelection:
 
     def test_unknown_model_400(self, client):
         client.put(
-            "/api/settings", json={"openai_api_key": "ok", "image_edit_model": "gpt-image-1"}
+            "/api/me/settings", json={"openai_api_key": "ok", "image_edit_model": "gpt-image-1"}
         )
         img_id, storage = _setup(client)
         with patch("app.routers.image_ai_fix.get_storage_from_settings", return_value=storage):
@@ -191,7 +191,7 @@ class TestRouterModelSelection:
 
 
 def test_settings_roundtrip_and_providers_list(client):
-    client.put("/api/settings", json={"image_edit_model": "gemini-3-pro-image"})
-    assert client.get("/api/settings").json()["image_edit_model"] == "gemini-3-pro-image"
+    client.put("/api/me/settings", json={"image_edit_model": "gemini-3-pro-image"})
+    assert client.get("/api/me/settings").json()["image_edit_model"] == "gemini-3-pro-image"
     providers = client.get("/api/settings/providers").json()
     assert [m["id"] for m in providers["image_edit"]] == [m["id"] for m in IMAGE_EDIT_MODELS]

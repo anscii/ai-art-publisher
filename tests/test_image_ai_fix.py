@@ -209,3 +209,66 @@ class TestAiFixDiscard:
             json={"temp_key": "tmp/../../images/real.jpg"},
         )
         assert resp.status_code == 400
+
+
+class TestAiFixNonAdmin:
+    def _setup(self, client, db):
+        from app.models import Image, Series
+        from tests.conftest import login_as
+
+        u = login_as(client, db)
+        s = Series(name="mine", user_id=u.id)
+        db.add(s)
+        db.commit()
+        img = Image(series_id=s.id, r2_key="images/a.jpg", original_filename="a.jpg")
+        db.add(img)
+        db.commit()
+        return img.id
+
+    def test_preview_with_fake_ai(self, client, db):
+        img_id = self._setup(client, db)
+        with patch(
+            "app.routers.image_ai_fix.get_storage_from_settings", return_value=_mock_storage()
+        ):
+            resp = client.post(f"/api/images/{img_id}/ai-fix", json={"hint": "fix"})
+        assert resp.status_code == 200
+
+    def test_no_key_gets_settings_hint(self, client, db, monkeypatch):
+        monkeypatch.setattr(AppConfig, "fake_ai", False)
+        img_id = self._setup(client, db)
+        with patch(
+            "app.routers.image_ai_fix.get_storage_from_settings", return_value=_mock_storage()
+        ):
+            resp = client.post(f"/api/images/{img_id}/ai-fix", json={"hint": "fix"})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == (
+            "Fix with AI needs your own OpenAI or Google key. Add one in Settings."
+        )
+
+    def test_own_key_is_used(self, client, db, monkeypatch):
+        monkeypatch.setattr(AppConfig, "fake_ai", False)
+        img_id = self._setup(client, db)
+        client.put("/api/me/settings", json={"openai_api_key": "sk-mine"})
+        with (
+            patch(
+                "app.routers.image_ai_fix.get_storage_from_settings",
+                return_value=_mock_storage(),
+            ),
+            patch("app.services.ai.image_edit.edit_image", return_value=(b"x", 0.01)) as ed,
+        ):
+            resp = client.post(
+                f"/api/images/{img_id}/ai-fix", json={"hint": "fix", "model": "gpt-image-2"}
+            )
+        assert resp.status_code == 200, resp.text
+        assert ed.call_args.args[1] == "sk-mine"
+
+    def test_keep_and_discard_not_forbidden(self, client, db):
+        img_id = self._setup(client, db)
+        key = "tmp/" + "0" * 36 + ".png"
+        with patch(
+            "app.routers.image_ai_fix.get_storage_from_settings", return_value=_mock_storage()
+        ):
+            keep = client.post(f"/api/images/{img_id}/ai-fix/keep", json={"temp_key": key})
+            discard = client.delete(f"/api/images/ai-fix/tmp?temp_key={key}")
+        assert keep.status_code == 200
+        assert discard.status_code == 204

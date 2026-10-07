@@ -9,37 +9,7 @@ from app.enums import Platform
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 
-class SettingsResponse(BaseModel):
-    anthropic_api_key: str
-    openai_api_key: str
-    google_api_key: str
-    deepseek_api_key: str
-    openrouter_api_key: str
-    default_provider: str
-    anthropic_default_model: str
-    openai_default_model: str
-    google_default_model: str
-    deepseek_default_model: str
-    openrouter_default_model: str
-    image_edit_model: str
-    telegram_bot_token: str
-    telegram_channel_id: str
-    telegram_api_id: str
-    telegram_api_hash: str
-    telegram_session_string: str
-    instagram_access_token: str
-    instagram_user_id: str
-    facebook_page_id: str
-    facebook_page_access_token: str
-    r2_endpoint: str
-    r2_access_key: str
-    r2_secret_key: str
-    r2_bucket: str
-    r2_public_base_url: str
-
-
-class SettingsUpdate(BaseModel):
-    invite_code: str | None = None
+class UserSettingsUpdate(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     google_api_key: str | None = None
@@ -52,6 +22,11 @@ class SettingsUpdate(BaseModel):
     deepseek_default_model: str | None = None
     openrouter_default_model: str | None = None
     image_edit_model: str | None = None
+
+
+class SettingsUpdate(BaseModel):
+    invite_code: str | None = None
+    openrouter_api_key: str | None = None
     telegram_bot_token: str | None = None
     telegram_channel_id: str | None = None
     telegram_api_id: str | None = None
