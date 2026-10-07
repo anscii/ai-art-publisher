@@ -5,7 +5,7 @@ const _SECRET_FIELD_IDS = [
   's_deepseek_api_key', 's_openrouter_api_key',
   's_telegram_bot_token', 's_instagram_access_token',
   's_facebook_page_access_token', 's_pinterest_access_token',
-  's_r2_secret_key',
+  's_r2_secret_key', 's_default_ai_openrouter_key',
 ];
 
 // Returns the Test button for a given secret field ID.
@@ -49,6 +49,7 @@ const _INSTANCE_FIELDS = [
   'facebook_page_access_token', 'facebook_page_id',
   'pinterest_access_token', 'pinterest_default_board_id',
   'r2_endpoint', 'r2_access_key', 'r2_secret_key', 'r2_bucket', 'r2_public_base_url',
+  'default_ai_openrouter_key', 'default_ai_daily_limit',
 ];
 const _AI_PROVIDERS = ['anthropic', 'openai', 'google', 'deepseek', 'openrouter'];
 
@@ -63,8 +64,11 @@ async function loadSettings() {
     }
     [..._MY_FIELDS, ..._INSTANCE_FIELDS].forEach(f => {
       const el = document.getElementById('s_' + f);
-      if (el && !el.list && el.tagName !== 'SELECT') { el.value = s[f] || ''; el.dataset.loaded = el.value; }
+      if (el && !el.list && el.tagName !== 'SELECT') { el.value = s[f] ?? ''; el.dataset.loaded = el.value; }
     });
+    const da = s.default_ai;
+    const usage = document.getElementById('defaultAiUsage');
+    if (usage) usage.textContent = da?.enabled ? `Free access today: ${da.used_today} / ${da.daily_limit}` : '';
     const provEl = document.getElementById('s_default_provider');
     if (provEl && s.default_provider) provEl.value = s.default_provider;
     // Model fields are <input list=datalist>: fill the datalist, then set the (free-text) value.
@@ -90,7 +94,7 @@ function _collect(fields) {
     const el = document.getElementById('s_' + f);
     if (!el) return;
     const val = el.value.trim();
-    if (val && val !== '****') body[f] = val;
+    if (val && val !== '****') body[f] = f === 'default_ai_daily_limit' ? Number(val) : val;
     else if (!val && el.dataset.loaded === '****') body[f] = '';  // user cleared a saved secret
   });
   return body;

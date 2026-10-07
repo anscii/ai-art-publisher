@@ -11,9 +11,11 @@ from app.routers.settings import (
     _test_google,
     _test_openai,
     _test_openrouter,
+    get_or_create_settings,
     mask,
 )
 from app.schemas import UserSettingsUpdate
+from app.services.ai.access import default_ai_enabled, used_today
 from app.services.ai.catalogue import IMAGE_EDIT_MODELS, PROVIDER_MODELS
 
 router = APIRouter(tags=["user_settings"])
@@ -44,7 +46,15 @@ def _to_dict(us: UserSettings) -> dict:
 
 @router.get("/api/me/settings")
 def get_my_settings(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
-    return _to_dict(get_user_settings(user.id, db))
+    s = get_or_create_settings(db)
+    return {
+        **_to_dict(get_user_settings(user.id, db)),
+        "default_ai": {
+            "enabled": default_ai_enabled(s),
+            "used_today": used_today(user.id, db),
+            "daily_limit": s.default_ai_daily_limit,
+        },
+    }
 
 
 @router.put("/api/me/settings")

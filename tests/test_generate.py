@@ -1796,3 +1796,156 @@ def test_board_context_only_for_admin_owned_series(client, db, is_admin, expecte
         mp.return_value = p
         gen._run_generate_variants(sid, {"hint": "a fox"}, db)
     assert ("Existing Pinterest boards" in p.generate_variants.call_args.args[2]) is expected
+
+
+# ── Default AI Access + AI Request ledger ─────────────────────────────────────
+
+_FREE_MODEL = "google/gemma-4-31b-it:free"
+
+
+def _enable_default_ai(db, key="sk-instance", limit=20):
+    from app.routers.settings import get_or_create_settings
+
+    s = get_or_create_settings(db)
+    s.default_ai_openrouter_key = key
+    s.default_ai_daily_limit = limit
+    db.commit()
+
+
+def _ledger(db):
+    from app.models import AIRequest
+
+    db.expire_all()
+    return db.query(AIRequest).all()
+
+
+def _keyless_generate(client, sid, **extra):
+    return client.post(f"/api/series/{sid}/generate", json={"hint": "a fox", **extra})
+
+
+def test_keyless_default_access_records_via_default_row(client, db, monkeypatch):
+    from app.config import AppConfig
+
+    monkeypatch.setattr(AppConfig, "fake_ai", True)
+    _enable_default_ai(db)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
+    resp = _keyless_generate(client, sid)
+    assert resp.status_code == 202
+    rows = _ledger(db)
+    assert len(rows) == 1
+    assert rows[0].via_default_access is True
+    assert rows[0].kind == "draft"
+    assert rows[0].model == "openrouter/free"
+
+
+def test_over_quota_returns_429_and_status_unchanged(client, db, monkeypatch):
+    from app.config import AppConfig
+    from app.models import Series
+
+    monkeypatch.setattr(AppConfig, "fake_ai", True)
+    _enable_default_ai(db, limit=2)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
+    for _ in range(2):
+        assert _keyless_generate(client, sid).status_code == 202
+        s = db.get(Series, sid)
+        s.generation_status = "idle"
+        db.commit()
+    resp = _keyless_generate(client, sid)
+    assert resp.status_code == 429
+    assert "Daily free limit reached (2/day)" in resp.json()["detail"]
+    db.expire_all()
+    assert db.get(Series, sid).generation_status == "idle"
+    assert len(_ledger(db)) == 2
+
+
+def test_own_key_row_not_via_default_and_not_counted(client, db):
+    _enable_default_ai(db, limit=1)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        for _ in range(3):
+            assert _keyless_generate(client, sid).status_code == 202
+    rows = _ledger(db)
+    assert len(rows) == 3
+    assert all(r.via_default_access is False for r in rows)
+
+
+def test_generate_full_bad_variant_burns_no_quota(client, db):
+    _enable_default_ai(db)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put(
+        "/api/me/settings", json={"default_provider": "anthropic", "anthropic_api_key": "sk-test"}
+    )
+    resp = client.post(
+        f"/api/series/{sid}/generate-full",
+        json={"description": "text", "variant_id": "nope"},
+    )
+    assert resp.status_code == 404
+    assert _ledger(db) == []
+
+
+def test_background_uses_instance_key_when_via_default(client, db):
+    _enable_default_ai(db, key="sk-instance")
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = _keyless_generate(client, sid, model=_FREE_MODEL)
+    assert resp.status_code == 202
+    mp.assert_called_once_with("openrouter", "sk-instance")
+
+
+def test_body_cannot_smuggle_ai_request_id_or_paid_model(client, db):
+    _enable_default_ai(db)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
+    payload = {"ai_request_id": "zzz", "provider": "openrouter"}
+    resp = _keyless_generate(client, sid, model="openai/gpt-6", **payload)
+    assert resp.status_code == 400
+    assert "free models only" in resp.json()["detail"]
+    assert _ledger(db) == []
+
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=_FAKE)
+        mp.return_value = p
+        resp = _keyless_generate(client, sid, model=_FREE_MODEL, **payload)
+    assert resp.status_code == 202
+    rows = _ledger(db)
+    assert len(rows) == 1
+    assert rows[0].id != "zzz"
+
+
+def test_ledger_cost_is_one_call_not_times_variants(client, db):
+    from app.services.ai.base import AIVariantData
+
+    _enable_default_ai(db)
+    sid = client.post("/api/series", json={"title": "T"}).json()["id"]
+    client.put("/api/me/settings", json={"default_provider": "openrouter"})
+    three = [
+        AIVariantData(
+            title="t",
+            title_ru="т",
+            description_en="d",
+            description_ru="д",
+            cost_usd=0.01,
+        )
+        for _ in range(3)
+    ]
+    with patch("app.routers.generate.get_provider") as mp:
+        p = MagicMock()
+        p.generate_variants = MagicMock(return_value=three)
+        mp.return_value = p
+        assert _keyless_generate(client, sid, num_variants=3).status_code == 202
+    rows = _ledger(db)
+    assert len(rows) == 1
+    assert rows[0].cost_usd == pytest.approx(0.01)

@@ -98,14 +98,40 @@ def test_model_field_accepts_free_text(page, live_server):
 
 def test_my_openrouter_key_not_overwritten_by_instance_key(page, live_server):
     """Admin view: the instance (Default AI Access) OpenRouter key must not show in My AI."""
-    httpx.put(f"{live_server}/api/settings", json={"openrouter_api_key": "sk-instance"}, timeout=5)
-    _api_put(live_server, {"openrouter_api_key": ""})
-
-    _open_settings(page, live_server)
-    page.wait_for_function(
-        "() => document.querySelector('#s_r2_endpoint').dataset.loaded !== undefined"
+    httpx.put(
+        f"{live_server}/api/settings", json={"default_ai_openrouter_key": "sk-instance"}, timeout=5
     )
-    assert page.locator("#s_openrouter_api_key").input_value() == ""
+    try:
+        _api_put(live_server, {"openrouter_api_key": ""})
+        _open_settings(page, live_server)
+        page.wait_for_function(
+            "() => document.querySelector('#s_r2_endpoint').dataset.loaded !== undefined"
+        )
+        assert page.locator("#s_openrouter_api_key").input_value() == ""
+    finally:
+        httpx.put(f"{live_server}/api/settings", json={"default_ai_openrouter_key": ""}, timeout=5)
+
+
+def test_default_ai_settings_persist_and_show_usage(page, live_server):
+    try:
+        _open_settings(page, live_server)
+        page.locator("#s_default_ai_openrouter_key").fill("sk-default-fake")
+        page.locator("#s_default_ai_daily_limit").fill("5")
+        page.locator("#settingsModal").get_by_role("button", name="Save").click()
+        page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
+
+        _open_settings(page, live_server)
+        page.wait_for_function(
+            "() => document.getElementById('s_default_ai_daily_limit').value === '5'", timeout=5000
+        )
+        assert page.locator("#s_default_ai_openrouter_key").input_value() == "****"
+        page.get_by_text("Free access today: 0 / 5").wait_for(timeout=5000)
+    finally:
+        httpx.put(
+            f"{live_server}/api/settings",
+            json={"default_ai_openrouter_key": "", "default_ai_daily_limit": 0},
+            timeout=5,
+        )
 
 
 def test_clearing_saved_key_removes_it(page, live_server):

@@ -21,6 +21,7 @@ SECRET_FIELDS = {
     "google_api_key",
     "deepseek_api_key",
     "openrouter_api_key",
+    "default_ai_openrouter_key",
     "telegram_bot_token",
     "telegram_api_hash",
     "telegram_session_string",
@@ -77,7 +78,7 @@ def test_connection(service: str, db: Session = Depends(get_db)) -> dict:
             s.facebook_page_access_token, s.facebook_page_id
         ),
         "pinterest": lambda: _test_pinterest(s.pinterest_access_token),
-        "openrouter": lambda: _test_openrouter(s.openrouter_api_key),
+        "default_ai": lambda: _test_openrouter(s.default_ai_openrouter_key),
         "r2": lambda: _test_r2(s),
     }
     if service not in handlers:

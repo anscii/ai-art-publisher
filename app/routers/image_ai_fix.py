@@ -6,21 +6,28 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Image, User
+from app.models import AIRequest, Image, User
 from app.ownership import get_owned
 from app.routers.auth import get_current_user
 from app.routers.series import series_to_detail
 from app.routers.settings import get_or_create_settings
 from app.routers.user_settings import get_user_settings
 from app.schemas import AIFixKeepRequest, AIFixPreviewResponse, AIFixRequest, SeriesDetail
+from app.services.ai.access import record_request
 from app.services.ai.catalogue import DEFAULT_IMAGE_EDIT_MODEL, image_edit_provider
 from app.services.storage import get_storage_from_settings
 
 logger = logging.getLogger("app.image_ai_fix")
 router = APIRouter(tags=["image_ai_fix"])
 
-_TEMP_KEY_RE = re.compile(r"^tmp/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
+_TEMP_KEY_RE = re.compile(r"^tmp/([0-9a-fA-F-]{36})/[0-9a-fA-F-]{36}\.(png|jpe?g)$")
 _ALLOWED_EXTS = {"png", "jpg", "jpeg"}
+
+
+def _check_temp_key(key: str, user: User) -> None:
+    m = _TEMP_KEY_RE.match(key)
+    if not m or m.group(1) != user.id:
+        raise HTTPException(status_code=400, detail="Invalid temp_key")
 
 
 def _content_type_from_key(key: str) -> str:
@@ -34,8 +41,7 @@ def ai_fix_discard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> None:
-    if not _TEMP_KEY_RE.match(temp_key):
-        raise HTTPException(status_code=400, detail="Invalid temp_key")
+    _check_temp_key(temp_key, user)
     settings = get_or_create_settings(db)
     storage = get_storage_from_settings(settings)
     storage.delete(temp_key)
@@ -57,7 +63,7 @@ def ai_fix_preview(
 
     if get_config().fake_ai:
         fake_bytes = storage.download_bytes(img.r2_key)
-        temp_key = f"tmp/{uuid.uuid4()}.png"
+        temp_key = f"tmp/{user.id}/{uuid.uuid4()}.png"
         storage.upload_bytes(fake_bytes, temp_key, "image/png")
         return AIFixPreviewResponse(
             preview_url=storage.public_url(temp_key),
@@ -90,8 +96,22 @@ def ai_fix_preview(
         logger.exception("Image edit failed for image %s", image_id)
         raise HTTPException(status_code=502, detail="Image editing failed. Try again.")
 
-    temp_key = f"tmp/{uuid.uuid4()}.png"
+    temp_key = f"tmp/{user.id}/{uuid.uuid4()}.png"
     storage.upload_bytes(edited_bytes, temp_key, "image/png")
+
+    # Own key only, so never counts toward Quota; success only (failed edits cost nothing).
+    rid = record_request(
+        db,
+        user_id=user.id,
+        kind="image_fix",
+        provider=provider,
+        model=model,
+        via_default=False,
+        limit=0,
+    )
+    db.flush()  # autoflush is off; make the pending row visible to get()
+    db.get(AIRequest, rid).cost_usd = cost  # type: ignore[union-attr]
+    db.commit()
 
     return AIFixPreviewResponse(
         preview_url=storage.public_url(temp_key),
@@ -108,8 +128,7 @@ def ai_fix_keep(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> SeriesDetail:
-    if not _TEMP_KEY_RE.match(body.temp_key):
-        raise HTTPException(status_code=400, detail="Invalid temp_key")
+    _check_temp_key(body.temp_key, user)
 
     img = get_owned(Image, image_id, user, db)
 

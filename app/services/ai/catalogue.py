@@ -138,3 +138,7 @@ def calc_image_edit_cost(model: str, text_in: int, image_in: int, image_out: int
     if not p:
         return 0.0
     return (text_in * p[0] + image_in * p[1] + image_out * p[2]) / 1_000_000
+
+
+def is_free_model(model: str) -> bool:
+    return model == "openrouter/free" or model.endswith(":free")
