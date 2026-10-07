@@ -102,8 +102,9 @@ function _collect(fields) {
     const el = document.getElementById('s_' + f);
     if (!el) return;
     const val = el.value.trim();
+    if (f === 'style_guide') { body[f] = val; return; }  // not a secret: always send, so clearing works
     if (val && val !== '****') body[f] = f === 'default_ai_daily_limit' ? Number(val) : val;
-    else if (!val && (el.dataset.loaded === '****' || (f === 'style_guide' && el.dataset.loaded))) body[f] = '';  // user cleared a saved secret / style guide
+    else if (!val && el.dataset.loaded === '****') body[f] = '';  // user cleared a saved secret
   });
   return body;
 }
@@ -113,6 +114,7 @@ async function saveSettings() {
     await apiFetch('PUT', '/api/me/settings', _collect(_MY_FIELDS));
     if (App.user?.is_admin) await apiFetch('PUT', '/api/settings', _collect(_INSTANCE_FIELDS));
     showToast('Settings saved', 'success');
+    await loadSettings();  // refresh masks and dataset.loaded so a second save in the same modal sees saved state
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
