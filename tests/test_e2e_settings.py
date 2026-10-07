@@ -13,8 +13,8 @@ def _open_settings(page, live_server):
 
 
 def _api_put(live_server, payload: dict) -> None:
-    """Write settings directly to the live server's database via HTTP."""
-    httpx.put(f"{live_server}/api/settings", json=payload, timeout=5)
+    """Write the caller's AI settings directly to the live server's database via HTTP."""
+    httpx.put(f"{live_server}/api/me/settings", json=payload, timeout=5)
 
 
 def test_settings_modal_opens(page, live_server):
@@ -78,3 +78,19 @@ def test_configured_key_shows_ok_state(page, live_server):
     test_btn = google_row.get_by_role("button", name="✓ Tested")
     classes = test_btn.get_attribute("class") or ""
     assert "aap-btn-test-ok" in classes
+
+
+def test_model_field_accepts_free_text(page, live_server):
+    """Model pickers are <input list=datalist>: a custom model id saves and reloads."""
+    _open_settings(page, live_server)
+    model = page.locator("#s_openrouter_default_model")
+    assert model.evaluate("el => el.tagName") == "INPUT"
+    model.fill("vendor/custom-model-x")
+    page.locator("#settingsModal").get_by_role("button", name="Save").click()
+    page.locator("#toastContainer").get_by_text("Settings saved").wait_for(timeout=5000)
+
+    _open_settings(page, live_server)
+    page.wait_for_function(
+        "() => document.getElementById('s_openrouter_default_model').value === 'vendor/custom-model-x'",
+        timeout=5000,
+    )
